@@ -1,3 +1,9 @@
+## [1.1.3](https://github.com/Zanuaimi/UniPatches/compare/v1.1.2...v1.1.3) (2026-09-04)
+
+### 🐛 Bug Fixes
+
+* retry semantic release workflow ([a7c35ac](https://github.com/Zanuaimi/UniPatches/commit/a7c35acecb974b64899f8ee287588d7d42f089f8))
+
 ## [1.1.2](https://github.com/Zanuaimi/UniPatches/compare/v1.1.1...v1.1.2) (2026-09-04)
 
 ### 🐛 Bug Fixes
