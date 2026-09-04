@@ -1,3 +1,11 @@
+## [1.1.2](https://github.com/Zanuaimi/UniPatches/compare/v1.1.1...v1.1.2) (2026-09-04)
+
+### 🐛 Bug Fixes
+
+* harden universal patch injections ([bd8a120](https://github.com/Zanuaimi/UniPatches/commit/bd8a120facb20a04cc47f77b5f070499c7d80c95))
+* make reward availability strategy-aware ([6e9cbe2](https://github.com/Zanuaimi/UniPatches/commit/6e9cbe2a8bcdf2ef4059f48320fbff4d60a94d5d))
+* report purchase strategy failures ([dabb73b](https://github.com/Zanuaimi/UniPatches/commit/dabb73b35f151e54360142a54ba10ca25e55ac94))
+
 ## [1.1.1](https://github.com/Zanuaimi/UniPatches/compare/v1.1.0...v1.1.1) (2026-09-04)
 
 ### 🐛 Bug Fixes
