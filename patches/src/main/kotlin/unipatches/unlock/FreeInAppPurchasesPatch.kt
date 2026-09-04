@@ -25,7 +25,8 @@ val freeInAppPurchasesPatch = bytecodePatch(
             try {
                 val matches: List<app.morphe.patcher.Match> = try {
                     with(this@execute) { fp.matchAll() }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    logger.warning("Free In-app Purchases: $label matchAll failed: ${e.message}")
                     emptyList()
                 }
                 if (matches.isNotEmpty()) {
@@ -36,19 +37,35 @@ val freeInAppPurchasesPatch = bytecodePatch(
                             injector(method)
                             patched++
                             patchedMethods.add(label)
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            logger.warning("Free In-app Purchases: $label failed in ${m.method.definingClass}: ${e.message}")
+                        }
                     }
                     return
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logger.warning("Free In-app Purchases: $label multi-match strategy failed: ${e.message}")
+            }
             // fallback single
-            val single = try { with(this@execute) { fp.matchOrNull() }?.method } catch (_: Exception) { null } ?: try { fp.methodOrNull } catch (_: Exception) { null }
+            val single = try {
+                with(this@execute) { fp.matchOrNull() }?.method
+            } catch (e: Exception) {
+                logger.warning("Free In-app Purchases: $label matchOrNull failed: ${e.message}")
+                null
+            } ?: try {
+                fp.methodOrNull
+            } catch (e: Exception) {
+                logger.warning("Free In-app Purchases: $label fingerprint lookup failed: ${e.message}")
+                null
+            }
             if (single?.implementation != null) {
                 try {
                     injector(single)
                     patched++
                     patchedMethods.add(label)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    logger.warning("Free In-app Purchases: $label failed in ${single.definingClass}: ${e.message}")
+                }
             }
         }
 
@@ -70,8 +87,13 @@ val freeInAppPurchasesPatch = bytecodePatch(
         patchAll(Fingerprint(name = "launchBillingFlow", custom = { m, _ -> m.returnType.contains("BillingResult") }), "launchBillingFlow") {
             try {
                 it.addInstructions(0, okBillingResult)
-            } catch (_: Exception) {
-                try { it.addInstructions(0, "const/4 v0, 0x0\nreturn-object v0") } catch (_: Exception) {}
+            } catch (e: Exception) {
+                logger.warning("Free In-app Purchases: launchBillingFlow primary strategy failed: ${e.message}")
+                try {
+                    it.addInstructions(0, "const/4 v0, 0x0\nreturn-object v0")
+                } catch (fallback: Exception) {
+                    logger.warning("Free In-app Purchases: launchBillingFlow fallback failed: ${fallback.message}")
+                }
             }
         }
 
@@ -174,7 +196,11 @@ val freeInAppPurchasesPatch = bytecodePatch(
                         invoke-virtual {v0, v1, v2}, Landroid/os/Bundle;->putStringArrayList(Ljava/lang/String;Ljava/util/ArrayList;)V
                         return-object v0
                     """.trimIndent())
-                    else -> try { it.addInstructions(0, "return-void") } catch (_: Exception) {}
+                    else -> try {
+                        it.addInstructions(0, "return-void")
+                    } catch (e: Exception) {
+                        logger.warning("Free In-app Purchases: $qn void fallback failed in ${it.definingClass}: ${e.message}")
+                    }
                 }
             }
         }
@@ -349,7 +375,16 @@ val freeInAppPurchasesPatch = bytecodePatch(
         // ──────────────────────────────────────────────
 
         patchAll(Fingerprint(name = "launchBillingFlow", custom = { _, c -> c.type.lowercase().contains("xsolla") }), "Xsolla.launchBillingFlow") {
-            try { it.addInstructions(0, okBillingResult) } catch (_: Exception) { it.addInstructions(0, "const/4 v0, 0x0\nreturn-object v0") }
+            try {
+                it.addInstructions(0, okBillingResult)
+            } catch (e: Exception) {
+                logger.warning("Free In-app Purchases: Xsolla.launchBillingFlow primary strategy failed: ${e.message}")
+                try {
+                    it.addInstructions(0, "const/4 v0, 0x0\nreturn-object v0")
+                } catch (fallback: Exception) {
+                    logger.warning("Free In-app Purchases: Xsolla.launchBillingFlow fallback failed: ${fallback.message}")
+                }
+            }
         }
         for (xb in listOf("isAvailable", "isUserAvailable", "isPaymentAvailable", "isInventoryAvailable", "isStoreAvailable")) {
             patchAll(Fingerprint(name = xb, returnType = "Z", custom = { _, c -> c.type.lowercase().contains("xsolla") }), "Xsolla.$xb") {
