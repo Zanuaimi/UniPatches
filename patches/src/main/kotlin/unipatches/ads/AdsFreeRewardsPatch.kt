@@ -97,7 +97,7 @@ val adsFreeRewardsPatch = bytecodePatch(
             else -> applyAdsFreeRewardsV1320(logger, rewardStrategy, instantReward)
         }
         if (fakeAdAvailability == true) {
-            val faked = forceAdAvailability(logger)
+            val faked = forceAdAvailability(logger, rewardStrategy)
             if (faked > 0) logger.info("Ads Free Rewards: faked availability for $faked SDK check(s)")
         }
     }
@@ -115,12 +115,16 @@ val adsFreeRewardsPatch = bytecodePatch(
  * the gates to return true makes the game proceed to show(), letting the
  * reward flow grant without a real ad.
  */
-private fun BytecodePatchContext.forceAdAvailability(logger: Logger): Int {
+private fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStrategy: String?): Int {
     var patched = 0
     fun patchIsReady(label: String, fingerprint: app.morphe.patcher.Fingerprint) {
         val method = fingerprint.methodOrNull ?: return
         val impl = method.implementation ?: run {
             logger.warning("Ads Free Rewards: skip $label  -  no implementation")
+            return
+        }
+        if (method.returnType != "Z") {
+            logger.warning("Ads Free Rewards: skip $label  -  expected boolean return, found ${method.returnType}")
             return
         }
         if (impl.registerCount < 1) {
@@ -138,18 +142,32 @@ private fun BytecodePatchContext.forceAdAvailability(logger: Logger): Int {
         patched++
     }
 
-    patchIsReady("Unity Ads Advertisement.isReady()", UnityAdsAdvertisementIsReadyFingerprint)
-    patchIsReady("Unity Ads Advertisement.isReady(placement)", UnityAdsAdvertisementIsReadyPlacementFingerprint)
-    patchIsReady("Unity Ads UnityAds.isReady()", UnityAdsSdkIsReadyFingerprint)
-    patchIsReady("ironSource isRewardedVideoAvailable()", IronSourceIsRewardedVideoAvailableFingerprint)
-    patchIsReady("ironSource isInterstitialReady()", IronSourceIsInterstitialReadyFingerprint)
-    patchIsReady("AppLovin MAX InterstitialAd.isReady()", MaxInterstitialAdIsReadyFingerprint)
-    patchIsReady("AppLovin MAX AppOpenAd.isReady()", MaxAppOpenAdIsReadyFingerprint)
-    patchIsReady("Yandex/MyTarget rewarded mediation isLoaded()", YandexMyTargetRewardedIsLoadedFingerprint)
-    patchIsReady("Yandex/MyTarget interstitial mediation isLoaded()", YandexMyTargetInterstitialIsLoadedFingerprint)
-    patchIsReady("Huawei Ads Kit RewardAd.isLoaded()", HuaweiRewardAdIsLoadedFingerprint)
-    patchIsReady("InMobi isReady()", InMobiIsReadyFingerprint)
-    patchIsReady("AdMob rewarded isLoaded()", AdMobRewardedShowFingerprint) // will fail gracefully, just to log
+    val auto = rewardStrategy == "auto"
+    val useMax = auto || rewardStrategy == "max"
+    val useUnity = auto || rewardStrategy == "unityAds"
+    val useIronSource = auto || rewardStrategy == "ironSource"
+    val useRustore = auto || rewardStrategy == "rustore"
+    val useHuawei = auto || rewardStrategy == "huawei"
+
+    if (useUnity) {
+        patchIsReady("Unity Ads Advertisement.isReady()", UnityAdsAdvertisementIsReadyFingerprint)
+        patchIsReady("Unity Ads Advertisement.isReady(placement)", UnityAdsAdvertisementIsReadyPlacementFingerprint)
+        patchIsReady("Unity Ads UnityAds.isReady()", UnityAdsSdkIsReadyFingerprint)
+    }
+    if (useIronSource) {
+        patchIsReady("ironSource isRewardedVideoAvailable()", IronSourceIsRewardedVideoAvailableFingerprint)
+        patchIsReady("ironSource isInterstitialReady()", IronSourceIsInterstitialReadyFingerprint)
+    }
+    if (useMax) {
+        patchIsReady("AppLovin MAX InterstitialAd.isReady()", MaxInterstitialAdIsReadyFingerprint)
+        patchIsReady("AppLovin MAX AppOpenAd.isReady()", MaxAppOpenAdIsReadyFingerprint)
+    }
+    if (useRustore) {
+        patchIsReady("Yandex/MyTarget rewarded mediation isLoaded()", YandexMyTargetRewardedIsLoadedFingerprint)
+        patchIsReady("Yandex/MyTarget interstitial mediation isLoaded()", YandexMyTargetInterstitialIsLoadedFingerprint)
+    }
+    if (useHuawei) patchIsReady("Huawei Ads Kit RewardAd.isLoaded()", HuaweiRewardAdIsLoadedFingerprint)
+    if (auto) patchIsReady("InMobi isReady()", InMobiIsReadyFingerprint)
     return patched
 }
 
@@ -161,7 +179,7 @@ private fun BytecodePatchContext.applyAdsFreeRewardsV1190(logger: Logger, reward
     val useRustore = strategy == "auto" || strategy == "rustore"
     val useHuawei = strategy == "auto" || strategy == "huawei"
 
-    logger.info("Ads Free Rewards: strategy=$strategy instantReward=$instantReward fakeAdAvailability=true")
+    logger.info("Ads Free Rewards: strategy=$strategy instantReward=$instantReward")
 
     val hasMaxUnity = ShowRewardedAdFingerprint.methodOrNull != null &&
         IsRewardedAdReadyFingerprint.methodOrNull != null
