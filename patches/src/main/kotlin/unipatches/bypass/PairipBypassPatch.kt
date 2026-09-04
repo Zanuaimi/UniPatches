@@ -64,8 +64,6 @@ val pairipBypassPatch = bytecodePatch(
         developers, with improvements for broader functionality, safer strategy selection, and usability.
 
         Credits: Nai64Patches from Nai64, Entree, kondratjev, and rushiranpise (Doom).
-
-        Credits: Nai64Patches from Nai64, Entree, kondratjev, and rushiranpise (Doom).
     """.trimIndent(),
     default = false,
 ) {
