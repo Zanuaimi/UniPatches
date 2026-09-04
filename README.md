@@ -4,9 +4,7 @@ Template repository for Morphe Patches.
 
 ## ❓ About
 
-Patches for apps I like.
-
-<!-- TODO: Update this about section with a brief introduction/summary about this repo and what it offers. -->
+Curated universal patches for Morphe, including community-driven patches with enhancements and original patches.
 
 ### How to use these patches
 
