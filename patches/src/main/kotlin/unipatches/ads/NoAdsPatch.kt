@@ -89,6 +89,10 @@ private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int
 
     val exact = fingerprint.methodOrNull
     if (exact != null && exact.implementation != null) {
+        if (exact.returnType != "Z" || (exact.implementation?.registerCount ?: 0) < 1) {
+            logger.warning("No Ads: skipping $name: boolean method has no usable register")
+            return 0
+        }
         exact.addInstructions(0, "const/4 v0, 0x0\nreturn v0")
         logger.info("No Ads: forced $name -> false (exact 1 impl)")
         return 1
@@ -113,6 +117,10 @@ private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int
             val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
             val mutableMethod = mutableClass.methods.find { it.name == name && it.returnType == ret && it.parameterTypes.map { p -> p.toString() } == params } ?: return@classDefForEach
             if (mutableMethod.implementation == null) return@classDefForEach
+            if (mutableMethod.returnType != "Z" || (mutableMethod.implementation?.registerCount ?: 0) < 1) {
+                logger.warning("No Ads: skipping $name in ${mutableMethod.definingClass}: boolean method has no usable register")
+                return@classDefForEach
+            }
             mutableMethod.addInstructions(0, "const/4 v0, 0x0\nreturn v0")
             patched++
         }

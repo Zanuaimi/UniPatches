@@ -23,6 +23,7 @@ private fun postDelayedDelayRegister(invoke: com.android.tools.smali.dexlib2.ifa
     val reference = (invoke as? ReferenceInstruction)?.reference as? MethodReference ?: return null
     if (reference.definingClass != "Landroid/os/Handler;") return null
     if (reference.name != "postDelayed") return null
+    if (reference.parameterTypes != listOf("Ljava/lang/Runnable;", "J")) return null
 
     return when (invoke) {
         is RegisterRangeInstruction -> {
@@ -31,7 +32,8 @@ private fun postDelayedDelayRegister(invoke: com.android.tools.smali.dexlib2.ifa
 
         is FiveRegisterInstruction -> {
             // invoke-virtual {handler, runnable, wideLow, wideHigh}
-            if (invoke.registerCount == 4) invoke.registerE else null
+            // The wide argument starts at register C; register D is its high word.
+            if (invoke.registerCount == 4) invoke.registerC else null
         }
 
         else -> null

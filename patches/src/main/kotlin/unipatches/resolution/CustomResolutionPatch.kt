@@ -7,6 +7,7 @@ import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.intOption
 import app.morphe.patcher.patch.resourcePatch
 import java.util.logging.Logger
+import helpers.bytecode.cloneMutableAndPreserveParameters
 import org.w3c.dom.Element
 
 private val unityPlayerActivityOnCreateFingerprint = Fingerprint(
@@ -15,54 +16,6 @@ private val unityPlayerActivityOnCreateFingerprint = Fingerprint(
     returnType = "V",
     parameters = listOf("Landroid/os/Bundle;"),
 )
-
-private val manifestResolutionPatch = resourcePatch(
-    name = "Custom App Resolution Manifest (internal)",
-    default = false,
-) {
-    execute {
-        val logger = Logger.getLogger(this::class.java.name)
-
-        document("AndroidManifest.xml").use { doc ->
-            val app = doc.getElementsByTagName("application").item(0) as? Element ?: run {
-                logger.warning("No <application> element found. Skipping manifest changes.")
-                return@execute
-            }
-            val ns = "http://schemas.android.com/apk/res/android"
-
-            // Enable resizeableActivity
-            app.setAttributeNS(ns, "android:resizeableActivity", "true")
-
-            // Find the launcher activity and set maxAspectRatio
-            val activities = doc.getElementsByTagName("activity")
-            for (i in 0 until activities.length) {
-                val activity = activities.item(i) as? Element ?: continue
-                val isLauncher = activity.getElementsByTagName("intent-filter").let { filters ->
-                    var found = false
-                    for (j in 0 until filters.length) {
-                        val filter = filters.item(j) as? Element ?: continue
-                        val actions = filter.getElementsByTagName("action")
-                        for (k in 0 until actions.length) {
-                            val action = actions.item(k) as? Element ?: continue
-                            if (action.getAttributeNS(ns, "name") == "android.intent.action.MAIN") {
-                                found = true
-                                break
-                            }
-                        }
-                        if (found) break
-                    }
-                    found
-                }
-                if (isLauncher) {
-                    activity.setAttributeNS(ns, "android:resizeableActivity", "true")
-                    // The actual resolution is enforced by the bytecode patch via Window.setLayout(width, height) + FLAG_LAYOUT_NO_LIMITS
-                    logger.info("Set resizeableActivity on launcher activity")
-                }
-            }
-            logger.info("Custom App Resolution Manifest (internal) patch succeeded")
-        }
-    }
-}
 
 @Suppress("unused")
 val customResolutionPatch = bytecodePatch(
@@ -74,8 +27,6 @@ val customResolutionPatch = bytecodePatch(
     """.trimIndent(),
     default = false,
 ) {
-    dependsOn(manifestResolutionPatch)
-
     val enableCustomResolution by booleanOption(
         title = "Enable Custom Resolution",
         default = false,
@@ -94,6 +45,50 @@ val customResolutionPatch = bytecodePatch(
         key = "height",
         description = "Vertical resolution in pixels",
     )
+
+    // Keep the resource change under the same user-facing enable switch. A dependency on a
+    // separate resource patch would otherwise modify the manifest even when this patch option
+    // is disabled.
+    val manifestResolutionPatch = resourcePatch(
+        name = "Custom App Resolution Manifest (internal)",
+        default = false,
+    ) {
+        execute {
+            if (enableCustomResolution != true) return@execute
+            val logger = Logger.getLogger(this::class.java.name)
+            document("AndroidManifest.xml").use { doc ->
+                val app = doc.getElementsByTagName("application").item(0) as? Element ?: run {
+                    logger.warning("No <application> element found. Skipping manifest changes.")
+                    return@execute
+                }
+                val ns = "http://schemas.android.com/apk/res/android"
+                app.setAttributeNS(ns, "android:resizeableActivity", "true")
+                val activities = doc.getElementsByTagName("activity")
+                for (i in 0 until activities.length) {
+                    val activity = activities.item(i) as? Element ?: continue
+                    val isLauncher = activity.getElementsByTagName("intent-filter").let { filters ->
+                        var found = false
+                        for (j in 0 until filters.length) {
+                            val filter = filters.item(j) as? Element ?: continue
+                            val actions = filter.getElementsByTagName("action")
+                            for (k in 0 until actions.length) {
+                                val action = actions.item(k) as? Element ?: continue
+                                if (action.getAttributeNS(ns, "name") == "android.intent.action.MAIN") {
+                                    found = true
+                                    break
+                                }
+                            }
+                            if (found) break
+                        }
+                        found
+                    }
+                    if (isLauncher) activity.setAttributeNS(ns, "android:resizeableActivity", "true")
+                }
+                logger.info("Custom App Resolution Manifest (internal) patch succeeded")
+            }
+        }
+    }
+    dependsOn(manifestResolutionPatch)
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)
@@ -116,10 +111,15 @@ val customResolutionPatch = bytecodePatch(
             return@execute
         }
 
-        // Inject getWindow().setLayout(width, height) + FLAG_LAYOUT_NO_LIMITS
-        // Assumes standard register layout: p0=this, p1=Bundle
-        // Use v0/v1 for loaded values, v2 for window reference
-        match.addInstructions(0, """
+        // Clone first so the injected temporaries cannot overwrite the Activity receiver,
+        // Bundle parameter, or existing locals in the original onCreate implementation.
+        val mutableClass = unityPlayerActivityOnCreateFingerprint.classDefOrNull?.let(::mutableClassDefBy)
+        if (mutableClass == null) {
+            logger.warning("Could not obtain mutable Unity activity class. No changes applied.")
+            return@execute
+        }
+        val safeMethod = match.cloneMutableAndPreserveParameters(mutableClass)
+        safeMethod.addInstructions(0, """
             invoke-virtual {p0}, Landroid/app/Activity;->getWindow()Landroid/view/Window;
             move-result-object v2
             const v0, ${w}
