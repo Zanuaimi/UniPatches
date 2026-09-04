@@ -19,6 +19,10 @@ UniPatches brings together a concise selection of community-favorite universal A
 
 These patches may be merged, refined, or enhanced where practical to improve compatibility, functionality, configuration, and usability.
 
+The Universal Overlay Patch has also been submitted as a pull request to [Nai64Patches](https://github.com/Nai64/Nai64Patches), one of the largest collections of universal Morphe patches. The version in Nai64Patches is intended for stable and major releases, while the version here is kept more up to date with ongoing improvements and changes. See the [Universal Overlay pull request](https://github.com/Nai64/Nai64Patches/pull/73).
+
+![Universal Overlay pull request evidence](images/pullrequestevidence.png)
+
 The repository also includes my own patches. The patches without separate community credits are:
 
 - Universal Overlay
