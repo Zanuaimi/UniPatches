@@ -1,3 +1,9 @@
+## [1.0.2](https://github.com/Zanuaimi/UniPatches/compare/v1.0.1...v1.0.2) (2026-09-04)
+
+### 🐛 Bug Fixes
+
+* retry semantic workflow ([df73d96](https://github.com/Zanuaimi/UniPatches/commit/df73d96e73218e71ec0eb28d884cc6a9c246630f))
+
 ## [1.0.1](https://github.com/Zanuaimi/UniPatches/compare/v1.0.0...v1.0.1) (2026-09-04)
 
 ### 🐛 Bug Fixes
