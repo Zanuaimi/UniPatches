@@ -15,7 +15,7 @@ belongs to the patched app's Activity content; it is not an Android system-level
 
 ### Patch and injection
 
-patches/src/main/kotlin/patches/universal/universaloverlay/UniversalOverlayPatch.kt
+patches/src/main/kotlin/unipatches/overlay/UniversalOverlayPatch.kt
 
 This is the Morphe patch entry point. It:
 
@@ -30,7 +30,7 @@ This is the Morphe patch entry point. It:
 It should contain patch-time discovery and configuration only. Runtime UI and feature behavior belong
 in the extension Java code.
 
-patches/src/main/kotlin/patches/universal/ui/StartupHooks.kt
+patches/src/main/kotlin/helpers/startup/StartupHooks.kt
 
 The overlay reuses StartupHooks for Application discovery, launcher Activity fallback information,
 and safe Smali string escaping. This is a shared patch helper, not an overlay-specific runtime.
@@ -45,17 +45,14 @@ The patch is split into a small patch-time layer and a larger runtime extension 
 ```text
 UniPatches
 |
-|-- patches/src/main/kotlin/patches/universal/universaloverlay/
+|-- patches/src/main/kotlin/unipatches/overlay/
 |   `-- UniversalOverlayPatch.kt       Morphe settings and safe injection bridge
-|-- patches/src/main/kotlin/patches/universal/ui/
+|-- patches/src/main/kotlin/helpers/startup/
 |   `-- StartupHooks.kt                Application/activity discovery and Smali helpers
-|-- patches/src/main/kotlin/patches/universal/manifest/
+|-- patches/src/main/kotlin/helpers/manifest/
 |   `-- ManifestUtils.kt                Manifest helpers used by StartupHooks
-|-- patches/src/main/kotlin/patches/universal/ads/util/
+|-- patches/src/main/kotlin/helpers/bytecode/
 |   `-- BytecodeUtils.kt                Safe register-preserving method cloning
-|
-|-- patches/src/main/kotlin/patches/universal/ui/
-|   `-- StartupHooks.kt                Application and Activity discovery helpers
 |
 `-- extensions/extension/src/main/java/unipatch/universaloverlay/
     |-- UniversalOverlayRuntime.java   Runtime coordinator and Activity controllers

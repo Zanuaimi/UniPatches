@@ -4,7 +4,7 @@ This guide explains how to add a module to the UniPatches Universal Overlay.
 
 ## Architecture
 
-The patch file at patches/src/main/kotlin/patches/universal/universaloverlay/UniversalOverlayPatch.kt
+The patch file at patches/src/main/kotlin/unipatches/overlay/UniversalOverlayPatch.kt
 exposes Morphe settings and serializes them into the runtime configuration. It should not contain
 app-specific logic.
 
