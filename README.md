@@ -1,14 +1,28 @@
-# 👋🧩 Morphe Patches template
+# UniPatches
 
-Template repository for Morphe Patches.
+![UniPatches profile logo](images/profilelogo.png)
 
-## ❓ About
+Curated universal patches for [Morphe](https://morphe.software), focused on quality over quantity.
 
-Curated universal patches for Morphe, including community-driven patches with enhancements and original patches.
+## About
+
+UniPatches brings together a concise selection of community-favorite patches and original patches. Community patches are selected from projects I find useful, then merged, refined, or enhanced where practical to improve compatibility, functionality, configuration, and usability.
+
+The repository also includes my own patches. The patches without separate community credits are:
+
+- Universal Overlay
+- Graphics API Override
+- Bypass Forced Online Checks
+- Bypass Forced Updates
+- Frame Rate Preference
+
+Community contributions are credited in each patch description, and merged or enhanced patches retain attribution to the developers whose work influenced them.
 
 ### How to use these patches
 
-Click here to add these patches to Morphe: https://morphe.software/add-source?github=Zanuaimi/UniPatches
+[Add UniPatches to Morphe](https://morphe.software/add-source?github=Zanuaimi/UniPatches)
+
+After adding the source, select the patches you want from Morphe. Read each patch description and its options before applying it, especially experimental patches that modify app startup, licensing, integrity checks, or runtime behavior.
 
 ## 🩹 Patches list
 
@@ -61,6 +75,12 @@ Click here to add these patches to Morphe: https://morphe.software/add-source?gi
 
 See the [Morphe documentation](https://github.com/MorpheApp/morphe-documentation) for more information.
 
-## 📜 License
+## Contributing
 
-UserXYZ Patches are licensed under the [GNU General Public License v3.0](LICENSE)
+Suggestions, fixes, compatibility improvements, and carefully selected community patches are welcome. Contributions should preserve the repository’s quality-over-quantity goal, include appropriate credits, and use clear semantic commit messages such as `feat:`, `fix:`, or `chore:`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance, including the Universal Overlay guide.
+
+## License
+
+UniPatches is licensed under the [GNU General Public License v3.0](LICENSE).
