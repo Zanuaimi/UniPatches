@@ -2,7 +2,7 @@
 
 ![UniPatches profile logo](images/profilelogo.png)
 
-Curated universal patches for [Morphe](https://morphe.software), focused on quality over quantity.
+Curated list of universal patches for [Morphe](https://morphe.software), including community-driven patches with enhancements and original patches, focusing on quality over quantity
 
 ## About
 
