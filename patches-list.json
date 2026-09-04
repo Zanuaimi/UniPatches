@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "patches": [
     {
       "name": "Ads Free Rewards (Experimental)",
@@ -444,7 +444,7 @@
     },
     {
       "name": "PairIP Bypass Enhanced (Experimental)",
-      "description": "A merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.\n\nAutomatic mode applies compatible strategies up to the selected risk level. It defaults to\nLow and Med Risk Strategies; Low Risk applies only low-risk strategies, while Low, Med, and\nHigh Risk Strategies also enables the invasive high-risk strategies.\n\nTurn off automatic mode to test the individual manual strategies. Manual selections are\nindependent of the automatic risk-level setting, and every manual strategy is disabled by default.\n\nThis patch is experimental and app-dependent. It does not bypass server-side Play Integrity,\nserver-side licensing, or other server-side enforcement.\n\nThis enhanced patch is a merged product of the PairIP bypass patches from the credited\ndevelopers, with improvements for broader functionality, safer strategy selection, and usability.\n\nCredits: Nai64Patches from Nai64, Entree, kondratjev, and rushiranpise (Doom).\n\nCredits: Nai64Patches from Nai64, Entree, kondratjev, and rushiranpise (Doom).",
+      "description": "A merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.\n\nAutomatic mode applies compatible strategies up to the selected risk level. It defaults to\nLow and Med Risk Strategies; Low Risk applies only low-risk strategies, while Low, Med, and\nHigh Risk Strategies also enables the invasive high-risk strategies.\n\nTurn off automatic mode to test the individual manual strategies. Manual selections are\nindependent of the automatic risk-level setting, and every manual strategy is disabled by default.\n\nThis patch is experimental and app-dependent. It does not bypass server-side Play Integrity,\nserver-side licensing, or other server-side enforcement.\n\nThis enhanced patch is a merged product of the PairIP bypass patches from the credited\ndevelopers, with improvements for broader functionality, safer strategy selection, and usability.\n\nCredits: Nai64Patches from Nai64, Entree, kondratjev, and rushiranpise (Doom).",
       "default": false,
       "dependencies": [
         "ResourcePatch"
