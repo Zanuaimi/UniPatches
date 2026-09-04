@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-04T18:27:23",
-  "description": "## [1.0.2](https://github.com/Zanuaimi/UniPatches/compare/v1.0.1...v1.0.2) (2026-09-04)\n\n### 🐛 Bug Fixes\n\n* retry semantic workflow ([df73d96](https://github.com/Zanuaimi/UniPatches/commit/df73d96e73218e71ec0eb28d884cc6a9c246630f))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.0.2/patches-1.0.2.mpp",
+  "created_at": "2026-09-04T19:23:50",
+  "description": "## [1.1.0](https://github.com/Zanuaimi/UniPatches/compare/v1.0.2...v1.1.0) (2026-09-04)\n\n### ✨ New Features\n\n* updated defaults of universal overlay ([7f3c92a](https://github.com/Zanuaimi/UniPatches/commit/7f3c92a973ec2376067499a396a97c519639fdcd))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.1.0/patches-1.1.0.mpp",
   "signature_download_url": "",
-  "version": "1.0.2"
+  "version": "1.1.0"
 }
