@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/Zanuaimi/UniPatches/compare/v1.1.0...v1.1.1) (2026-09-04)
+
+### 🐛 Bug Fixes
+
+* update README ([0b8c8ca](https://github.com/Zanuaimi/UniPatches/commit/0b8c8cacbc777ff02b56d23706ca7e16c4379617))
+
 ## [1.1.0](https://github.com/Zanuaimi/UniPatches/compare/v1.0.2...v1.1.0) (2026-09-04)
 
 ### ✨ New Features
