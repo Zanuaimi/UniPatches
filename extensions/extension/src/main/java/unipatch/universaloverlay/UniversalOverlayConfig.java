@@ -9,7 +9,7 @@ import android.view.Gravity;
  */
 final class UniversalOverlayConfig {
     private static final String DEFAULT_DESCRIPTION =
-            "Welcome to the UniPatches Universal Overlay Patch. This experimental in-app overlay " +
+            "Welcome to the UniPatches Universal Overlay Patch Menu. This experimental in-app overlay " +
             "contains optional statistic, activity, and hook modules. More may be added in " +
             "future updates. The idea and initial works of this Universal Overlay Patch are from " +
             "Zanuaimi.";
@@ -43,11 +43,11 @@ final class UniversalOverlayConfig {
         c.description = limit(field(v, offset, 1), 500, DEFAULT_DESCRIPTION);
         c.repositoryText = empty(field(v, offset, 2), "UniPatches repository");
         c.repositoryUrl = validUrl(field(v, offset, 3));
-        c.background = color(field(v, offset, 4), 0xCC101820);
-        c.outline = color(field(v, offset, 5), 0xFF55D6BE);
-        c.buttonText = limit(empty(field(v, offset, 6), "N64"), 3, "N64");
-        c.buttonTextColor = color(field(v, offset, 7), Color.WHITE);
-        c.buttonBackground = color(field(v, offset, 8), 0xFF17304A);
+        c.background = color(field(v, offset, 4), 0x80FF0000);
+        c.outline = color(field(v, offset, 5), 0xFFFF0000);
+        c.buttonText = limit(empty(field(v, offset, 6), "U"), 3, "U");
+        c.buttonTextColor = color(field(v, offset, 7), 0xFFFF0000);
+        c.buttonBackground = color(field(v, offset, 8), 0xFF941100);
         String shape = field(v, offset, 9);
         c.shape = "square".equals(shape) ? 0 : ("squircle".equals(shape) ? 2 : 1);
         c.buttonSize = integer(field(v, offset, 10), 56, 32, 128);
@@ -97,8 +97,8 @@ final class UniversalOverlayConfig {
         int dragDurationIndex = automaticIconFormat ? 28 : 29;
         int gradientToggleIndex = automaticIconFormat ? 29 : 30;
         c.iconBold = !customizationFormat || "1".equals(field(v, offset, iconBoldIndex));
-        c.iconBackground2 = color(customizationFormat ? field(v, offset, iconBackgroundIndex) : "", 0xFF00AF7C);
-        c.iconGradientAngle = customizationFormat ? integer(field(v, offset, iconGradientIndex), 30, 0, 360) : 30;
+        c.iconBackground2 = color(customizationFormat ? field(v, offset, iconBackgroundIndex) : "", 0xFFDE1600);
+        c.iconGradientAngle = customizationFormat ? integer(field(v, offset, iconGradientIndex), 0, 0, 360) : 0;
         c.customIconImage = customizationFormat ? field(v, offset, customIconIndex) : "";
         c.iconType = c.customIconImage.isEmpty() ? "legacy" : "image";
         c.dragVisibilityDurationSeconds = customizationFormat

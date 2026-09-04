@@ -21,7 +21,7 @@ private const val MAX_TITLE_CHARACTERS = 80
 private const val MAX_DESCRIPTION_CHARACTERS = 500
 private val DEFAULT_DESCRIPTION =
     """
-    Welcome! This is UniPatches Universal Overlay Patch Menu.
+    Welcome! This is the UniPatches Universal Overlay Patch Menu.
     You will find modules below the description if you enabled some modules
     in this patch settings before patching this APK.
     The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.
@@ -151,7 +151,7 @@ private fun injectMethod(owner: MutableClass, method: MutableMethod, config: Str
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "Universal Overlay Patch v1.0 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v1.0 (Experimental)",
     description = """
         Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,
         fullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;
@@ -196,13 +196,13 @@ val universalOverlayPatch = bytecodePatch(
     )
     val backgroundColor by stringOption(
         title = "General - Overlay background color",
-        default = "#CC101820",
+        default = "#80FF0000",
         key = "runtimeOverlayBackgroundColor",
         description = "Overlay background as #RRGGBB or #AARRGGBB.",
     )
     val outlineColor by stringOption(
         title = "General - Overlay outline color",
-        default = "#FF55D6BE",
+        default = "#FFFF0000",
         key = "runtimeOverlayOutlineColor",
         description = "Overlay outline as #RRGGBB or #AARRGGBB.",
     )
@@ -214,7 +214,7 @@ val universalOverlayPatch = bytecodePatch(
     )
     val buttonText by stringOption(
         title = "UI - Legacy icon text",
-        default = "N64",
+        default = "U",
         key = "runtimeOverlayButtonText",
         description = "Text shown by the legacy icon. Maximum three characters.",
     )
@@ -226,7 +226,7 @@ val universalOverlayPatch = bytecodePatch(
     )
     val buttonTextColor by stringOption(
         title = "UI - Legacy icon text color",
-        default = "#FFFFFFFF",
+        default = "#FFFF0000",
         key = "runtimeOverlayButtonTextColor",
         description = "Text color used by the legacy icon.",
     )
@@ -238,19 +238,19 @@ val universalOverlayPatch = bytecodePatch(
     )
     val buttonBackgroundColor by stringOption(
         title = "UI - Legacy icon background 1",
-        default = "#000083",
+        default = "#941100",
         key = "runtimeOverlayButtonBackgroundColor",
         description = "First color of the legacy icon gradient.",
     )
     val iconBackground2 by stringOption(
         title = "UI - Legacy icon background 2",
-        default = "#00AF7C",
+        default = "#DE1600",
         key = "runtimeOverlayIconBackgroundColor2",
         description = "Second color of the legacy icon gradient. Background 1 is the existing overlay button background color.",
     )
     val iconGradientAngle by intOption(
         title = "UI - Legacy icon gradient angle (degrees)",
-        default = 30,
+        default = 0,
         key = "runtimeOverlayIconGradientAngle",
         description = "Gradient direction: 0 degrees runs top to bottom, 90 runs left to right, and 30 runs diagonally down and right. Values wrap through 360 degrees.",
     )
@@ -473,14 +473,14 @@ val universalOverlayPatch = bytecodePatch(
         val dragVisibilityDurationValue = (buttonDragVisibilityDurationSeconds ?: 2).coerceIn(1, 10)
         val shapeValue = buttonShape.orEmpty().ifBlank { "circle" }
         val positionValue = buttonPosition.orEmpty().ifBlank { "topRight" }
-        val backgroundValue = backgroundColor.orEmpty().ifBlank { "#CC101820" }
-        val outlineValue = outlineColor.orEmpty().ifBlank { "#FF55D6BE" }
-        val buttonTextColorValue = buttonTextColor.orEmpty().ifBlank { "#FFFFFFFF" }
-        val buttonBackgroundValue = buttonBackgroundColor.orEmpty().ifBlank { "#000083" }
+        val backgroundValue = backgroundColor.orEmpty().ifBlank { "#80FF0000" }
+        val outlineValue = outlineColor.orEmpty().ifBlank { "#FFFF0000" }
+        val buttonTextColorValue = buttonTextColor.orEmpty().ifBlank { "#FFFF0000" }
+        val buttonBackgroundValue = buttonBackgroundColor.orEmpty().ifBlank { "#941100" }
         val outlineWidthValue = (outlineWidth ?: 1).coerceIn(1, 8)
         val iconOutlineColorValue = iconOutlineColor.orEmpty().ifBlank { "#FFFFFFFF" }
-        val iconBackground2Value = iconBackground2.orEmpty().ifBlank { "#00AF7C" }
-        val iconGradientAngleValue = ((iconGradientAngle ?: 30) % 361 + 361) % 361
+        val iconBackground2Value = iconBackground2.orEmpty().ifBlank { "#DE1600" }
+        val iconGradientAngleValue = ((iconGradientAngle ?: 0) % 361 + 361) % 361
         val customIconSourceValue = customIconImage.orEmpty().trim()
         val resolvedCustomIconImage = resolveCustomIconImage(customIconSourceValue, logger)
         // Keep invalid non-empty input distinguishable from an intentionally blank field so the
@@ -511,7 +511,7 @@ val universalOverlayPatch = bytecodePatch(
 
         val config = listOf(
             CONFIG_VERSION, titleValue, descriptionValue, labelValue, urlValue,
-            backgroundValue, outlineValue, buttonText.orEmpty().trim().take(3).ifBlank { "N64" },
+            backgroundValue, outlineValue, buttonText.orEmpty().trim().take(3).ifBlank { "U" },
             buttonTextColorValue, buttonBackgroundValue, shapeValue,
             sizeValue.toString(), opacityValue.toString(), positionValue,
             listOf(
