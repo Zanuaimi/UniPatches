@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/Zanuaimi/UniPatches/compare/v1.0.2...v1.1.0) (2026-09-04)
+
+### ✨ New Features
+
+* updated defaults of universal overlay ([7f3c92a](https://github.com/Zanuaimi/UniPatches/commit/7f3c92a973ec2376067499a396a97c519639fdcd))
+
 ## [1.0.2](https://github.com/Zanuaimi/UniPatches/compare/v1.0.1...v1.0.2) (2026-09-04)
 
 ### 🐛 Bug Fixes

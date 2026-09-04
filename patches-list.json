@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "patches": [
     {
       "name": "Ads Free Rewards (Experimental)",
@@ -871,7 +871,7 @@
       "options": []
     },
     {
-      "name": "Universal Overlay Patch v1.0 (Experimental)",
+      "name": "UniPatches Universal Overlay Patch v1.0 (Experimental)",
       "description": "Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,\nfullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;\nselect them in Morphe settings before patching. Statistic modules show information, Activity modules\ncontrol the current Activity, and Hook modules control internal app behavior, such as disabling\nanimations, through best-effort runtime changes. A selected local image automatically replaces\nthe legacy icon; empty or invalid image input falls back to the legacy icon. This is experimental\nand may not work on all apps.\n\nThe idea and initial works of this Universal Overlay Patch are from Zanuaimi / Noobite.",
       "default": false,
       "dependencies": [
@@ -894,7 +894,7 @@
           "description": "Description below the title. Limited to 500 characters.",
           "required": false,
           "type": "kotlin.String",
-          "default": "Welcome! This is UniPatches Universal Overlay Patch Menu.\nYou will find modules below the description if you enabled some modules\nin this patch settings before patching this APK.\nThe idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.",
+          "default": "Welcome! This is the UniPatches Universal Overlay Patch Menu.\nYou will find modules below the description if you enabled some modules\nin this patch settings before patching this APK.\nThe idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.",
           "values": null
         },
         {
@@ -921,7 +921,7 @@
           "description": "Overlay background as #RRGGBB or #AARRGGBB.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#CC101820",
+          "default": "#80FF0000",
           "values": null
         },
         {
@@ -930,7 +930,7 @@
           "description": "Overlay outline as #RRGGBB or #AARRGGBB.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#FF55D6BE",
+          "default": "#FFFF0000",
           "values": null
         },
         {
@@ -948,7 +948,7 @@
           "description": "Text shown by the legacy icon. Maximum three characters.",
           "required": false,
           "type": "kotlin.String",
-          "default": "N64",
+          "default": "U",
           "values": null
         },
         {
@@ -966,7 +966,7 @@
           "description": "Text color used by the legacy icon.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#FFFFFFFF",
+          "default": "#FFFF0000",
           "values": null
         },
         {
@@ -984,7 +984,7 @@
           "description": "First color of the legacy icon gradient.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#000083",
+          "default": "#941100",
           "values": null
         },
         {
@@ -993,7 +993,7 @@
           "description": "Second color of the legacy icon gradient. Background 1 is the existing overlay button background color.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#00AF7C",
+          "default": "#DE1600",
           "values": null
         },
         {
@@ -1002,7 +1002,7 @@
           "description": "Gradient direction: 0 degrees runs top to bottom, 90 runs left to right, and 30 runs diagonally down and right. Values wrap through 360 degrees.",
           "required": false,
           "type": "kotlin.Int",
-          "default": 30,
+          "default": 0,
           "values": null
         },
         {
