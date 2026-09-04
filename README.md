@@ -1,80 +1,84 @@
-# 👋🧩 Morphe Patches template
+# UniPatches
 
-Template repository for Morphe Patches.
+![UniPatches profile logo](images/profilelogo.png)
 
-## ❓ About
+Curated list of universal patches for [Morphe](https://morphe.software), including community-driven patches with enhancements and original patches, focusing on quality over quantity
 
-Patches for apps I like.
+## About
 
-<!-- TODO: Update this about section with a brief introduction/summary about this repo and what it offers. -->
+UniPatches brings together a concise selection of community-favorite universal APK target-level patches and contains some patches of my own. Community patches are selected from projects I find useful, including:
+
+- [Entree](https://github.com/Entree3k/Morning-Entree-Patches)
+- [Nai64](https://github.com/Zanuaimi/Nai64Patches)
+- [Adobo](https://github.com/jkennethcarino/adobo)
+- [kondratjev](https://github.com/kondratjev/morphe-patches)
+- [MiguelNinja19](https://github.com/MiguelNinja19/miguel-morphe-patches)
+- [BlazeFTL](https://github.com/BlazeFTL/FTL-Patches)
+- [xob0t](https://github.com/xob0t/morphe-patches)
+- [rushiranpise (Doom)](https://github.com/rushiranpise/morphe-patches)
+
+These patches may be merged, refined, or enhanced where practical to improve compatibility, functionality, configuration, and usability.
+
+The Universal Overlay Patch has also been submitted as a pull request to [Nai64Patches](https://github.com/Nai64/Nai64Patches), one of the largest collections of universal Morphe patches. The version in Nai64Patches is intended for stable and major releases, while the version here is kept more up to date with ongoing improvements and changes. See the [Universal Overlay pull request](https://github.com/Nai64/Nai64Patches/pull/73).
+
+![Universal Overlay pull request evidence](images/pullrequestevidence.png)
+
+The repository also includes my own patches. The patches without separate community credits are:
+
+- Universal Overlay
+- Graphics API Override
+- Bypass Forced Online Checks
+- Bypass Forced Updates
+- Frame Rate Preference
+
+Community contributions are credited in each patch description, and merged or enhanced patches retain attribution to the developers whose work influenced them.
 
 ### How to use these patches
 
-Click here to add these patches to Morphe: https://morphe.software/add-source?github=xyz-user/xyz-patches
+[Add UniPatches to Morphe](https://morphe.software/add-source?github=Zanuaimi/UniPatches)
+
+After adding the source, select the patches you want from Morphe. Read each patch description and its options before applying it, especially experimental patches that modify app startup, licensing, integrity checks, or runtime behavior.
 
 ## 🩹 Patches list
 
 <!-- PATCHES_START EXPANDED -->
+> **[v1.1.2](https://github.com/Zanuaimi/UniPatches/releases/tag/v1.1.2)**&nbsp;&nbsp;•&nbsp;&nbsp;`main`&nbsp;&nbsp;•&nbsp;&nbsp;13 patches total
+<details open>
+<summary>📦 XYZ app&nbsp;&nbsp;•&nbsp;&nbsp;1 patch</summary>
+<br>
 
-<!-- Do not modify this section by hand. The patch list is generated when release.yml creates a new release.
-     
-     If you wish for the patches list to be collapsed, then remove the word 'EXPANDED' from the comment tag above.
+**🎯 Supported versions:**
 
-     If you wish to manually keep this list updated then remove the PATCHES_START and PATCHES_END 
-     comment blocks entirely. -->
+| 2.0.0 | 1.0.2 |
+| :---: | :---: |
 
-#### A list of your patches will automatically be shown here after your first patches release is created.
+| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
+|----------|----------------|-----------|
+| [Example Patch](#example-patch) | Example patch to start with. |  |
 
-&nbsp;
+</details>
 
-## 🚀 Getting development started
+<details open>
+<summary>🌐 Universal&nbsp;&nbsp;•&nbsp;&nbsp;12 patches</summary>
+<br>
 
-To start using this template, follow these steps:
+| 💊&nbsp;Patch | 📜&nbsp;Description | ⚙️&nbsp;Options |
+|----------|----------------|-----------|
+| [Ads Free Rewards (Experimental)](#ads-free-rewards-experimental) | Get rewards without watching ads. Combine with No Ads for other formats, but keep No Ads' rewarded block off.<br><br>Credits: Nai64Patches from Nai64. | • Patch version<br>• Reward Strategy<br>• Instant reward<br>• Fake ad availability |
+| [Bypass Emulator Detection](#bypass-emulator-detection) | Hides emulator traces by spoofing Build info and related checks so apps cannot detect an emulator.<br><br>Credits: Nai64Patches from Nai64. | • Device profile<br>• Hide Emulator Radio<br>• Spoof Build Extras |
+| [Bypass Forced Updates (Experimental)](#bypass-forced-updates-experimental) | Skip forced update screens and keep using the app. | • Bypass update gate<br>• Make dialogs dismissible<br>• Block update redirects<br>• Prevent forced exit<br>• Patch Play Core updates |
+| [Custom App Resolution (Experimental)](#custom-app-resolution-experimental) | Set a custom resolution for the game<br><br>Credits: Nai64Patches from Nai64. | • Enable Custom Resolution<br>• Resolution width (px)<br>• Resolution height (px) |
+| [Disable Forced Online Checks (Experimental)](#disable-forced-online-checks-experimental) | Lets the app start without internet. | • Auto mode<br>• Common Android/network API<br>• Unity strategy<br>• Unreal strategy<br>• Godot strategy<br>• Generic bytecode strategy |
+| [Frame Rate Preference (Experimental)](#frame-rate-preference-experimental) | Requests a preferred refresh rate like 60 or 90 Hz for the app window. The system may ignore it. | • Frame rate |
+| [Free In-app Purchases (Experimental)](#free-in-app-purchases-experimental) | Get paid items for free. Best for offline games.<br><br>Credits: Nai64Patches from Nai64. |  |
+| [Graphics API Override (Experimental)](#graphics-api-override-experimental) | Forces a Unity game to use Vulkan or OpenGL via launch argument. Only for supported Unity games. | • Graphics API |
+| [No Ads (Experimental)](#no-ads-experimental) | Blocks ads by type. Pick what to block. For rewarded ads use Ads Free Rewards instead.<br><br>Credits: Nai64Patches from Nai64. | • Preset<br>• Block Interstitials<br>• Block Banners<br>• Block App Open<br>• Block MREC<br>• Block Rewarded<br>• Block Native |
+| [PairIP Bypass Enhanced (Experimental)](#pairip-bypass-enhanced-experimental) | A merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.<br><br>Automatic mode applies compatible strategies up to the selected risk level. It defaults to<br>Low and Med Risk Strategies; Low Risk applies only low-risk strategies, while Low, Med, and<br>High Risk Strategies also enables the invasive high-risk strategies.<br><br>Turn off automatic mode to test the individual manual strategies. Manual selections are<br>independent of the automatic risk-level setting, and every manual strategy is disabled by default.<br><br>This patch is experimental and app-dependent. It does not bypass server-side Play Integrity,<br>server-side licensing, or other server-side enforcement.<br><br>This enhanced patch is a merged product of the PairIP bypass patches from the credited<br>developers, with improvements for broader functionality, safer strategy selection, and usability.<br><br>Credits: Nai64Patches from Nai64, Entree, kondratjev, and rushiranpise (Doom). | • Automatic strategy selection<br>• Automatic mode applying<br>• Redirect PairIP Application (Low Risk)<br>• Remove PairIP manifest entries (Low Risk)<br>• UI - Suppress LicenseClient error dialog (Low Risk)<br>• UI - Suppress LicenseClient paywall (Medium Risk)<br>• UI - Suppress LicenseActivity paywall (Medium Risk)<br>• UI - Suppress LicenseActivity nnStart (Medium Risk)<br>• UI - Suppress LicenseActivity onStart (Medium Risk)<br>• UI - Suppress LicenseActivity closeApp (Medium Risk)<br>• UI - Suppress LicenseActivity exitApp (Medium Risk)<br>• UI - Suppress LicenseActivity closeapp (Medium Risk)<br>• UI - Suppress LicenseActivity exitapp (Medium Risk)<br>• UI - Suppress LicenseActivity closeAllTasks (Medium Risk)<br>• UI - Suppress LicenseActivity error dialog (Low Risk)<br>• UI - Suppress logged error dialog (Low Risk)<br>• Application - Bypass attachBaseContext (High Risk)<br>• Application - Bypass onCreate (High Risk)<br>• Runtime - Bypass Application static initializer (High Risk)<br>• Runtime - Bypass VMRunner.invoke (High Risk)<br>• Runtime - Bypass StartupLauncher.launch (High Risk)<br>• Runtime - Bypass StartupLauncher.pairip (High Risk)<br>• V3 - Bypass LicenseClient activity (High Risk)<br>• Installer - Spoof local installer check (Medium Risk)<br>• Installer - Spoof installer source (High Risk)<br>• Integrity - Bypass signature integrity (High Risk)<br>• Integrity - Bypass signature match (High Risk)<br>• License Client - Bypass checkLicense (Medium Risk)<br>• License Client - Bypass initializeLicenseCheck (Medium Risk)<br>• License Client - Bypass service connection (Medium Risk)<br>• License Client - Bypass processResponse (Medium Risk)<br>• Provider - Bypass initialization (High Risk)<br>• Provider - Bypass query (High Risk)<br>• Provider - Bypass context provider (High Risk)<br>• Response - Bypass helper validation (Medium Risk)<br>• Response - Remove repeated-check metadata (Low Risk)<br>• Response - Bypass helper signature (Medium Risk)<br>• Response - Bypass validator validation (Medium Risk)<br>• Response - Bypass validator signature (Medium Risk)<br>• V3 - Bypass response validation (Medium Risk)<br>• V2 - Bypass checkLicenseInternal (High Risk)<br>• V2 - Bypass response signature (High Risk)<br>• V2 - Disable repeated checks (Low Risk)<br>• V2 - Disable repeated-check flag (Low Risk)<br>• Advanced - External VMRunner call sites (High Risk) |
+| [Skip Splash Screen (Experimental)](#skip-splash-screen-experimental) | Skip or shorten splash screen delays<br><br>Credits: Nai64Patches from Nai64. |  |
+| [UniPatches Universal Overlay Patch v1.0 (Experimental)](#unipatches-universal-overlay-patch-v1-0-experimental) | Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,<br>fullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;<br>select them in Morphe settings before patching. Statistic modules show information, Activity modules<br>control the current Activity, and Hook modules control internal app behavior, such as disabling<br>animations, through best-effort runtime changes. A selected local image automatically replaces<br>the legacy icon; empty or invalid image input falls back to the legacy icon. This is experimental<br>and may not work on all apps.<br><br>The idea and initial works of this Universal Overlay Patch are from Zanuaimi / Noobite. | • General - Overlay title<br>• General - Overlay description<br>• General - Repository button text<br>• General - Repository button URL<br>• General - Overlay background color<br>• General - Overlay outline color<br>• UI - Menu outline width (dp)<br>• UI - Legacy icon text<br>• UI - Legacy icon bold text<br>• UI - Legacy icon text color<br>• UI - Gradient background<br>• UI - Legacy icon background 1<br>• UI - Legacy icon background 2<br>• UI - Legacy icon gradient angle (degrees)<br>• UI - Icon outline<br>• UI - Icon outline color<br>• UI - Custom image icon<br>• UI - Overlay button shape<br>• UI - Overlay button size (dp)<br>• UI - Overlay button idle opacity (%)<br>• UI - Overlay button fully visible duration (seconds)<br>• UI - Overlay button position<br>• Advanced - Overlay Activity name override<br>• Settings to Modules - Activate statistic modules on launch<br>• Settings to Modules - Enable monitors for statistic modules on launch<br>• Settings to Modules - Statistic monitor position<br>• Settings to Modules - Monitor panel size<br>• Settings to Modules - Monitor columns<br>• Settings to Modules - Temperature stat format<br>• Settings to Modules - System time format<br>• Statistic modules - Device Information<br>• Statistic modules - FPS<br>• Statistic modules - Device Temperature<br>• Statistic modules - System Time<br>• Statistic modules - App Session Time<br>• Statistic modules - Battery Status<br>• Statistic modules - App Memory Usage<br>• Statistic modules - Network Status<br>• Activity modules - Keep screen awake<br>• Activity modules - Fullscreen<br>• Activity modules - Allow screenshots<br>• Activity modules - App brightness<br>• Activity modules - Rotation mode<br>• Activity modules - App audio mute<br>• Hook modules - Disable haptic feedback / vibrations<br>• Hook modules - Disable app animations |
 
-1. [Setup](https://github.com/MorpheApp/morphe-documentation/blob/main/docs/morphe-development/README.md) your development environment including adding a GitHub PAT as described [here](https://github.com/MorpheApp/morphe-patcher/blob/main/docs/2_1_setup.md#-prepare-the-environment).
-2. [Create a new repository using this template](https://github.com/new?template_name=morphe-patches-template&template_owner=MorpheApp). Select create a new repository, and **enable 'Include all branches'** 
-3. Enable "Allow GitHub Actions to create and approve pull requests" in your repo Settings > Actions > General > Workflow permissions
-4. Update the [build.gradle.kts](patches/build.gradle.kts) file (Specifically, the 
-   [group of the project](patches/build.gradle.kts#L1), and the [About](patches/build.gradle.kts#L6-L11))
-5. Update the [README.md](README.md) file to be specific of your repo, and update the links in the [issue templates](.github/ISSUE_TEMPLATE).
-6. Choose a name for your patches project. Keep in mind you must use a name that does not 
-   imply authorship by the Morphe open source project. If unsure, then simply name these
-   patches after yourself ("UserXYZ Morphe patches"). See the [NOTICE](NOTICE) for details. 
-7. (Optional): Add `patches-bundle.png` to the project if you want a custom icon to show in
-   Morphe Manager instead of your GitHub profile avatar.
+</details>
 
-🎉 You are now ready to start creating patches!
-
-## 🧑‍💻 Dev usage
-
-To develop and release your Patches using this template:
-
-- **Make all changes to the `dev` branch.**
-- For local development work build your patches using the gradle task `./gradlew buildAndroid` to generate the mpp file found in `patches/build/libs/patches-*.mpp`. Apply your patches locally using Morphe Desktop tool like any other patch bundle.
-- Always use [Semantic commit](https://kapeli.com/cheat_sheets/Semantic_Commits.docset/Contents/Resources/Documents/index) messages for commits. To keep it simple use only 3 commit message types: 
-  - `feat: Added a new feature`
-  - `fix: Some problem now fixed`
-  - `chore: Random change you do not want in the user facing changelog`
-- Commits of `fix:` and `feat:` will automatically generate new pre-releases and `chore:` will not create a new release.
-- Users can apply your dev branch releases by enabling `pre-release` in Morphe Manager patch sources.
-- When your dev branch is ready, and you want a stable release, merge dev branch to main (do not squash, and only merge).
-- **Always use semantic release (release.yml)**. Do not manually upload or create releases by hand
-  because many files must be updated and release.yml handles everything.
-
-## 🤓 Tips
-- See the [patcher documentation](https://github.com/MorpheApp/morphe-patcher/blob/main/docs/1_patcher_intro.md) for more examples of creating patches and fingerprints.
-- Do not use AI to create new release scripts. The `release.yml` here already handles everything.
-  If you need omething custom with your releases then modify the existing `release.yml`
-  and `.releaserc` instead of writing everything new from scratch.
-- Do not manually edit or manually commit any generated files such as: `patches-list.json`,
-  `patches-bundle.json`, `CHANGELOG.md`.  These files will be automatically updated by `release.yml`.
-- Do not force push any semantic release commits as that will break all future releases.
-  If you need to fix a broken release, it's always easiest to create a new release instead of 
-  fixing an existing release.
-
-
-<!-- The patches end tag is intentionally placed here so the first release will clean up 
-     this readme of all developer instructions above. -->
 <!-- PATCHES_END -->
 
 ### 🛠️ Building locally
@@ -86,6 +90,12 @@ To develop and release your Patches using this template:
 
 See the [Morphe documentation](https://github.com/MorpheApp/morphe-documentation) for more information.
 
-## 📜 License
+## Contributing
 
-UserXYZ Patches are licensed under the [GNU General Public License v3.0](LICENSE)
+Suggestions, fixes, compatibility improvements, and carefully selected community patches are welcome. Contributions should preserve the repository’s quality-over-quantity goal, include appropriate credits, and use clear semantic commit messages such as `feat:`, `fix:`, or `chore:`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance, including the Universal Overlay guide.
+
+## License
+
+UniPatches is licensed under the [GNU General Public License v3.0](LICENSE).

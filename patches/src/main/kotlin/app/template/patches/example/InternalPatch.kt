@@ -4,7 +4,7 @@ import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.extensions.InstructionExtensions.addInstruction
 import app.morphe.patcher.patch.bytecodePatch
 
-// Internal patch that is not shown in Morphe Manager or CLI patch list,
+// Internal patch that is not shown in the Morphe Manager or CLI patch list,
 // but this patch is required for other patches to function.
 val internalPatch = bytecodePatch {
     execute {
