@@ -73,6 +73,10 @@ Configuration fields are positional and Base64 encoded. When adding fields:
 - preserve decoding for older versions;
 - validate bounded numeric values and enum strings before serialization.
 
+Configuration version 11 adds separate background transparency, overlay text color, and icon
+outline width fields. Colors remain RGB-only; background alpha is applied by the runtime from the
+percentage field.
+
 Keep the runtime fallback safe when a setting is missing or malformed.
 
 ## Review checklist

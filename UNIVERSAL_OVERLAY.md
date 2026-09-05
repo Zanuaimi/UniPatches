@@ -120,6 +120,12 @@ This decodes and sanitizes the payload produced by the Kotlin patch. Configurati
 positional, so new fields are appended and version-aware defaults preserve older payloads.
 Malformed colors, enums, dimensions, and missing values receive safe fallbacks.
 
+The current configuration uses RGB-only color values in `#RRGGBB` format. Overlay background
+transparency is serialized separately as a percentage because Morphe's color picker does not
+edit alpha. The default background `#300000` with 80% opacity reproduces the previous `#CC300000`
+value. Menu outline and menu text are independent settings, and the icon outline width is
+independent from the menu outline width.
+
 ### Shared view construction
 
 extensions/extension/src/main/java/unipatch/universaloverlay/UniversalOverlayViews.java
