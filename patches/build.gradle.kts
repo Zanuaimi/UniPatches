@@ -1,24 +1,24 @@
-group = "app.template"
+group = "unipatches"
 
 patches {
-    // TODO: Update this section with your project details.
     about {
-        name = "UserXYZ Patches"
-        description = "Patches for apps I like"
-        source = "git@github.com:UserXYZ/morphe-patches.git"
-        author = "Awesome dev"
-        contact = "na"
-        website = "na"
+        name = "Zanuaimi's Morphe UniPatches"
+        description = "Curated universal APK target level patches with selected community patches and original UniPatches patches."
+        source = "https://github.com/Zanuaimi/UniPatches"
+        author = "Zanuaimi"
+        contact = "https://github.com/Zanuaimi"
+        website = "https://github.com/Zanuaimi/UniPatches"
         license = "GPLv3"
     }
 }
 
-// Separate configuration so gson is available at runtime for the
-// generatePatchesList task but never bundled into the APK.
+// Gson is used by the patch-time preset importer/exporter and by the
+// generatePatchesList task. It is a patch-builder dependency, not an APK
+// runtime dependency; the extension does not use it.
 val patchListGeneratorClasspath = configurations.create("patchListGeneratorClasspath")
 
 dependencies {
-    compileOnly(libs.gson)
+    implementation(libs.gson)
     patchListGeneratorClasspath(libs.gson)
 }
 
