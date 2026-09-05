@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/Zanuaimi/UniPatches/compare/v1.3.0...v1.4.0) (2026-09-05)
+
+### ✨ New Features
+
+* harden UI preset export paths ([aea34fe](https://github.com/Zanuaimi/UniPatches/commit/aea34fe359a9b68626b57c1d81983fe2d403ba58))
+
 ## [1.3.0](https://github.com/Zanuaimi/UniPatches/compare/v1.2.0...v1.3.0) (2026-09-05)
 
 ### ✨ New Features

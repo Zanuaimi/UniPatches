@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-05T05:22:14",
-  "description": "## [1.3.0](https://github.com/Zanuaimi/UniPatches/compare/v1.2.0...v1.3.0) (2026-09-05)\n\n### ✨ New Features\n\n* add Universal Overlay UI presets ([9b7f13b](https://github.com/Zanuaimi/UniPatches/commit/9b7f13bbe82583f66a4f77eaee09301baf94b3eb))\n* organize PairIP strategies by risk ([2b9ae59](https://github.com/Zanuaimi/UniPatches/commit/2b9ae59ac5afa3de1c67b59fc51984971e4b12f4))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.3.0/patches-1.3.0.mpp",
+  "created_at": "2026-09-05T05:30:43",
+  "description": "## [1.4.0](https://github.com/Zanuaimi/UniPatches/compare/v1.3.0...v1.4.0) (2026-09-05)\n\n### ✨ New Features\n\n* harden UI preset export paths ([aea34fe](https://github.com/Zanuaimi/UniPatches/commit/aea34fe359a9b68626b57c1d81983fe2d403ba58))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.4.0/patches-1.4.0.mpp",
   "signature_download_url": "",
-  "version": "1.3.0"
+  "version": "1.4.0"
 }
