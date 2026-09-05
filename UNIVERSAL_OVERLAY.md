@@ -11,6 +11,30 @@ The patch adds an in-app floating button and an optional menu. The menu is confi
 patching, while selected modules can be enabled, disabled, and customized at runtime. The overlay
 belongs to the patched app's Activity content; it is not an Android system-level window.
 
+## UI presets
+
+Version 1.2 adds build-time UI presets. `Custom` uses the visible Morphe settings, including user
+adjustments. `UniPatches`, `Morphe Blue`, `Dark`, `Light`, and `ZArchiver` provide predefined
+readable UI values. ZArchiver uses an opaque gray menu, white text, a green outline, and a
+non-gradient dark-green `Z` icon.
+The UniPatches default values are intentionally identical to the default Custom values.
+
+Presets cover every General, UI, and Advanced setting, including the custom icon input. They do not
+contain the Settings to Modules group or any Statistic, Activity, or Hook module toggle. Those values
+remain independent because hook and module combinations can be app-specific and may prevent an APK
+from working correctly.
+
+`Import UI preset` accepts a path to a JSON file and is used only in Custom mode. A valid supported
+preset overrides the visible settings during patching; an empty, unreadable, malformed, or
+unsupported file falls back to the visible Morphe settings. Morphe Manager's visible controls do
+not change when a preset is imported because settings are evaluated during patch execution.
+
+`Export UI preset` accepts an existing output folder and is used only in Custom mode. The final
+effective UI configuration is exported after the patch work completes. The default filename is
+`UniversalOverlay.json`; `.json` is normalized and duplicate names receive `-1`, `-2`, and so on.
+Export failures are logged but never cancel APK patching. Root and protected system locations are
+rejected.
+
 ## File map
 
 ### Patch and injection
@@ -30,6 +54,13 @@ This is the Morphe patch entry point. It:
 It should contain patch-time discovery and configuration only. Runtime UI and feature behavior belong
 in the extension Java code.
 
+patches/src/main/kotlin/unipatches/overlay/presets/
+
+This contains the shared preset model, one definition file per built-in preset, and the centralized
+catalog registry. Each `OverlayPresetDefinition` contains explicit General, UI, and Advanced values.
+The Morphe preset dropdown is generated from the catalog, so contributors do not maintain a second
+list in the patch entry point.
+
 patches/src/main/kotlin/helpers/startup/StartupHooks.kt
 
 The overlay reuses StartupHooks for Application discovery, launcher Activity fallback information,
@@ -47,6 +78,13 @@ UniPatches
 |
 |-- patches/src/main/kotlin/unipatches/overlay/
 |   `-- UniversalOverlayPatch.kt       Morphe settings and safe injection bridge
+|   |-- presets/OverlayPreset.kt         Shared preset model and value builder
+|   |-- presets/OverlayPresetCatalog.kt Central preset registry
+|   |-- presets/UniPatchesPreset.kt     UniPatches preset
+|   |-- presets/MorpheBluePreset.kt     Morphe Blue preset
+|   |-- presets/DarkPreset.kt            Dark preset
+|   |-- presets/LightPreset.kt           Light preset
+|   `-- presets/ZArchiverPreset.kt       ZArchiver preset
 |-- patches/src/main/kotlin/helpers/startup/
 |   `-- StartupHooks.kt                Application/activity discovery and Smali helpers
 |-- patches/src/main/kotlin/helpers/manifest/
@@ -124,7 +162,15 @@ The current configuration uses RGB-only color values in `#RRGGBB` format. Overla
 transparency is serialized separately as a percentage because Morphe's color picker does not
 edit alpha. The default background `#300000` with 80% opacity reproduces the previous `#CC300000`
 value. Menu outline and menu text are independent settings, and the icon outline width is
-independent from the menu outline width.
+independent from the menu outline width. Version 1.2 also stores the configurable legacy icon text
+size and supports two build-time custom icon inputs: a local image file and a String Handler input.
+The local image takes priority when valid; otherwise file URI, Base64, data URI, and HTTPS inputs are
+tried before falling back to the legacy icon.
+
+The user-facing preset format is versioned JSON and is separate from the internal Base64-delimited
+runtime payload. Unknown JSON fields are ignored, missing fields use the visible settings, and
+recognized values are range-checked before use. This allows future UI settings to be added without
+invalidating older presets.
 
 ### Shared view construction
 
@@ -185,7 +231,7 @@ other module categories from operating.
 
 ## Runtime flow
 
-1. Morphe builds the patch with the selected settings.
+1. Morphe builds the patch with the selected settings and, in Custom mode, optionally imports a UI preset.
 2. The patch injects a bridge into Application.onCreate, or uses an Activity fallback.
 3. UniversalOverlayRuntime decodes the configuration and registers lifecycle callbacks.
 4. Each resumed Activity receives its own controller and overlay content.
@@ -195,6 +241,8 @@ other module categories from operating.
 7. Menu and monitor updates follow their separate visibility rules.
 8. Pause stops visible-work updates, destruction removes the controller, and full close removes all
    controllers and unregisters the runtime.
+9. In Custom mode, an optional UI preset is exported after patching. Export errors do not affect the
+   patched APK.
 
 If content attachment is unavailable for an unusual Activity, setup failure is caught and the host
 app continues without the overlay. The implementation does not create a system-level overlay.

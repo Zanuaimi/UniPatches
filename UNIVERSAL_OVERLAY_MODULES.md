@@ -8,6 +8,11 @@ The patch file at patches/src/main/kotlin/unipatches/overlay/UniversalOverlayPat
 exposes Morphe settings and serializes them into the runtime configuration. It should not contain
 app-specific logic.
 
+Built-in UI presets are defined separately in
+patches/src/main/kotlin/unipatches/overlay/presets/OverlayPresetCatalog.kt. The patch entry point
+only selects a catalog value, applies Custom/import precedence, and serializes the final result.
+Preset definitions are build-time data and do not belong in the extension runtime.
+
 The extension runtime starts from UniversalOverlayRuntime and owns lifecycle registration,
 Activity controllers, view attachment, state restoration, update scheduling, and failure isolation.
 It is shared by ordinary Android apps, Unity games, Godot games, and apps with multiple Activities.
@@ -73,9 +78,16 @@ Configuration fields are positional and Base64 encoded. When adding fields:
 - preserve decoding for older versions;
 - validate bounded numeric values and enum strings before serialization.
 
-Configuration version 11 adds separate background transparency, overlay text color, and icon
-outline width fields. Colors remain RGB-only; background alpha is applied by the runtime from the
-percentage field.
+The current configuration payload uses version 1 for this new UniPatches repository. It includes
+the v1.2 icon text size alongside background transparency, overlay text color, and icon outline width.
+Colors remain RGB-only; background alpha is applied by the runtime from the percentage field. The
+runtime still accepts older positional payloads.
+
+UI presets are versioned JSON files handled by the patch-time Kotlin layer. They contain General,
+UI, and Advanced settings, including both custom icon inputs, but exclude Settings to Modules and all
+module toggles. Import is Custom-only and falls back field-by-field to visible Morphe settings when
+values are missing or invalid. Export is Custom-only, happens after patch work, and logs failures
+without failing the APK patch.
 
 Keep the runtime fallback safe when a setting is missing or malformed.
 
