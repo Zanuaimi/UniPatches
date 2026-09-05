@@ -397,7 +397,7 @@ public final class UniversalOverlayRuntime {
                         config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
                         config.iconGradientAngle,
                         config.iconOutline ? config.iconOutlineColor : Color.TRANSPARENT,
-                        config.iconOutline ? Math.min(8, Math.max(2, config.outlineWidth + 1)) : 0, config.shape == 1));
+                        config.iconOutline ? config.iconOutlineWidth : 0, config.shape == 1));
             }
             button.setOnClickListener(v -> toggleMenu());
             button.setOnTouchListener(this::onButtonTouch);
@@ -452,7 +452,7 @@ public final class UniversalOverlayRuntime {
         private void createStatisticMonitors(UniversalOverlayStatisticModule module) {
             List<TextView> monitors = new ArrayList<>();
             for (int i = 0; i < module.monitorCount(); i++) {
-                TextView monitor = text("", 12, config.outline);
+                TextView monitor = text("", 12, config.overlayTextColor);
                 monitor.setGravity(Gravity.CENTER);
                 monitor.setPadding(dp(3), 0, dp(3), 0);
                 monitor.setBackground(UniversalOverlayViews.background(config.background, config.outline, false, config.outlineWidth));
@@ -595,11 +595,11 @@ public final class UniversalOverlayRuntime {
             panelParams.setMargins(dp(20), dp(20), dp(20), dp(20));
             menu.setLayoutParams(panelParams);
 
-            TextView title = text(config.title, 20, config.outline);
+            TextView title = text(config.title, 20, config.overlayTextColor);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             menu.addView(title, new LinearLayout.LayoutParams(-1, -2));
 
-            TextView description = text(config.description, 14, config.outline);
+            TextView description = text(config.description, 14, config.overlayTextColor);
             LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(-1, -2);
             descriptionParams.topMargin = dp(8);
             menu.addView(description, descriptionParams);
@@ -640,11 +640,11 @@ public final class UniversalOverlayRuntime {
             card.setClickable(true);
             card.setOnClickListener(v -> { });
 
-            TextView title = text("Close overlay?", 20, config.outline);
+            TextView title = text("Close overlay?", 20, config.overlayTextColor);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             card.addView(title, new LinearLayout.LayoutParams(-1, -2));
 
-            TextView message = text("The overlay will be removed for this Activity.", 14, config.outline);
+            TextView message = text("The overlay will be removed for this Activity.", 14, config.overlayTextColor);
             LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(-1, -2);
             messageParams.topMargin = dp(8);
             card.addView(message, messageParams);
@@ -725,7 +725,7 @@ public final class UniversalOverlayRuntime {
         }
 
         private void addSectionLabel(LinearLayout parent, String label) {
-            TextView separator = text("—  " + label + "  —", 13, config.outline);
+            TextView separator = text("—  " + label + "  —", 13, config.overlayTextColor);
             separator.setAlpha(.65f);
             separator.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(32));
@@ -833,12 +833,12 @@ public final class UniversalOverlayRuntime {
             ArrayAdapter<String> adapter = new ArrayAdapter<String>(overlayContext, android.R.layout.simple_spinner_item, labels) {
                 @Override public View getView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getView(position, convertView, parentView);
-                    view.setTextColor(config.outline);
+                    view.setTextColor(config.overlayTextColor);
                     return view;
                 }
                 @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getDropDownView(position, convertView, parentView);
-                    view.setTextColor(config.outline);
+                    view.setTextColor(config.overlayTextColor);
                     view.setBackgroundColor(config.background);
                     return view;
                 }
@@ -873,10 +873,10 @@ public final class UniversalOverlayRuntime {
             LinearLayout row = new LinearLayout(overlayContext);
             row.setOrientation(LinearLayout.VERTICAL);
             row.setPadding(0, dp(6), 0, dp(6));
-            TextView title = text(label, 16, config.outline);
+            TextView title = text(label, 16, config.overlayTextColor);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             row.addView(title, new LinearLayout.LayoutParams(-1, -2));
-            TextView description = text(details, 13, config.outline);
+            TextView description = text(details, 13, config.overlayTextColor);
             description.setAlpha(.82f);
             row.addView(description, new LinearLayout.LayoutParams(-1, -2));
             return row;
@@ -895,13 +895,13 @@ public final class UniversalOverlayRuntime {
 
             LinearLayout copy = new LinearLayout(overlayContext);
             copy.setOrientation(LinearLayout.VERTICAL);
-            TextView title = text(label, 16, config.outline);
+            TextView title = text(label, 16, config.overlayTextColor);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             copy.addView(title, new LinearLayout.LayoutParams(-1, -2));
-            TextView details = text(description, 13, config.outline);
+            TextView details = text(description, 13, config.overlayTextColor);
             details.setAlpha(.82f);
             copy.addView(details, new LinearLayout.LayoutParams(-1, -2));
-            TextView valueView = text("Disabled", 12, config.outline);
+            TextView valueView = text("Disabled", 12, config.overlayTextColor);
             valueView.setAlpha(.72f);
             copy.addView(valueView, new LinearLayout.LayoutParams(-1, -2));
             row.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -1017,10 +1017,10 @@ public final class UniversalOverlayRuntime {
 
             LinearLayout copy = new LinearLayout(overlayContext);
             copy.setOrientation(LinearLayout.VERTICAL);
-            TextView title = text(feature.label(), 16, config.outline);
+            TextView title = text(feature.label(), 16, config.overlayTextColor);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             copy.addView(title, new LinearLayout.LayoutParams(-1, -2));
-            TextView description = text(feature.description(), 13, config.outline);
+            TextView description = text(feature.description(), 13, config.overlayTextColor);
             description.setAlpha(.82f);
             LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(-1, -2);
             descriptionParams.topMargin = dp(2);
@@ -1060,15 +1060,15 @@ public final class UniversalOverlayRuntime {
         }
 
         private void styleCheckBox(CheckBox control) {
-            control.setTextColor(config.outline);
+            control.setTextColor(config.overlayTextColor);
             if (android.os.Build.VERSION.SDK_INT >= 21) {
-                control.setButtonTintList(ColorStateList.valueOf(config.outline));
+                control.setButtonTintList(ColorStateList.valueOf(config.overlayTextColor));
             }
         }
 
         private void styleSlider(SeekBar slider) {
             if (android.os.Build.VERSION.SDK_INT >= 21) {
-                ColorStateList tint = ColorStateList.valueOf(config.outline);
+                ColorStateList tint = ColorStateList.valueOf(config.overlayTextColor);
                 slider.setProgressTintList(tint);
                 slider.setThumbTintList(tint);
                 slider.setProgressBackgroundTintList(ColorStateList.valueOf(config.background));
@@ -1076,7 +1076,7 @@ public final class UniversalOverlayRuntime {
         }
 
         private void addAction(LinearLayout row, String label, View.OnClickListener listener) {
-            TextView action = text(label, 14, config.outline);
+            TextView action = text(label, 14, config.overlayTextColor);
             action.setGravity(Gravity.CENTER);
             action.setContentDescription(label);
             action.setOnClickListener(listener);
