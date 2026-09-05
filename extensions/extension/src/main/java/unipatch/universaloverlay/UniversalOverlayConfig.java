@@ -5,7 +5,7 @@ import android.view.Gravity;
 
 /**
  * Decodes and validates overlay configuration inside the extension runtime.
- * The patch-building Kotlin code supplies version 10; older payloads remain supported.
+ * The patch-building Kotlin code supplies version 11; older payloads remain supported.
  */
 final class UniversalOverlayConfig {
     private static final String DEFAULT_DESCRIPTION =
@@ -14,8 +14,9 @@ final class UniversalOverlayConfig {
             "future updates. The idea and initial works of this Universal Overlay Patch are from " +
             "Zanuaimi.";
     String title, description, repositoryText, repositoryUrl, buttonText;
-    int background, outline, buttonTextColor, buttonBackground, buttonSize, gravity;
-    int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle;
+    int background, outline, overlayTextColor, buttonTextColor, buttonBackground, buttonSize, gravity;
+    int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle, iconOutlineWidth;
+    int backgroundTransparency;
     float opacity;
     int shape;
     boolean iconOutline, iconBold;
@@ -34,20 +35,24 @@ final class UniversalOverlayConfig {
     static UniversalOverlayConfig decode(String encoded) {
         UniversalOverlayConfig c = new UniversalOverlayConfig();
         String[] values = encoded == null ? new String[0] : encoded.split("\\|", -1);
-        // Version 2/3/4/5/6/7/8/9/10 prepends a version field. Keep accepting the original 14-field format so an
+        // Version 2/3/4/5/6/7/8/9/10/11 prepends a version field. Keep accepting the original 14-field format so an
         // older generated patch remains safe when paired with this newer extension.
-        String[] v = new String[33];
+        String[] v = new String[36];
         for (int i = 0; i < v.length; i++) v[i] = i < values.length ? decodePart(values[i]) : "";
-        int offset = ("2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0])) ? 1 : 0;
+        int offset = ("2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0])) ? 1 : 0;
         c.title = limit(field(v, offset, 0), 80, "UniPatches Universal Overlay Patch");
         c.description = limit(field(v, offset, 1), 500, DEFAULT_DESCRIPTION);
         c.repositoryText = empty(field(v, offset, 2), "UniPatches repository");
         c.repositoryUrl = validUrl(field(v, offset, 3));
-        c.background = color(field(v, offset, 4), 0x80FF0000);
-        c.outline = color(field(v, offset, 5), 0xFFFF0000);
+        boolean currentColorFormat = "11".equals(v[0]);
+        int rawBackground = color(field(v, offset, 4), currentColorFormat ? 0xFF300000 : 0x80FF0000);
+        c.backgroundTransparency = currentColorFormat ? integer(field(v, offset, 30), 80, 0, 100) : Math.round(Color.alpha(rawBackground) * 100f / 255f);
+        c.background = currentColorFormat ? withAlpha(rawBackground, c.backgroundTransparency) : rawBackground;
+        c.outline = color(field(v, offset, 5), 0xFFFF5656);
+        c.overlayTextColor = color(currentColorFormat ? field(v, offset, 31) : "", c.outline);
         c.buttonText = limit(empty(field(v, offset, 6), "U"), 3, "U");
-        c.buttonTextColor = color(field(v, offset, 7), 0xFFFF0000);
-        c.buttonBackground = color(field(v, offset, 8), 0xFF941100);
+        c.buttonTextColor = color(field(v, offset, 7), 0xFFFFFFFF);
+        c.buttonBackground = color(field(v, offset, 8), 0xFF500000);
         String shape = field(v, offset, 9);
         c.shape = "square".equals(shape) ? 0 : ("squircle".equals(shape) ? 2 : 1);
         c.buttonSize = integer(field(v, offset, 10), 56, 32, 128);
@@ -71,7 +76,7 @@ final class UniversalOverlayConfig {
         c.disableHaptics = hasToken(controls, "disableHaptics");
         c.disableAnimations = hasToken(controls, "disableAnimations");
         c.activateStatisticsOnLaunch = "1".equals(field(v, offset, 14));
-        boolean currentFormat = "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]);
+        boolean currentFormat = "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]);
         c.enableMonitorsOnLaunch = currentFormat && "1".equals(field(v, offset, 15));
         int monitorPositionIndex = currentFormat ? 16 : 15;
         int monitorScaleIndex = currentFormat ? 17 : 16;
@@ -81,15 +86,15 @@ final class UniversalOverlayConfig {
                 : ("bottom".equals(monitorPosition) ? 2 : 0);
         c.monitorScale = floatValue(field(v, offset, monitorScaleIndex), 1f, .5f, 2f);
         c.monitorColumns = integer(field(v, offset, monitorColumnsIndex), 2, 1, 3);
-        boolean extendedFormat = "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]);
+        boolean extendedFormat = "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]);
         c.temperatureFormat = extendedFormat && "fahrenheit".equals(field(v, offset, 19)) ? "fahrenheit"
                 : (extendedFormat && "kelvin".equals(field(v, offset, 19)) ? "kelvin" : "celsius");
         c.timeFormat = extendedFormat && "24".equals(field(v, offset, 20)) ? "24" : "12";
-        boolean customizationFormat = "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]);
-        boolean automaticIconFormat = "10".equals(v[0]);
+        boolean customizationFormat = "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]);
+        boolean automaticIconFormat = "10".equals(v[0]) || "11".equals(v[0]);
         c.outlineWidth = customizationFormat ? integer(field(v, offset, 21), 1, 1, 8) : 1;
         c.iconOutline = customizationFormat && "1".equals(field(v, offset, 22));
-        c.iconOutlineColor = color(customizationFormat ? field(v, offset, 23) : "", c.outline);
+        c.iconOutlineColor = color(customizationFormat ? field(v, offset, 23) : "", 0xFFFFFFFF);
         int iconBoldIndex = automaticIconFormat ? 24 : 25;
         int iconBackgroundIndex = automaticIconFormat ? 25 : 26;
         int iconGradientIndex = automaticIconFormat ? 26 : 27;
@@ -97,7 +102,7 @@ final class UniversalOverlayConfig {
         int dragDurationIndex = automaticIconFormat ? 28 : 29;
         int gradientToggleIndex = automaticIconFormat ? 29 : 30;
         c.iconBold = !customizationFormat || "1".equals(field(v, offset, iconBoldIndex));
-        c.iconBackground2 = color(customizationFormat ? field(v, offset, iconBackgroundIndex) : "", 0xFFDE1600);
+        c.iconBackground2 = color(customizationFormat ? field(v, offset, iconBackgroundIndex) : "", 0xFFAA0000);
         c.iconGradientAngle = customizationFormat ? integer(field(v, offset, iconGradientIndex), 0, 0, 360) : 0;
         c.customIconImage = customizationFormat ? field(v, offset, customIconIndex) : "";
         c.iconType = c.customIconImage.isEmpty() ? "legacy" : "image";
@@ -108,6 +113,7 @@ final class UniversalOverlayConfig {
         c.gradientBackground = automaticIconFormat
                 ? "1".equals(field(v, offset, gradientToggleIndex))
                 : (!"9".equals(v[0]) || "1".equals(field(v, offset, gradientToggleIndex)));
+        c.iconOutlineWidth = currentColorFormat ? integer(field(v, offset, 32), 3, 1, 8) : Math.min(8, Math.max(2, c.outlineWidth + 1));
         return c;
     }
 
@@ -143,6 +149,10 @@ final class UniversalOverlayConfig {
             if (v.length() != 8) return fallback;
             return (int) Long.parseLong(v, 16);
         } catch (RuntimeException ignored) { return fallback; }
+    }
+    private static int withAlpha(int color, int transparencyPercent) {
+        int alpha = Math.round(255f * Math.max(0, Math.min(100, transparencyPercent)) / 100f);
+        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
     }
     private static int gravity(String value) {
         if ("topLeft".equals(value)) return Gravity.TOP | Gravity.LEFT;
