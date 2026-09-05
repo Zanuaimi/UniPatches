@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.1.3",
+  "version": "1.2.0",
   "patches": [
     {
       "name": "Ads Free Rewards (Experimental)",
@@ -918,19 +918,37 @@
         {
           "key": "runtimeOverlayBackgroundColor",
           "title": "General - Overlay background color",
-          "description": "Overlay background as #RRGGBB or #AARRGGBB.",
+          "description": "Overlay background color as #RRGGBB. Transparency is controlled separately.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#80FF0000",
+          "default": "#300000",
+          "values": null
+        },
+        {
+          "key": "runtimeOverlayBackgroundTransparency",
+          "title": "General - Overlay Background Transparency (%)",
+          "description": "Transparency of the overlay background from 0% to 100%. 80% matches the default Morphe-style background alpha.",
+          "required": false,
+          "type": "kotlin.Int",
+          "default": 80,
           "values": null
         },
         {
           "key": "runtimeOverlayOutlineColor",
           "title": "General - Overlay outline color",
-          "description": "Overlay outline as #RRGGBB or #AARRGGBB.",
+          "description": "Overlay outline color as #RRGGBB.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#FFFF0000",
+          "default": "#FF5656",
+          "values": null
+        },
+        {
+          "key": "runtimeOverlayTextColor",
+          "title": "General - Overlay text color",
+          "description": "Color of text and controls inside the overlay menu as #RRGGBB.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "#FF5656",
           "values": null
         },
         {
@@ -966,7 +984,7 @@
           "description": "Text color used by the legacy icon.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#FFFF0000",
+          "default": "#FFFFFF",
           "values": null
         },
         {
@@ -984,22 +1002,22 @@
           "description": "First color of the legacy icon gradient.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#941100",
+          "default": "#500000",
           "values": null
         },
         {
           "key": "runtimeOverlayIconBackgroundColor2",
           "title": "UI - Legacy icon background 2",
-          "description": "Second color of the legacy icon gradient. Background 1 is the existing overlay button background color.",
+          "description": "Second color of the legacy icon gradient as #RRGGBB.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#DE1600",
+          "default": "#AA0000",
           "values": null
         },
         {
           "key": "runtimeOverlayIconGradientAngle",
           "title": "UI - Legacy icon gradient angle (degrees)",
-          "description": "Gradient direction: 0 degrees runs top to bottom, 90 runs left to right, and 30 runs diagonally down and right. Values wrap through 360 degrees.",
+          "description": "Gradient direction: 0 degrees runs top to bottom and 90 runs left to right. Values wrap through 360 degrees.",
           "required": false,
           "type": "kotlin.Int",
           "default": 0,
@@ -1015,12 +1033,21 @@
           "values": null
         },
         {
+          "key": "runtimeOverlayIconOutlineWidthDp",
+          "title": "UI - Icon outline width (dp)",
+          "description": "Width of the legacy icon outline from 1 to 8dp. This is independent from the overlay menu outline width.",
+          "required": false,
+          "type": "kotlin.Int",
+          "default": 3,
+          "values": null
+        },
+        {
           "key": "runtimeOverlayIconOutlineColor",
           "title": "UI - Icon outline color",
           "description": "Color used only when the icon outline is enabled.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#FFFFFFFF",
+          "default": "#FFFFFF",
           "values": null
         },
         {

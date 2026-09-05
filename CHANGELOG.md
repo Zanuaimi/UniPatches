@@ -1,3 +1,10 @@
+## [1.2.0](https://github.com/Zanuaimi/UniPatches/compare/v1.1.3...v1.2.0) (2026-09-05)
+
+### ✨ New Features
+
+* add configurable overlay appearance settings ([e0e75a3](https://github.com/Zanuaimi/UniPatches/commit/e0e75a36811a2c5e2f7c9ef3fec4d3d8a8236fc6))
+* separate overlay text and icon outline styling ([d747f40](https://github.com/Zanuaimi/UniPatches/commit/d747f40e7948b6efd1feb515a9c65b0008644ea1))
+
 ## [1.1.3](https://github.com/Zanuaimi/UniPatches/compare/v1.1.2...v1.1.3) (2026-09-04)
 
 ### 🐛 Bug Fixes
