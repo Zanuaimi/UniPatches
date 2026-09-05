@@ -391,6 +391,7 @@ public final class UniversalOverlayRuntime {
             } else {
                 customIconFallbackRequired = config.iconType.equals("image");
                 button.setText(config.buttonText);
+                button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, config.iconTextSize);
                 button.setTypeface(Typeface.DEFAULT, config.iconBold ? Typeface.BOLD : Typeface.NORMAL);
                 button.setBackground(UniversalOverlayViews.gradientBackground(
                         config.buttonBackground,

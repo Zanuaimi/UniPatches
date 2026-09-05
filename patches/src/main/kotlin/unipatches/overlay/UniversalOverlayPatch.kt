@@ -10,12 +10,20 @@ import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import helpers.bytecode.*
 import helpers.startup.StartupHooks
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import unipatches.overlay.presets.OverlayPresetCatalog
+import unipatches.overlay.presets.OverlayUiPreset
 import java.io.File
+import java.io.ByteArrayOutputStream
 import java.util.Base64
 import java.util.logging.Logger
+import kotlin.math.roundToInt
 
 private const val RUNTIME_CLASS = "Lunipatch/universaloverlay/UniversalOverlayRuntime;"
-private const val CONFIG_VERSION = "11"
+private const val CONFIG_VERSION = "1"
+private const val PRESET_SCHEMA_VERSION = 1
 private const val MAX_CUSTOM_ICON_BYTES = 1024 * 1024
 private const val MAX_TITLE_CHARACTERS = 80
 private const val MAX_DESCRIPTION_CHARACTERS = 500
@@ -30,24 +38,205 @@ private val DEFAULT_DESCRIPTION =
 private fun encode(value: String): String =
     Base64.getEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))
 
-private fun resolveCustomIconImage(source: String, logger: Logger): String {
-    // Read the selected local file while patching so the installed APK does not need filesystem
-    // access. The resulting embedded data is an implementation detail, not another user input.
+private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
+    addProperty("format", "unipatches-universal-overlay-preset")
+    addProperty("version", PRESET_SCHEMA_VERSION)
+    add("settings", JsonObject().apply {
+        addProperty("title", title)
+        addProperty("description", description)
+        addProperty("repositoryText", repositoryText)
+        addProperty("repositoryUrl", repositoryUrl)
+        addProperty("backgroundColor", background)
+        addProperty("backgroundTransparency", backgroundTransparency)
+        addProperty("outlineColor", outline)
+        addProperty("textColor", overlayTextColor)
+        addProperty("menuOutlineWidth", outlineWidth)
+        addProperty("iconText", buttonText)
+        addProperty("iconBold", iconBold)
+        addProperty("iconTextColor", buttonTextColor)
+        addProperty("gradientBackground", gradientBackground)
+        addProperty("iconBackground1", buttonBackground)
+        addProperty("iconBackground2", iconBackground2)
+        addProperty("iconGradientAngle", iconGradientAngle)
+        addProperty("iconOutline", iconOutline)
+        addProperty("iconOutlineWidth", iconOutlineWidth)
+        addProperty("iconOutlineColor", iconOutlineColor)
+        addProperty("customIconImageLocal", customIconImageLocal)
+        addProperty("customIconImageInput", customIconImageInput)
+        addProperty("buttonShape", buttonShape)
+        addProperty("buttonSize", buttonSize)
+        addProperty("buttonOpacity", buttonOpacity)
+        addProperty("dragVisibilityDuration", dragVisibilityDuration)
+        addProperty("buttonPosition", buttonPosition)
+        addProperty("activityOverride", activityOverride)
+        addProperty("iconTextSize", iconTextSize)
+    })
+}
+
+private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Logger): OverlayUiPreset {
+    if (source.isBlank()) return fallback
+    val file = runCatching { File(source).canonicalFile }.getOrNull()
+    if (file == null || !file.isFile || !file.name.endsWith(".json", ignoreCase = true)) {
+        logger.warning("Universal Overlay UI preset import skipped: the path is not a readable .json file. Manual Morphe settings remain active.")
+        return fallback
+    }
+    return runCatching {
+        val root = JsonParser.parseString(file.readText(Charsets.UTF_8)).asJsonObject
+        // Accept both names so early experimental exports remain usable after the schema was
+        // formalized. Missing version means the original unversioned JSON shape.
+        val version = root.get("version")?.asInt ?: root.get("schemaVersion")?.asInt ?: 0
+        check(version in 0..PRESET_SCHEMA_VERSION) { "unsupported preset version $version" }
+        val values = root.getAsJsonObject("settings") ?: root
+        fun text(name: String, current: String, valid: (String) -> Boolean = { true }): String {
+            val value = values.get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+            return value?.takeIf(valid) ?: current
+        }
+        fun number(name: String, current: Int, range: IntRange): Int {
+            val value = values.get(name)?.takeIf { it.isJsonPrimitive }?.asInt
+            return value?.takeIf { it in range } ?: current
+        }
+        fun flag(name: String, current: Boolean): Boolean =
+            values.get(name)?.takeIf { it.isJsonPrimitive }?.asBoolean ?: current
+        fun rgbColor(name: String, current: String): String {
+            val value = values.get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString ?: return current
+            return when {
+                value.matches(Regex("#[0-9a-fA-F]{6}")) -> value
+                // v1.0/v1.1 experimental exports could contain #AARRGGBB. Keep their RGB
+                // portion and let the background alpha migration below preserve transparency.
+                value.matches(Regex("#[0-9a-fA-F]{8}")) -> "#${value.substring(3)}"
+                else -> current
+            }
+        }
+        val backgroundSource = values.get("backgroundColor")?.takeIf {
+            it.isJsonPrimitive && it.asJsonPrimitive.isString
+        }?.asString
+        val migratedBackgroundTransparency = backgroundSource
+            ?.takeIf { it.matches(Regex("#[0-9a-fA-F]{8}")) }
+            ?.substring(1, 3)
+            ?.toIntOrNull(16)
+            ?.let { ((it * 100f) / 255f).roundToInt() }
+        fallback.copy(
+            title = text("title", fallback.title) { it.isNotBlank() && it.length <= MAX_TITLE_CHARACTERS },
+            description = text("description", fallback.description) { it.isNotBlank() && it.length <= MAX_DESCRIPTION_CHARACTERS },
+            repositoryText = text("repositoryText", fallback.repositoryText) { it.isNotBlank() },
+            repositoryUrl = text("repositoryUrl", fallback.repositoryUrl) { it.startsWith("http://") || it.startsWith("https://") },
+            background = rgbColor("backgroundColor", fallback.background),
+            backgroundTransparency = if (values.has("backgroundTransparency")) {
+                number("backgroundTransparency", fallback.backgroundTransparency, 0..100)
+            } else {
+                migratedBackgroundTransparency ?: fallback.backgroundTransparency
+            },
+            outline = rgbColor("outlineColor", fallback.outline),
+            overlayTextColor = rgbColor("textColor", fallback.overlayTextColor),
+            outlineWidth = number("menuOutlineWidth", fallback.outlineWidth, 1..8),
+            buttonText = text("iconText", fallback.buttonText) { it.length <= 3 },
+            iconBold = flag("iconBold", fallback.iconBold),
+            buttonTextColor = rgbColor("iconTextColor", fallback.buttonTextColor),
+            gradientBackground = flag("gradientBackground", fallback.gradientBackground),
+            buttonBackground = rgbColor("iconBackground1", fallback.buttonBackground),
+            iconBackground2 = rgbColor("iconBackground2", fallback.iconBackground2),
+            iconGradientAngle = number("iconGradientAngle", fallback.iconGradientAngle, 0..360),
+            iconOutline = flag("iconOutline", fallback.iconOutline),
+            iconOutlineWidth = number("iconOutlineWidth", fallback.iconOutlineWidth, 1..8),
+            iconOutlineColor = rgbColor("iconOutlineColor", fallback.iconOutlineColor),
+            customIconImageLocal = text(
+                "customIconImageLocal",
+                text("customIconImage", fallback.customIconImageLocal),
+            ),
+            customIconImageInput = text("customIconImageInput", fallback.customIconImageInput),
+            buttonShape = text("buttonShape", fallback.buttonShape) { it in setOf("circle", "squircle", "square") },
+            buttonSize = number("buttonSize", fallback.buttonSize, 32..128),
+            buttonOpacity = number("buttonOpacity", fallback.buttonOpacity, 10..100),
+            dragVisibilityDuration = number("dragVisibilityDuration", fallback.dragVisibilityDuration, 1..10),
+            buttonPosition = text("buttonPosition", fallback.buttonPosition) { it in setOf("topLeft", "topMiddle", "topRight", "centerLeft", "centerRight", "bottomLeft", "bottomMiddle", "bottomRight") },
+            activityOverride = text("activityOverride", fallback.activityOverride),
+            iconTextSize = number("iconTextSize", fallback.iconTextSize, 8..48),
+        )
+    }.onFailure {
+        logger.warning("Universal Overlay UI preset import skipped: ${it.message ?: "invalid JSON"}. Manual Morphe settings remain active.")
+    }.getOrDefault(fallback)
+}
+
+private fun exportPreset(folder: String, outputName: String, preset: OverlayUiPreset, logger: Logger) {
+    if (folder.isBlank()) return
+    runCatching {
+        val directory = File(folder).canonicalFile
+        require(directory.isDirectory) { "target is not an existing folder: $directory" }
+        require(directory.parentFile != null) { "refusing to export to filesystem root" }
+        if (directory.path == "/storage" || directory.path == "/storage/emulated") {
+            error("target is above Android emulated storage: $directory")
+        }
+        require(!directory.path.startsWith("/system") && !directory.path.startsWith("/data") && !directory.path.startsWith("/vendor")) {
+            "target is a protected system folder: $directory"
+        }
+        val requestedName = outputName.trim()
+        val base = (if (requestedName.endsWith(".json", ignoreCase = true)) requestedName.dropLast(5) else requestedName)
+            .ifBlank { "UniversalOverlay" }
+            .replace(Regex("[/\\\\]"), "_")
+        var index = 0
+        var target: File
+        do {
+            val suffix = if (index == 0) "" else "-$index"
+            target = File(directory, "$base$suffix.json")
+            index++
+        } while (target.exists())
+        target.writeText(GsonBuilder().setPrettyPrinting().create().toJson(preset.toJson()), Charsets.UTF_8)
+        logger.info("Universal Overlay UI preset exported to $target")
+    }.onFailure {
+        logger.warning("Universal Overlay UI preset export failed; APK patching will continue without export: ${it.message ?: "unknown error"}")
+    }
+}
+
+private fun readBounded(input: java.io.InputStream): ByteArray {
+    input.use { stream ->
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+            val count = stream.read(buffer)
+            if (count < 0) break
+            output.write(buffer, 0, count)
+            require(output.size() <= MAX_CUSTOM_ICON_BYTES) { "icon exceeds $MAX_CUSTOM_ICON_BYTES bytes" }
+        }
+        return output.toByteArray()
+    }
+}
+
+private fun resolveCustomIconImage(source: String, allowLocalPath: Boolean, logger: Logger, label: String): String {
     if (source.isBlank()) return ""
     val bytes = runCatching {
-        val file = if (source.startsWith("file:", ignoreCase = true)) {
-            File(java.net.URI(source))
-        } else {
-            File(source)
+        when {
+            allowLocalPath || source.startsWith("file:", ignoreCase = true) -> {
+                val file = if (source.startsWith("file:", ignoreCase = true)) File(java.net.URI(source)) else File(source)
+                require(file.isFile && file.length() in 1..MAX_CUSTOM_ICON_BYTES)
+                file.readBytes()
+            }
+            source.startsWith("https://", ignoreCase = true) -> {
+                val connection = java.net.URI(source).toURL().openConnection()
+                connection.connectTimeout = 10_000
+                connection.readTimeout = 10_000
+                readBounded(connection.getInputStream())
+            }
+            source.startsWith("data:", ignoreCase = true) -> {
+                val comma = source.indexOf(',')
+                require(comma > 5 && source.substring(0, comma).contains(";base64", ignoreCase = true))
+                decodeBase64(source.substring(comma + 1))
+            }
+            else -> decodeBase64(source)
         }
-        require(file.isFile && file.length() in 1..MAX_CUSTOM_ICON_BYTES)
-        file.readBytes()
     }.getOrNull()
     if (bytes == null || bytes.isEmpty() || bytes.size > MAX_CUSTOM_ICON_BYTES) {
-        logger.warning("Could not resolve custom overlay icon source; runtime fallback will be used.")
+        logger.warning("Could not resolve custom overlay icon $label input; the next icon source or legacy icon will be used.")
         return ""
     }
     return "data:application/octet-stream;base64," + Base64.getEncoder().encodeToString(bytes)
+}
+
+private fun decodeBase64(value: String): ByteArray {
+    val compact = value.trim().replace(Regex("\\s"), "")
+    require(compact.isNotEmpty())
+    return runCatching { Base64.getDecoder().decode(compact) }
+        .recoverCatching { Base64.getUrlDecoder().decode(compact) }
+        .getOrThrow()
 }
 
 private fun descriptor(value: String): String {
@@ -157,7 +346,7 @@ private fun injectMethod(owner: MutableClass, method: MutableMethod, config: Str
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v1.0 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v1.2 (Experimental)",
     description = """
         Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,
         fullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;
@@ -165,7 +354,9 @@ val universalOverlayPatch = bytecodePatch(
         control the current Activity, and Hook modules control internal app behavior, such as disabling
         animations, through best-effort runtime changes. A selected local image automatically replaces
         the legacy icon; empty or invalid image input falls back to the legacy icon. This is experimental
-        and may not work on all apps.
+        and may not work on all apps. UI presets can save and reuse every General, UI, and Advanced
+        setting, but intentionally exclude Modules and Settings to Modules because hook and module
+        combinations can be app-specific.
 
         The idea and initial works of this Universal Overlay Patch are from Zanuaimi / Noobite.
     """.trimIndent(),
@@ -175,6 +366,34 @@ val universalOverlayPatch = bytecodePatch(
     // must not contain overlay UI or feature implementation.
     extendWith("extensions/extension.mpe")
     dependsOn(StartupHooks.resolveRealApplicationPatch)
+
+    val selectedPreset by stringOption(
+        title = "Presets - Selected preset",
+        default = "custom",
+        key = "runtimeOverlaySelectedPreset",
+        description = "Choose Custom to use the visible settings. UniPatches, Morphe Blue, Dark, Light, and ZArchiver presets replace the UI settings with readable predefined values. Presets never change Modules or Settings to Modules.",
+        values = linkedMapOf("Custom" to "custom").apply {
+            OverlayPresetCatalog.definitions.forEach { put(it.displayName, it.id) }
+        },
+    )
+    val importUiPreset by stringOption(
+        title = "Presets - Import UI preset",
+        default = "",
+        key = "runtimeOverlayImportUiPreset",
+        description = "Optional path to a Universal Overlay .json preset. Only Custom mode uses it. A valid JSON preset overrides the visible UI settings during patching; an empty, unreadable, malformed, or unsupported file falls back to the visible Morphe settings. The Manager controls do not change visually.",
+    )
+    val exportUiPreset by stringOption(
+        title = "Presets - Export UI preset",
+        default = "",
+        key = "runtimeOverlayExportUiPreset",
+        description = "Optional existing folder where Custom mode exports the final UI preset as JSON after patching. Leave empty to disable. Export errors are logged and never cancel APK patching. Protected system/root locations are rejected.",
+    )
+    val exportedUiPresetOutputName by stringOption(
+        title = "Presets - Exported UI preset output name",
+        default = "UniversalOverlay.json",
+        key = "runtimeOverlayExportedUiPresetOutputName",
+        description = "Output name for exported JSON. Defaults to UniversalOverlay.json; .json is added automatically and duplicate names receive -1, -2, and so on.",
+    )
 
     val title by stringOption(
         title = "General - Overlay title",
@@ -248,6 +467,12 @@ val universalOverlayPatch = bytecodePatch(
         key = "runtimeOverlayButtonTextColor",
         description = "Text color used by the legacy icon.",
     )
+    val iconTextSize by intOption(
+        title = "UI - Legacy icon text size (sp)",
+        default = 18,
+        key = "runtimeOverlayIconTextSizeSp",
+        description = "Text size of the legacy icon in scaled pixels, from 8 to 48sp. The default is slightly larger than the pre-v1.2 fixed size.",
+    )
     val gradientBackground by booleanOption(
         title = "UI - Gradient background",
         default = true,
@@ -291,12 +516,18 @@ val universalOverlayPatch = bytecodePatch(
         description = "Color used only when the icon outline is enabled.",
     )
     val customIconImage by imageOption(
-        title = "UI - Custom image icon",
+        title = "UI - Custom Overlay Button Icon ( Local Image )",
         default = "",
         key = "runtimeOverlayCustomIconImage",
         allowedExtensions = listOf("png", "jpg", "jpeg", "webp"),
         recommendedSize = app.morphe.patcher.patch.ImageSize(128, 128),
-        description = "Select a local PNG, JPG, JPEG, or WebP image file. A valid image automatically replaces the legacy icon, including its outline. Prefer a transparent square image around 128x128 or 256x256 pixels. Images are embedded during patching and scaled proportionally. Leave blank or use an invalid file to fall back to the legacy icon with a one-time launch notice.",
+        description = "Select a local PNG, JPG, JPEG, or WebP image file. This input has priority over the String Handler input when valid. Images are embedded during patching and scaled proportionally. Leave blank or use an invalid file to try the String Handler input, then fall back to the legacy icon.",
+    )
+    val customIconImageInput by stringOption(
+        title = "UI - Custom Overlay Button Icon Input ( String Handler )",
+        default = "",
+        key = "runtimeOverlayCustomIconImageInput",
+        description = "Optional non-local image input: file URI, data URI, raw Base64, URL-safe Base64, or HTTPS image URL. Used only when the Local Image input is empty or invalid. Invalid input falls back to the legacy icon.",
     )
     val buttonShape by stringOption(
         title = "UI - Overlay button shape",
@@ -486,33 +717,80 @@ val universalOverlayPatch = bytecodePatch(
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)
-        val titleValue = title.orEmpty().ifBlank { "UniPatches Universal Overlay Patch" }
-            .take(MAX_TITLE_CHARACTERS)
-        val descriptionValue = descriptionText.orEmpty().ifBlank { DEFAULT_DESCRIPTION }
-            .take(MAX_DESCRIPTION_CHARACTERS)
-        val labelValue = repositoryText.orEmpty().ifBlank { "UniPatches repository" }
-        val urlValue = repositoryUrl.orEmpty().ifBlank { "https://github.com/Zanuaimi/UniPatches" }
-        val sizeValue = (buttonSizeDp ?: 56).coerceIn(32, 128)
-        val opacityValue = (buttonOpacity ?: 50).coerceIn(10, 100)
-        val dragVisibilityDurationValue = (buttonDragVisibilityDurationSeconds ?: 2).coerceIn(1, 10)
-        val shapeValue = buttonShape.orEmpty().ifBlank { "circle" }
-        val positionValue = buttonPosition.orEmpty().ifBlank { "topRight" }
-        val backgroundValue = backgroundColor.orEmpty().ifBlank { "#300000" }
-        val outlineValue = outlineColor.orEmpty().ifBlank { "#FF5656" }
-        val overlayTextColorValue = overlayTextColor.orEmpty().ifBlank { "#FF5656" }
-        val buttonTextColorValue = buttonTextColor.orEmpty().ifBlank { "#FFFFFF" }
-        val buttonBackgroundValue = buttonBackgroundColor.orEmpty().ifBlank { "#500000" }
-        val outlineWidthValue = (outlineWidth ?: 1).coerceIn(1, 8)
-        val iconOutlineColorValue = iconOutlineColor.orEmpty().ifBlank { "#FFFFFF" }
-        val iconBackground2Value = iconBackground2.orEmpty().ifBlank { "#AA0000" }
-        val iconGradientAngleValue = ((iconGradientAngle ?: 0) % 361 + 361) % 361
-        val backgroundTransparencyValue = (backgroundTransparency ?: 80).coerceIn(0, 100)
-        val iconOutlineWidthValue = (iconOutlineWidth ?: 3).coerceIn(1, 8)
-        val customIconSourceValue = customIconImage.orEmpty().trim()
-        val resolvedCustomIconImage = resolveCustomIconImage(customIconSourceValue, logger)
+        val manualPreset = OverlayUiPreset(
+            title = title.orEmpty().ifBlank { "UniPatches Universal Overlay Patch" }.take(MAX_TITLE_CHARACTERS),
+            description = descriptionText.orEmpty().ifBlank { DEFAULT_DESCRIPTION }.take(MAX_DESCRIPTION_CHARACTERS),
+            repositoryText = repositoryText.orEmpty().ifBlank { "UniPatches repository" },
+            repositoryUrl = repositoryUrl.orEmpty().ifBlank { "https://github.com/Zanuaimi/UniPatches" },
+            background = backgroundColor.orEmpty().ifBlank { "#300000" },
+            backgroundTransparency = (backgroundTransparency ?: 80).coerceIn(0, 100),
+            outline = outlineColor.orEmpty().ifBlank { "#FF5656" },
+            overlayTextColor = overlayTextColor.orEmpty().ifBlank { "#FF5656" },
+            outlineWidth = (outlineWidth ?: 2).coerceIn(1, 8),
+            buttonText = buttonText.orEmpty().trim().take(3).ifBlank { "U" },
+            iconBold = iconBold != false,
+            buttonTextColor = buttonTextColor.orEmpty().ifBlank { "#FFFFFF" },
+            gradientBackground = gradientBackground != false,
+            buttonBackground = buttonBackgroundColor.orEmpty().ifBlank { "#500000" },
+            iconBackground2 = iconBackground2.orEmpty().ifBlank { "#AA0000" },
+            iconGradientAngle = ((iconGradientAngle ?: 0) % 361 + 361) % 361,
+            iconOutline = iconOutline == true,
+            iconOutlineWidth = (iconOutlineWidth ?: 3).coerceIn(1, 8),
+            iconOutlineColor = iconOutlineColor.orEmpty().ifBlank { "#FFFFFF" },
+            customIconImageLocal = customIconImage.orEmpty().trim(),
+            customIconImageInput = customIconImageInput.orEmpty().trim(),
+            buttonShape = buttonShape.orEmpty().ifBlank { "circle" },
+            buttonSize = (buttonSizeDp ?: 56).coerceIn(32, 128),
+            buttonOpacity = (buttonOpacity ?: 50).coerceIn(10, 100),
+            dragVisibilityDuration = (buttonDragVisibilityDurationSeconds ?: 2).coerceIn(1, 10),
+            buttonPosition = buttonPosition.orEmpty().ifBlank { "topRight" },
+            activityOverride = activityOverride.orEmpty().trim(),
+            iconTextSize = (iconTextSize ?: 18).coerceIn(8, 48),
+        )
+        val customMode = selectedPreset.orEmpty().equals("custom", ignoreCase = true)
+        val selectedUiPreset = if (customMode) {
+            readPresetFile(importUiPreset.orEmpty().trim(), manualPreset, logger)
+        } else {
+            OverlayPresetCatalog.valuesFor(selectedPreset.orEmpty(), manualPreset)
+        }
+        val titleValue = selectedUiPreset.title
+        val descriptionValue = selectedUiPreset.description
+        val labelValue = selectedUiPreset.repositoryText
+        val urlValue = selectedUiPreset.repositoryUrl
+        val sizeValue = selectedUiPreset.buttonSize
+        val opacityValue = selectedUiPreset.buttonOpacity
+        val dragVisibilityDurationValue = selectedUiPreset.dragVisibilityDuration
+        val shapeValue = selectedUiPreset.buttonShape
+        val positionValue = selectedUiPreset.buttonPosition
+        val backgroundValue = selectedUiPreset.background
+        val outlineValue = selectedUiPreset.outline
+        val overlayTextColorValue = selectedUiPreset.overlayTextColor
+        val buttonTextColorValue = selectedUiPreset.buttonTextColor
+        val buttonBackgroundValue = selectedUiPreset.buttonBackground
+        val outlineWidthValue = selectedUiPreset.outlineWidth
+        val iconOutlineColorValue = selectedUiPreset.iconOutlineColor
+        val iconBackground2Value = selectedUiPreset.iconBackground2
+        val iconGradientAngleValue = selectedUiPreset.iconGradientAngle
+        val backgroundTransparencyValue = selectedUiPreset.backgroundTransparency
+        val iconOutlineWidthValue = selectedUiPreset.iconOutlineWidth
+        val customIconLocalSourceValue = selectedUiPreset.customIconImageLocal
+        val customIconStringSourceValue = selectedUiPreset.customIconImageInput
+        val iconTextSizeValue = selectedUiPreset.iconTextSize
+        val resolvedLocalIconImage = resolveCustomIconImage(customIconLocalSourceValue, allowLocalPath = true, logger, "local")
+        val resolvedStringIconImage = if (resolvedLocalIconImage.isBlank() && customIconStringSourceValue.isNotBlank()) {
+            resolveCustomIconImage(customIconStringSourceValue, allowLocalPath = false, logger, "string")
+        } else {
+            ""
+        }
+        if (resolvedLocalIconImage.isNotBlank() && customIconStringSourceValue.isNotBlank()) {
+            logger.info("Valid local custom overlay icon input takes priority over the String Handler input.")
+        } else if (resolvedLocalIconImage.isBlank() && customIconLocalSourceValue.isNotBlank() && customIconStringSourceValue.isNotBlank()) {
+            logger.warning("Local custom overlay icon input was invalid; trying the String Handler input.")
+        }
+        val resolvedCustomIconImage = resolvedLocalIconImage.ifBlank { resolvedStringIconImage }
         // Keep invalid non-empty input distinguishable from an intentionally blank field so the
         // runtime can use the legacy icon and show its one-time fallback notice.
-        val customIconImageValue = if (customIconSourceValue.isNotBlank() && resolvedCustomIconImage.isBlank()) {
+        val customIconImageValue = if ((customIconLocalSourceValue.isNotBlank() || customIconStringSourceValue.isNotBlank()) && resolvedCustomIconImage.isBlank()) {
             "invalid"
         } else {
             resolvedCustomIconImage
@@ -534,11 +812,11 @@ val universalOverlayPatch = bytecodePatch(
         check(monitorColumnsValue in setOf("1", "2", "3"))
         check(temperatureFormatValue in setOf("celsius", "fahrenheit", "kelvin"))
         check(timeFormatValue in setOf("12", "24"))
-        check(buttonText.orEmpty().trim().length <= 3)
+        check(selectedUiPreset.buttonText.length <= 3)
 
         val config = listOf(
             CONFIG_VERSION, titleValue, descriptionValue, labelValue, urlValue,
-            backgroundValue, outlineValue, buttonText.orEmpty().trim().take(3).ifBlank { "U" },
+            backgroundValue, outlineValue, selectedUiPreset.buttonText.ifBlank { "U" },
             buttonTextColorValue, buttonBackgroundValue, shapeValue,
             sizeValue.toString(), opacityValue.toString(), positionValue,
             listOf(
@@ -567,17 +845,18 @@ val universalOverlayPatch = bytecodePatch(
             temperatureFormatValue,
             timeFormatValue,
             outlineWidthValue.toString(),
-            if (iconOutline == true) "1" else "0",
+            if (selectedUiPreset.iconOutline) "1" else "0",
             iconOutlineColorValue,
-            if (iconBold != false) "1" else "0",
+            if (selectedUiPreset.iconBold) "1" else "0",
             iconBackground2Value,
             iconGradientAngleValue.toString(),
             customIconImageValue,
             dragVisibilityDurationValue.toString(),
-            if (gradientBackground != false) "1" else "0",
+            if (selectedUiPreset.gradientBackground) "1" else "0",
             backgroundTransparencyValue.toString(),
             overlayTextColorValue,
             iconOutlineWidthValue.toString(),
+            iconTextSizeValue.toString(),
         ).joinToString("|") { encode(it) }
 
         // Prefer the process Application entry point. The Activity path is a compatibility fallback
@@ -585,33 +864,42 @@ val universalOverlayPatch = bytecodePatch(
         val appDescriptor = StartupHooks.resolvedApplicationDescriptor
         val appClass = appDescriptor?.let { mutableClassDefByOrNull(it) }
         val appMethod = appClass?.let { findInheritedApplicationOnCreate(it) }
+        var bridgeInstalled = false
         if (appMethod != null) {
             val (appOwner, appOnCreate) = appMethod
             if (appOnCreate.implementation?.instructions?.any { it.toString().contains(RUNTIME_CLASS) } == true) {
                 logger.info("Runtime overlay bridge already exists in ${appOwner.type}->onCreate")
-                return@execute
+                bridgeInstalled = true
+            } else {
+                injectMethod(appOwner, appOnCreate, config, application = true)
+                logger.info("Runtime overlay bridge injected into ${appOwner.type}->onCreate")
+                bridgeInstalled = true
             }
-            injectMethod(appOwner, appOnCreate, config, application = true)
-            logger.info("Runtime overlay bridge injected into ${appOwner.type}->onCreate")
-            return@execute
         }
 
-        val fallback = activityOverride.orEmpty().trim().takeIf { it.isNotEmpty() }?.let(::descriptor)
-            ?.let { target -> mutableClassDefByOrNull(target) }
-            ?: findFallbackActivity()
+        val fallback = if (bridgeInstalled) {
+            null
+        } else {
+            selectedUiPreset.activityOverride.trim().takeIf { it.isNotEmpty() }?.let(::descriptor)
+                ?.let { target -> mutableClassDefByOrNull(target) }
+                ?: findFallbackActivity()
+        }
         val onCreate = fallback?.methods?.firstOrNull {
             it.name == "onCreate" && it.returnType == "V" && it.parameterTypes == listOf("Landroid/os/Bundle;")
         }
         if (fallback != null && onCreate != null) {
             if (onCreate.implementation?.instructions?.any { it.toString().contains(RUNTIME_CLASS) } == true) {
                 logger.info("Runtime overlay bridge already exists in ${fallback.type}->onCreate")
-                return@execute
+                bridgeInstalled = true
+            } else {
+                injectMethod(fallback, onCreate, config, application = false)
+                logger.warning("Runtime overlay used Activity fallback: ${fallback.type}->onCreate")
+                bridgeInstalled = true
             }
-            injectMethod(fallback, onCreate, config, application = false)
-            logger.warning("Runtime overlay used Activity fallback: ${fallback.type}->onCreate")
-        } else {
+        } else if (!bridgeInstalled) {
             logger.warning("No suitable Application or Activity entry point found. No changes applied.")
         }
+        if (customMode) exportPreset(exportUiPreset.orEmpty().trim(), exportedUiPresetOutputName.orEmpty(), selectedUiPreset, logger)
     }
 }
 
