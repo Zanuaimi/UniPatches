@@ -199,13 +199,45 @@ val pairipBypassPatch = bytecodePatch(
     // the manual settings in the same way as the Universal Overlay settings.
     // Automatic mode selects strategies up to the configured risk level; manual
     // mode isolates one transformation.
-    // License UI - individual activity and dialog strategies.
+    // Low-risk strategies: narrow UI, metadata, and repeated-check changes.
     val pairipLicenseClientStartErrorDialog by booleanOption(
         key = "pairipLicenseClientStartErrorDialog",
         default = false,
         title = "UI - Suppress LicenseClient error dialog (Low Risk)",
         description = "Disable LicenseClient.startErrorDialogActivity()."
     )
+    val pairipLicenseActivityShowErrorDialog by booleanOption(
+        key = "pairipLicenseActivityShowErrorDialog",
+        default = false,
+        title = "UI - Suppress LicenseActivity error dialog (Low Risk)",
+        description = "Disable LicenseActivity.showErrorDialog()."
+    )
+    val pairipLicenseActivityLogAndShowErrorDialog by booleanOption(
+        key = "pairipLicenseActivityLogAndShowErrorDialog",
+        default = false,
+        title = "UI - Suppress logged error dialog (Low Risk)",
+        description = "Disable LicenseActivity.logAndShowErrorDialog()."
+    )
+    val pairipLicenseResponseHelperGetRepeatedCheckMetadata by booleanOption(
+        key = "pairipLicenseResponseHelperGetRepeatedCheckMetadata",
+        default = false,
+        title = "Response - Remove repeated-check metadata (Low Risk)",
+        description = "Return null from LicenseResponseHelper.getRepeatedCheckMetadata()."
+    )
+    val pairipV2ScheduleRepeatedLicenseCheck by booleanOption(
+        key = "pairipV2ScheduleRepeatedLicenseCheck",
+        default = false,
+        title = "V2 - Disable repeated checks (Low Risk)",
+        description = "Disable V2 repeated license-check scheduling."
+    )
+    val pairipRepeatedCheckEnabledRead by booleanOption(
+        key = "pairipRepeatedCheckEnabledRead",
+        default = false,
+        title = "V2 - Disable repeated-check flag (Low Risk)",
+        description = "Force LicenseClient.repeatedCheckEnabled reads to false."
+    )
+
+    // Medium-risk strategies: licensing, installer, and response-flow changes.
     val pairipLicenseClientStartPaywall by booleanOption(
         key = "pairipLicenseClientStartPaywall",
         default = false,
@@ -260,88 +292,12 @@ val pairipBypassPatch = bytecodePatch(
         title = "UI - Suppress LicenseActivity closeAllTasks (Medium Risk)",
         description = "Disable LicenseActivity.closeAllTasks()."
     )
-    val pairipLicenseActivityShowErrorDialog by booleanOption(
-        key = "pairipLicenseActivityShowErrorDialog",
-        default = false,
-        title = "UI - Suppress LicenseActivity error dialog (Low Risk)",
-        description = "Disable LicenseActivity.showErrorDialog()."
-    )
-    val pairipLicenseActivityLogAndShowErrorDialog by booleanOption(
-        key = "pairipLicenseActivityLogAndShowErrorDialog",
-        default = false,
-        title = "UI - Suppress logged error dialog (Low Risk)",
-        description = "Disable LicenseActivity.logAndShowErrorDialog()."
-    )
-    // Application startup - individual lifecycle strategies.
-    val pairipApplicationAttachBaseContext by booleanOption(
-        key = "pairipApplicationAttachBaseContext",
-        default = false,
-        title = "Application - Bypass attachBaseContext (High Risk)",
-        description = "Skip PairIP startup code in Application.attachBaseContext()."
-    )
-    val pairipApplicationOnCreate by booleanOption(
-        key = "pairipApplicationOnCreate",
-        default = false,
-        title = "Application - Bypass onCreate (High Risk)",
-        description = "Skip PairIP startup code in Application.onCreate()."
-    )
-    val pairipApplicationClinit by booleanOption(
-        key = "pairipApplicationClinit",
-        default = false,
-        title = "Runtime - Bypass Application static initializer (High Risk)",
-        description = "Prevent PairIP Application.<clinit>() from starting its runtime."
-    )
-    // PairIP runtime - VM and launcher entry points.
-    val pairipVmRunnerInvoke by booleanOption(
-        key = "pairipVmRunnerInvoke",
-        default = false,
-        title = "Runtime - Bypass VMRunner.invoke (High Risk)",
-        description = "Return null from PairIP VMRunner.invoke()."
-    )
-    val pairipStartupLauncherLaunch by booleanOption(
-        key = "pairipStartupLauncherLaunch",
-        default = false,
-        title = "Runtime - Bypass StartupLauncher.launch (High Risk)",
-        description = "Disable PairIP StartupLauncher.launch()."
-    )
-    val pairipStartupLauncherPairip by booleanOption(
-        key = "pairipStartupLauncherPairip",
-        default = false,
-        title = "Runtime - Bypass StartupLauncher.pairip (High Risk)",
-        description = "Disable the PairIP StartupLauncher.pairip() entry point."
-    )
-    val pairipLicenseClientV3OnActivityCreate by booleanOption(
-        key = "pairipLicenseClientV3OnActivityCreate",
-        default = false,
-        title = "V3 - Bypass LicenseClient activity (High Risk)",
-        description = "Disable LicenseClientV3.onActivityCreate()."
-    )
-    // Integrity and installer - signature and installation identity checks.
     val pairipPerformLocalInstallerCheck by booleanOption(
         key = "pairipPerformLocalInstallerCheck",
         default = false,
         title = "Installer - Spoof local installer check (Medium Risk)",
         description = "Make PairIP performLocalInstallerCheck() report success."
     )
-    val pairipGenericInstallerSource by booleanOption(
-        key = "pairipGenericInstallerSource",
-        default = false,
-        title = "Installer - Spoof installer source (High Risk)",
-        description = "Return the Play Store package name from a generic installer-source check."
-    )
-    val pairipSignatureVerifyIntegrity by booleanOption(
-        key = "pairipSignatureVerifyIntegrity",
-        default = false,
-        title = "Integrity - Bypass signature integrity (High Risk)",
-        description = "Disable SignatureCheck.verifyIntegrity()."
-    )
-    val pairipSignatureVerifySignatureMatches by booleanOption(
-        key = "pairipSignatureVerifySignatureMatches",
-        default = false,
-        title = "Integrity - Bypass signature match (High Risk)",
-        description = "Make SignatureCheck.verifySignatureMatches() report success."
-    )
-    // License client - legacy licensing service and response flow.
     val pairipLicenseClientCheckLicense by booleanOption(
         key = "pairipLicenseClientCheckLicense",
         default = false,
@@ -366,37 +322,11 @@ val pairipBypassPatch = bytecodePatch(
         title = "License Client - Bypass processResponse (Medium Risk)",
         description = "Disable the older LicenseClient.processResponse() path."
     )
-    // Content provider and context - early PairIP initialization paths.
-    val pairipLicenseContentProviderOnCreate by booleanOption(
-        key = "pairipLicenseContentProviderOnCreate",
-        default = false,
-        title = "Provider - Bypass initialization (High Risk)",
-        description = "Make LicenseContentProvider.onCreate() report success."
-    )
-    val pairipLicenseContentProviderQuery by booleanOption(
-        key = "pairipLicenseContentProviderQuery",
-        default = false,
-        title = "Provider - Bypass query (High Risk)",
-        description = "Return no result from LicenseContentProvider.query()."
-    )
-    val pairipInitContextProviderGetContext by booleanOption(
-        key = "pairipInitContextProviderGetContext",
-        default = false,
-        title = "Provider - Bypass context provider (High Risk)",
-        description = "Return null from InitContextProvider.getContext()."
-    )
-    // Response validation - legacy and licensecheck3 response validators.
     val pairipLicenseResponseHelperValidateResponse by booleanOption(
         key = "pairipLicenseResponseHelperValidateResponse",
         default = false,
         title = "Response - Bypass helper validation (Medium Risk)",
         description = "Disable LicenseResponseHelper.validateResponse()."
-    )
-    val pairipLicenseResponseHelperGetRepeatedCheckMetadata by booleanOption(
-        key = "pairipLicenseResponseHelperGetRepeatedCheckMetadata",
-        default = false,
-        title = "Response - Remove repeated-check metadata (Low Risk)",
-        description = "Return null from LicenseResponseHelper.getRepeatedCheckMetadata()."
     )
     val pairipLicenseResponseHelperVerifySignature by booleanOption(
         key = "pairipLicenseResponseHelperVerifySignature",
@@ -422,7 +352,86 @@ val pairipBypassPatch = bytecodePatch(
         title = "V3 - Bypass response validation (Medium Risk)",
         description = "Disable licensecheck3.ResponseValidator.validateResponse()."
     )
-    // PairIP V2 - newer license flow and repeated-check controls.
+
+    // High-risk strategies: startup, provider, signature, VM, and broad control-flow changes.
+    val pairipApplicationAttachBaseContext by booleanOption(
+        key = "pairipApplicationAttachBaseContext",
+        default = false,
+        title = "Application - Bypass attachBaseContext (High Risk)",
+        description = "Skip PairIP startup code in Application.attachBaseContext()."
+    )
+    val pairipApplicationOnCreate by booleanOption(
+        key = "pairipApplicationOnCreate",
+        default = false,
+        title = "Application - Bypass onCreate (High Risk)",
+        description = "Skip PairIP startup code in Application.onCreate()."
+    )
+    val pairipApplicationClinit by booleanOption(
+        key = "pairipApplicationClinit",
+        default = false,
+        title = "Runtime - Bypass Application static initializer (High Risk)",
+        description = "Prevent PairIP Application.<clinit>() from starting its runtime."
+    )
+    val pairipVmRunnerInvoke by booleanOption(
+        key = "pairipVmRunnerInvoke",
+        default = false,
+        title = "Runtime - Bypass VMRunner.invoke (High Risk)",
+        description = "Return null from PairIP VMRunner.invoke()."
+    )
+    val pairipStartupLauncherLaunch by booleanOption(
+        key = "pairipStartupLauncherLaunch",
+        default = false,
+        title = "Runtime - Bypass StartupLauncher.launch (High Risk)",
+        description = "Disable PairIP StartupLauncher.launch()."
+    )
+    val pairipStartupLauncherPairip by booleanOption(
+        key = "pairipStartupLauncherPairip",
+        default = false,
+        title = "Runtime - Bypass StartupLauncher.pairip (High Risk)",
+        description = "Disable the PairIP StartupLauncher.pairip() entry point."
+    )
+    val pairipLicenseClientV3OnActivityCreate by booleanOption(
+        key = "pairipLicenseClientV3OnActivityCreate",
+        default = false,
+        title = "V3 - Bypass LicenseClient activity (High Risk)",
+        description = "Disable LicenseClientV3.onActivityCreate()."
+    )
+    val pairipGenericInstallerSource by booleanOption(
+        key = "pairipGenericInstallerSource",
+        default = false,
+        title = "Installer - Spoof installer source (High Risk)",
+        description = "Return the Play Store package name from a generic installer-source check."
+    )
+    val pairipSignatureVerifyIntegrity by booleanOption(
+        key = "pairipSignatureVerifyIntegrity",
+        default = false,
+        title = "Integrity - Bypass signature integrity (High Risk)",
+        description = "Disable SignatureCheck.verifyIntegrity()."
+    )
+    val pairipSignatureVerifySignatureMatches by booleanOption(
+        key = "pairipSignatureVerifySignatureMatches",
+        default = false,
+        title = "Integrity - Bypass signature match (High Risk)",
+        description = "Make SignatureCheck.verifySignatureMatches() report success."
+    )
+    val pairipLicenseContentProviderOnCreate by booleanOption(
+        key = "pairipLicenseContentProviderOnCreate",
+        default = false,
+        title = "Provider - Bypass initialization (High Risk)",
+        description = "Make LicenseContentProvider.onCreate() report success."
+    )
+    val pairipLicenseContentProviderQuery by booleanOption(
+        key = "pairipLicenseContentProviderQuery",
+        default = false,
+        title = "Provider - Bypass query (High Risk)",
+        description = "Return no result from LicenseContentProvider.query()."
+    )
+    val pairipInitContextProviderGetContext by booleanOption(
+        key = "pairipInitContextProviderGetContext",
+        default = false,
+        title = "Provider - Bypass context provider (High Risk)",
+        description = "Return null from InitContextProvider.getContext()."
+    )
     val pairipV2CheckLicenseInternal by booleanOption(
         key = "pairipV2CheckLicenseInternal",
         default = false,
@@ -435,19 +444,6 @@ val pairipBypassPatch = bytecodePatch(
         title = "V2 - Bypass response signature (High Risk)",
         description = "Disable the V2 response signature check."
     )
-    val pairipV2ScheduleRepeatedLicenseCheck by booleanOption(
-        key = "pairipV2ScheduleRepeatedLicenseCheck",
-        default = false,
-        title = "V2 - Disable repeated checks (Low Risk)",
-        description = "Disable V2 repeated license-check scheduling."
-    )
-    val pairipRepeatedCheckEnabledRead by booleanOption(
-        key = "pairipRepeatedCheckEnabledRead",
-        default = false,
-        title = "V2 - Disable repeated-check flag (Low Risk)",
-        description = "Force LicenseClient.repeatedCheckEnabled reads to false."
-    )
-    // Advanced - caller-level handling inspired by Doom's shared helper.
     val vmCallSiteChecks by booleanOption(
         key = "vmCallSiteChecks",
         default = false,
