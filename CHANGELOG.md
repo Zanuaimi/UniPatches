@@ -1,3 +1,10 @@
+## [1.3.0](https://github.com/Zanuaimi/UniPatches/compare/v1.2.0...v1.3.0) (2026-09-05)
+
+### ✨ New Features
+
+* add Universal Overlay UI presets ([9b7f13b](https://github.com/Zanuaimi/UniPatches/commit/9b7f13bbe82583f66a4f77eaee09301baf94b3eb))
+* organize PairIP strategies by risk ([2b9ae59](https://github.com/Zanuaimi/UniPatches/commit/2b9ae59ac5afa3de1c67b59fc51984971e4b12f4))
+
 ## [1.2.0](https://github.com/Zanuaimi/UniPatches/compare/v1.1.3...v1.2.0) (2026-09-05)
 
 ### ✨ New Features
