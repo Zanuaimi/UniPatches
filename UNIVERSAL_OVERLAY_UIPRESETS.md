@@ -51,8 +51,9 @@ adding one. If the name already exists, the patch creates `UniversalOverlay-1.js
 `UniversalOverlay-2.json`, and so on.
 
 Export failures never cancel APK patching. The patch logs the reason and continues without exporting.
-Filesystem root, protected system directories, and locations above Android emulated storage are
-rejected.
+Filesystem roots and protected locations are rejected across platforms. Android paths must be below
+emulated storage; Unix and macOS system locations, and Windows locations such as `Windows`,
+`Program Files`, and `ProgramData`, are refused. Normal user folders remain valid.
 
 ## Preset JSON format
 

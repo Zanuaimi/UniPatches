@@ -32,8 +32,11 @@ not change when a preset is imported because settings are evaluated during patch
 `Export UI preset` accepts an existing output folder and is used only in Custom mode. The final
 effective UI configuration is exported after the patch work completes. The default filename is
 `UniversalOverlay.json`; `.json` is normalized and duplicate names receive `-1`, `-2`, and so on.
-Export failures are logged but never cancel APK patching. Root and protected system locations are
-rejected.
+Export failures are logged but never cancel APK patching. Filesystem roots and protected locations
+are rejected across platforms: Android paths must be below emulated storage, Unix paths such as
+`/system`, `/etc`, `/usr`, and `/var`, macOS locations such as `/Applications` and `/Library`, and
+Windows locations such as `Windows`, `Program Files`, and `ProgramData` are refused. Normal user
+folders such as macOS `/Users`, Linux `/home`, and Windows `C:\\Users` remain valid.
 
 ## File map
 

@@ -162,13 +162,7 @@ private fun exportPreset(folder: String, outputName: String, preset: OverlayUiPr
     runCatching {
         val directory = File(folder).canonicalFile
         require(directory.isDirectory) { "target is not an existing folder: $directory" }
-        require(directory.parentFile != null) { "refusing to export to filesystem root" }
-        if (directory.path == "/storage" || directory.path == "/storage/emulated") {
-            error("target is above Android emulated storage: $directory")
-        }
-        require(!directory.path.startsWith("/system") && !directory.path.startsWith("/data") && !directory.path.startsWith("/vendor")) {
-            "target is a protected system folder: $directory"
-        }
+        protectedExportPathReason(directory)?.let { error(it) }
         val requestedName = outputName.trim()
         val base = (if (requestedName.endsWith(".json", ignoreCase = true)) requestedName.dropLast(5) else requestedName)
             .ifBlank { "UniversalOverlay" }
@@ -185,6 +179,55 @@ private fun exportPreset(folder: String, outputName: String, preset: OverlayUiPr
     }.onFailure {
         logger.warning("Universal Overlay UI preset export failed; APK patching will continue without export: ${it.message ?: "unknown error"}")
     }
+}
+
+/**
+ * Reject filesystem locations where exporting a user preset would be surprising or unsafe.
+ * Canonical paths are used by the caller so symlinks cannot bypass the platform checks.
+ * User folders such as /Users, /home, and C:/Users remain valid export locations.
+ */
+private fun protectedExportPathReason(directory: File): String? {
+    val path = directory.toPath().toAbsolutePath().normalize()
+    val root = path.root?.toString()?.replace('\\', '/')?.trimEnd('/')
+    val normalized = path.toString().replace('\\', '/').trimEnd('/').ifBlank { "/" }
+    val lower = normalized.lowercase()
+
+    if (root != null && lower == root.lowercase()) {
+        return "refusing to export to filesystem root: $directory"
+    }
+
+    // On Android, only a user directory below emulated storage is an acceptable /storage path.
+    if (lower == "/storage" || lower == "/storage/emulated") {
+        return "target is above Android emulated storage: $directory"
+    }
+    if (lower.startsWith("/storage/") && !lower.startsWith("/storage/emulated/")) {
+        return "target is outside Android emulated storage: $directory"
+    }
+
+    val protectedUnixRoots = listOf(
+        "/system", "/data", "/vendor", "/etc", "/usr", "/var", "/root", "/boot",
+        "/dev", "/proc", "/sys", "/run", "/bin", "/sbin", "/lib", "/lib64", "/opt",
+        "/private/etc", "/private/var", "/private/tmp", "/applications", "/library",
+    )
+    if (protectedUnixRoots.any { lower == it || lower.startsWith("$it/") }) {
+        return "target is a protected system folder: $directory"
+    }
+    if (lower == "/volumes") {
+        return "target is the macOS volumes root; choose a folder inside the volume: $directory"
+    }
+
+    // Windows system locations. Drive roots and UNC share roots were handled by the root check.
+    if (Regex("^[a-z]:/", RegexOption.IGNORE_CASE).containsMatchIn(lower)) {
+        val drivePrefix = lower.substringBefore(':') + ":"
+        val protectedWindowsRoots = listOf(
+            "/windows", "/program files", "/program files (x86)", "/programdata",
+            "/\$recycle.bin", "/system volume information",
+        )
+        if (protectedWindowsRoots.any { lower == drivePrefix + it || lower.startsWith(drivePrefix + it + "/") }) {
+            return "target is a protected Windows system folder: $directory"
+        }
+    }
+    return null
 }
 
 private fun readBounded(input: java.io.InputStream): ByteArray {
