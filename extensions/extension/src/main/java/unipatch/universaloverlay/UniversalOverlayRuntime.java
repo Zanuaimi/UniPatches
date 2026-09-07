@@ -124,6 +124,7 @@ public final class UniversalOverlayRuntime {
 
     static synchronized void showActivity(Activity activity) {
         if (configuration == null || globallyClosed) return;
+        if (isActivityInstallBanned(activity)) return;
         if (activity.isFinishing() || (android.os.Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
         Controller existing = CONTROLLERS.get(activity);
         if (existing != null) {
@@ -140,6 +141,25 @@ public final class UniversalOverlayRuntime {
             // Never let overlay setup failure crash the host application.
             CONTROLLERS.remove(activity);
         }
+    }
+
+    private static boolean isActivityInstallBanned(Activity activity) {
+        String className = activity.getClass().getName();
+        String banlist = configuration == null ? "" : configuration.activityInstallBanlist;
+        if (banlist == null || banlist.trim().isEmpty()) return false;
+        if ("none".equalsIgnoreCase(banlist.trim())) return false;
+        for (String rawEntry : banlist.split("[,;\\r\\n]+")) {
+            String entry = rawEntry.trim();
+            if (entry.isEmpty()) continue;
+            boolean wildcard = entry.endsWith("*");
+            String value = wildcard ? entry.substring(0, entry.length() - 1).trim() : entry;
+            if (value.isEmpty()) continue;
+            if ((wildcard && className.startsWith(value))
+                    || (!wildcard && (className.equals(value) || className.startsWith(value + ".")))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static synchronized void removeActivity(Activity activity) {

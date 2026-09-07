@@ -29,6 +29,22 @@ private const val MAX_CUSTOM_ICON_BYTES = 1024 * 1024
 private const val MAX_TITLE_CHARACTERS = 80
 private const val MAX_DESCRIPTION_CHARACTERS = 500
 private const val CUSTOM_SEPARATOR_BACKGROUND_DEFAULT = "#210000"
+private val DEFAULT_ACTIVITY_INSTALL_BANLIST = """
+com.google.android.gms.games.*
+com.google.android.play.games.*
+com.google.android.gms.auth.api.signin.*
+com.google.android.gms.common.api.*
+com.android.billingclient.*
+com.android.vending.billing.*
+com.android.vending.*
+com.xiaomi.market.*
+com.huawei.appmarket.*
+ru.vk.store.*
+ru.rustore.*
+com.heytap.market.*
+com.oppo.market.*
+com.sec.android.app.samsungapps.*
+""".trimIndent()
 private val DEFAULT_DESCRIPTION =
     """
     Welcome! This is the UniPatches Universal Overlay Patch Menu.
@@ -461,7 +477,7 @@ private fun injectMethod(owner: MutableClass, method: MutableMethod, config: Str
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v1.3.2 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v1.3.3 (Experimental)",
     description = """
         Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,
         fullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;
@@ -807,6 +823,12 @@ val universalOverlayPatch = bytecodePatch(
         key = "runtimeOverlayActivityNameOverride",
         description = "Optional fallback Activity class used only when Application startup cannot be found. Leave blank for universal automatic discovery. Example: com.example.MainActivity or Lcom/example/MainActivity;.",
     )
+    val activityInstallBanlist by stringOption(
+        title = "Advanced > Activity > Overlay install banlist",
+        default = DEFAULT_ACTIVITY_INSTALL_BANLIST,
+        key = "runtimeOverlayActivityInstallBanlist",
+        description = "Activity class or package prefixes that must not receive the overlay. Enter one per line, comma, or semicolon; use * for a prefix. Common store, billing, and sign-in popup prefixes are included by default. Enter none to disable the default banlist.",
+    )
     val activateStatisticsOnLaunch by booleanOption(
         title = "Modules > Settings > Activate statistic modules on launch",
         default = false,
@@ -968,6 +990,7 @@ val universalOverlayPatch = bytecodePatch(
             (MAX_DESCRIPTION_CHARACTERS - manualDescription.length).coerceAtLeast(0),
         )
         val manualBackground = backgroundColor.orEmpty().ifBlank { "#300000" }
+        val activityInstallBanlistValue = activityInstallBanlist.orEmpty().trim().take(4096).ifBlank { DEFAULT_ACTIVITY_INSTALL_BANLIST }
         val manualPreset = OverlayUiPreset(
             title = title.orEmpty().ifBlank { "UniPatches Universal Overlay Patch" }.take(MAX_TITLE_CHARACTERS),
             description = manualDescription,
@@ -1222,6 +1245,7 @@ val universalOverlayPatch = bytecodePatch(
             closingAnimationValue,
             menuTextColor6Value,
             separatorBackgroundColorValue,
+            activityInstallBanlistValue,
         ).joinToString("|") { encode(it) }
 
         // Prefer the process Application entry point. The Activity path is a compatibility fallback
