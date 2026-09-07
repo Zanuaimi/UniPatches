@@ -6,9 +6,11 @@ internal object OverlayPresetCatalog {
         uniPatchesPreset,
         morpheBluePreset,
         darkPreset,
-        lightPreset,
-        zArchiverPreset,
-    )
+    lightPreset,
+    zArchiverPreset,
+        luckyPatcherPreset,
+        reVancedPreset,
+)
 
     fun valuesFor(id: String, custom: OverlayUiPreset): OverlayUiPreset =
         definitions.firstOrNull { it.id == id }?.values ?: custom
