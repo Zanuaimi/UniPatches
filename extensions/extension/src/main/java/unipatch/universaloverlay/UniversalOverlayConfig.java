@@ -5,7 +5,7 @@ import android.view.Gravity;
 
 /**
  * Decodes and validates overlay configuration inside the extension runtime.
- * The patch-building Kotlin code supplies version 1; older payloads remain supported.
+ * The patch-building Kotlin code supplies the current version; older payloads remain supported.
  */
 final class UniversalOverlayConfig {
     private static final String DEFAULT_DESCRIPTION =
@@ -13,7 +13,7 @@ final class UniversalOverlayConfig {
             "contains optional statistic, activity, and hook modules. More may be added in " +
             "future updates. The idea and initial works of this Universal Overlay Patch are from " +
             "Zanuaimi.";
-    String title, description, repositoryText, repositoryUrl, buttonText;
+    String title, description, appendDescription, descriptionAlignment, repositoryText, repositoryUrl, buttonText;
     int background, outline, overlayTextColor, buttonTextColor, buttonBackground, buttonSize, gravity;
     int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle, iconOutlineWidth, iconTextSize;
     int backgroundTransparency;
@@ -31,20 +31,30 @@ final class UniversalOverlayConfig {
     int statisticMonitorPosition, monitorColumns;
     float monitorScale;
     String temperatureFormat, timeFormat;
+    String controlTheme, bottomButtonStyle, bottomButtonShape, separatorStyle,
+            titleIconPlacement, titleAlignment, menuCorners, menuOutlineAnimation,
+            menuAnimation, animationEasing;
+    int controlBackground, controlForeground, bottomButtonTextColor,
+            bottomButtonBackground1, bottomButtonBackground2,
+            menuTextColor1, menuTextColor2, menuTextColor3, menuTextColor4, menuTextColor5,
+            outlineAnimationSpeed, animationDuration, appendDescriptionColor;
+    boolean bottomButtonPadding, titleSeparator;
 
     static UniversalOverlayConfig decode(String encoded) {
         UniversalOverlayConfig c = new UniversalOverlayConfig();
         String[] values = encoded == null ? new String[0] : encoded.split("\\|", -1);
-        // Version 1/2/3/4/5/6/7/8/9/10/11/12 prepends a version field. Keep accepting the original 14-field format so an
+        // Version 1 through 16 prepends a version field. Keep accepting the original 14-field format so an
         // older generated patch remains safe when paired with this newer extension.
-        String[] v = new String[37];
+        String[] v = new String[63];
         for (int i = 0; i < v.length; i++) v[i] = i < values.length ? decodePart(values[i]) : "";
-        int offset = ("1".equals(v[0]) || "2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0])) ? 1 : 0;
+        int offset = ("1".equals(v[0]) || "2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0])) ? 1 : 0;
         c.title = limit(field(v, offset, 0), 80, "UniPatches Universal Overlay Patch");
         c.description = limit(field(v, offset, 1), 500, DEFAULT_DESCRIPTION);
+        c.appendDescription = limit(field(v, offset, 58), 500, "");
+        c.descriptionAlignment = choice(field(v, offset, 59), "center", "left", "center", "right");
         c.repositoryText = empty(field(v, offset, 2), "UniPatches repository");
         c.repositoryUrl = validUrl(field(v, offset, 3));
-        boolean currentColorFormat = "1".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]);
+        boolean currentColorFormat = "1".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0]);
         int rawBackground = color(field(v, offset, 4), currentColorFormat ? 0xFF300000 : 0x80FF0000);
         c.backgroundTransparency = currentColorFormat ? integer(field(v, offset, 30), 80, 0, 100) : Math.round(Color.alpha(rawBackground) * 100f / 255f);
         c.background = currentColorFormat ? withAlpha(rawBackground, c.backgroundTransparency) : rawBackground;
@@ -76,7 +86,7 @@ final class UniversalOverlayConfig {
         c.disableHaptics = hasToken(controls, "disableHaptics");
         c.disableAnimations = hasToken(controls, "disableAnimations");
         c.activateStatisticsOnLaunch = "1".equals(field(v, offset, 14));
-        boolean currentFormat = "1".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]);
+        boolean currentFormat = "1".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0]);
         c.enableMonitorsOnLaunch = currentFormat && "1".equals(field(v, offset, 15));
         int monitorPositionIndex = currentFormat ? 16 : 15;
         int monitorScaleIndex = currentFormat ? 17 : 16;
@@ -86,12 +96,12 @@ final class UniversalOverlayConfig {
                 : ("bottom".equals(monitorPosition) ? 2 : 0);
         c.monitorScale = floatValue(field(v, offset, monitorScaleIndex), 1f, .5f, 2f);
         c.monitorColumns = integer(field(v, offset, monitorColumnsIndex), 2, 1, 3);
-        boolean extendedFormat = "1".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]);
+        boolean extendedFormat = "1".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0]);
         c.temperatureFormat = extendedFormat && "fahrenheit".equals(field(v, offset, 19)) ? "fahrenheit"
                 : (extendedFormat && "kelvin".equals(field(v, offset, 19)) ? "kelvin" : "celsius");
         c.timeFormat = extendedFormat && "24".equals(field(v, offset, 20)) ? "24" : "12";
-        boolean customizationFormat = "1".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]);
-        boolean automaticIconFormat = "1".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]);
+        boolean customizationFormat = "1".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0]);
+        boolean automaticIconFormat = "1".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0]);
         c.outlineWidth = customizationFormat ? integer(field(v, offset, 21), 1, 1, 8) : 1;
         c.iconOutline = customizationFormat && "1".equals(field(v, offset, 22));
         c.iconOutlineColor = color(customizationFormat ? field(v, offset, 23) : "", 0xFFFFFFFF);
@@ -114,8 +124,38 @@ final class UniversalOverlayConfig {
                 ? "1".equals(field(v, offset, gradientToggleIndex))
                 : (!"9".equals(v[0]) || "1".equals(field(v, offset, gradientToggleIndex)));
         c.iconOutlineWidth = currentColorFormat ? integer(field(v, offset, 32), 3, 1, 8) : Math.min(8, Math.max(2, c.outlineWidth + 1));
-        c.iconTextSize = ("1".equals(v[0]) || "12".equals(v[0])) ? integer(field(v, offset, 33), 18, 8, 48) : 18;
+        c.iconTextSize = ("1".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0])) ? integer(field(v, offset, 33), 18, 8, 48) : 18;
+        c.controlTheme = choice(field(v, offset, 34), "modern", "legacy", "modern", "monet");
+        c.controlBackground = color(field(v, offset, 35), 0xFF300000);
+        c.controlForeground = color(field(v, offset, 36), 0xFFFF5656);
+        c.bottomButtonStyle = choice(field(v, offset, 37), "text", "text", "solid", "gradient");
+        c.bottomButtonShape = choice(field(v, offset, 38), "square", "square", "squircle");
+        c.bottomButtonPadding = "1".equals(field(v, offset, 39));
+        c.bottomButtonTextColor = color(field(v, offset, 40), 0xFFFFFFFF);
+        c.bottomButtonBackground1 = color(field(v, offset, 41), 0xFF500000);
+        c.bottomButtonBackground2 = color(field(v, offset, 42), 0xFFAA0000);
+        c.menuTextColor1 = color(field(v, offset, 43), c.overlayTextColor);
+        c.menuTextColor2 = color(field(v, offset, 44), c.overlayTextColor);
+        c.menuTextColor3 = color(field(v, offset, 45), c.overlayTextColor);
+        c.menuTextColor4 = color(field(v, offset, 46), c.overlayTextColor);
+        c.menuTextColor5 = color(field(v, offset, 47), c.overlayTextColor);
+        c.appendDescriptionColor = color(field(v, offset, 60), c.menuTextColor3);
+        c.separatorStyle = choice(field(v, offset, 48), "ascii", "ascii", "doubleLine", "background", "singleLine", "inline");
+        c.titleIconPlacement = choice(field(v, offset, 49), "none", "none", "left", "right", "both");
+        c.titleAlignment = choice(field(v, offset, 50), "left", "left", "center", "right");
+        c.titleSeparator = "1".equals(field(v, offset, 51));
+        c.menuCorners = choice(field(v, offset, 52), "rounded", "rounded", "square");
+        c.menuOutlineAnimation = choice(field(v, offset, 53), "static", "static", "gradient", "rainbow");
+        c.outlineAnimationSpeed = integer(field(v, offset, 54), 1, 0, 10);
+        c.menuAnimation = choice(field(v, offset, 55), "fade", "fade", "scale", "disabled");
+        c.animationDuration = integer(field(v, offset, 56), 180, 0, 5000);
+        c.animationEasing = choice(field(v, offset, 57), "linear", "linear", "logarithmic");
         return c;
+    }
+
+    private static String choice(String value, String fallback, String... allowed) {
+        for (String item : allowed) if (item.equals(value)) return value;
+        return fallback;
     }
 
     private static boolean hasToken(String values, String token) {

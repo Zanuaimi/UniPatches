@@ -190,6 +190,7 @@ public final class UniversalOverlayRuntime {
 
     /** Owns all views and state for exactly one Activity. */
     private static final class Controller {
+        private enum MenuState { CLOSED, OPENING, OPEN, CLOSING }
         private final Activity activity;
         private final Context overlayContext;
         private final UniversalOverlayConfig config;
@@ -198,6 +199,7 @@ public final class UniversalOverlayRuntime {
         private final FrameLayout menuLayer;
         private final View menuScrim;
         private final LinearLayout panel;
+        private final UniversalOverlayViews.AnimatedOutline menuOutline;
         private final FrameLayout confirmationLayer;
         private final View brightnessDimLayer;
         private final List<UniversalOverlayActivityModule> activityModules = new ArrayList<>();
@@ -210,6 +212,7 @@ public final class UniversalOverlayRuntime {
         private final int originalWindowFlags;
         private final int originalSystemUi;
         private boolean menuVisible;
+        private MenuState menuState = MenuState.CLOSED;
         private boolean fullyClosed;
         private boolean attached;
         private boolean detached;
@@ -273,9 +276,19 @@ public final class UniversalOverlayRuntime {
             };
             menuLayer = new FrameLayout(overlayContext);
             menuScrim = createMenuScrim();
+            menuOutline = "static".equals(config.menuOutlineAnimation) || config.outlineAnimationSpeed <= 0 ? null
+                    : UniversalOverlayViews.animatedOutline(
+                            config.background,
+                            config.buttonBackground,
+                            config.iconBackground2,
+                            "rainbow".equals(config.menuOutlineAnimation),
+                            config.outlineWidth,
+                            !"square".equals(config.menuCorners),
+                            config.outlineAnimationSpeed);
             panel = createMenuPanel();
             confirmationLayer = createConfirmationLayer();
         }
+
 
         void attach() {
             if (attached || detached) return;
@@ -304,6 +317,7 @@ public final class UniversalOverlayRuntime {
             if (detached) return;
             detached = true;
             root.removeCallbacks(dragVisibilityFade);
+            if (menuOutline != null) menuOutline.stop();
             for (UniversalOverlayStatisticModule module : statistics) module.stopSafely();
             restoreActivityModules();
             removeRoot();
@@ -313,6 +327,10 @@ public final class UniversalOverlayRuntime {
             if (detached) return;
             root.removeCallbacks(dragVisibilityFade);
             menuVisible = false;
+            menuState = MenuState.CLOSED;
+            menuScrim.animate().cancel();
+            panel.animate().cancel();
+            if (menuOutline != null) menuOutline.stop();
             menuLayer.setVisibility(View.GONE);
             confirmationLayer.setVisibility(View.GONE);
             floatingButton.setAlpha(config.opacity);
@@ -453,7 +471,7 @@ public final class UniversalOverlayRuntime {
         private void createStatisticMonitors(UniversalOverlayStatisticModule module) {
             List<TextView> monitors = new ArrayList<>();
             for (int i = 0; i < module.monitorCount(); i++) {
-                TextView monitor = text("", 12, config.overlayTextColor);
+                TextView monitor = text("", 12, config.menuTextColor4);
                 monitor.setGravity(Gravity.CENTER);
                 monitor.setPadding(dp(3), 0, dp(3), 0);
                 monitor.setBackground(UniversalOverlayViews.background(config.background, config.outline, false, config.outlineWidth));
@@ -588,7 +606,9 @@ public final class UniversalOverlayRuntime {
             // Consume unused panel area without preventing its child controls from receiving taps.
             menu.setOnTouchListener((v, event) -> true);
             menu.setPadding(dp(20), dp(18), dp(20), dp(12));
-            menu.setBackground(UniversalOverlayViews.background(config.background, config.outline, false, config.outlineWidth));
+            menu.setBackground(menuOutline != null ? menuOutline : UniversalOverlayViews.background(
+                    config.background, config.outline, false, config.outlineWidth,
+                    !"square".equals(config.menuCorners)));
             FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
                     Math.max(dp(1), Math.min(dp(560), activity.getResources().getDisplayMetrics().widthPixels - dp(40))),
                     ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -596,14 +616,44 @@ public final class UniversalOverlayRuntime {
             panelParams.setMargins(dp(20), dp(20), dp(20), dp(20));
             menu.setLayoutParams(panelParams);
 
-            TextView title = text(config.title, 20, config.overlayTextColor);
+            LinearLayout titleRow = new LinearLayout(overlayContext);
+            titleRow.setOrientation(LinearLayout.HORIZONTAL);
+            titleRow.setGravity(Gravity.CENTER_VERTICAL);
+            boolean leftTitleIcon = "left".equals(config.titleIconPlacement) || "both".equals(config.titleIconPlacement);
+            boolean rightTitleIcon = "right".equals(config.titleIconPlacement) || "both".equals(config.titleIconPlacement);
+            if (leftTitleIcon) titleRow.addView(createMenuTitleIcon(), titleIconParams());
+            TextView title = text(config.title, 20, config.menuTextColor1);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            menu.addView(title, new LinearLayout.LayoutParams(-1, -2));
+            title.setGravity("center".equals(config.titleAlignment) ? Gravity.CENTER
+                    : ("right".equals(config.titleAlignment) ? Gravity.RIGHT : Gravity.LEFT));
+            LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1f);
+            titleParams.leftMargin = leftTitleIcon ? dp(8) : 0;
+            titleParams.rightMargin = rightTitleIcon ? dp(8) : 0;
+            titleRow.addView(title, titleParams);
+            if (rightTitleIcon) titleRow.addView(createMenuTitleIcon(), titleIconParams());
+            menu.addView(titleRow, new LinearLayout.LayoutParams(-1, -2));
+            if (config.titleSeparator) {
+                View titleLine = new View(overlayContext);
+                titleLine.setBackgroundColor(config.menuTextColor1);
+                LinearLayout.LayoutParams lineParams = new LinearLayout.LayoutParams(-1, dp(1));
+                lineParams.topMargin = dp(6);
+                menu.addView(titleLine, lineParams);
+            }
 
-            TextView description = text(config.description, 14, config.overlayTextColor);
+            int descriptionGravity = "left".equals(config.descriptionAlignment) ? Gravity.LEFT
+                    : ("right".equals(config.descriptionAlignment) ? Gravity.RIGHT : Gravity.CENTER);
+            TextView description = text(config.description, 14, config.menuTextColor3);
+            description.setGravity(descriptionGravity);
             LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(-1, -2);
             descriptionParams.topMargin = dp(8);
             menu.addView(description, descriptionParams);
+            if (config.appendDescription != null && !config.appendDescription.isEmpty()) {
+                TextView appendedDescription = text(config.appendDescription, 14, config.appendDescriptionColor);
+                appendedDescription.setGravity(descriptionGravity);
+                LinearLayout.LayoutParams appendedParams = new LinearLayout.LayoutParams(-1, -2);
+                appendedParams.topMargin = dp(2);
+                menu.addView(appendedDescription, appendedParams);
+            }
 
             int maxControlHeight = Math.max(dp(120), Math.min(dp(280),
                     (int) (activity.getResources().getDisplayMetrics().heightPixels * .45f)) - dp(8));
@@ -627,6 +677,37 @@ public final class UniversalOverlayRuntime {
             return menu;
         }
 
+        private LinearLayout.LayoutParams titleIconParams() {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(32), dp(32));
+            params.gravity = Gravity.CENTER_VERTICAL;
+            return params;
+        }
+
+        private TextView createMenuTitleIcon() {
+            TextView icon = new TextView(overlayContext);
+            icon.setGravity(Gravity.CENTER);
+            icon.setTextColor(config.buttonTextColor);
+            icon.setText(config.buttonText);
+            icon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, Math.max(10, config.iconTextSize - 4));
+            icon.setTypeface(Typeface.DEFAULT, config.iconBold ? Typeface.BOLD : Typeface.NORMAL);
+            Bitmap customIcon = "image".equals(config.iconType) ? decodeCustomIcon(config.customIconImage) : null;
+            if (customIcon != null) {
+                icon.setText("");
+                BitmapDrawable image = new BitmapDrawable(overlayContext.getResources(), fitCustomIcon(customIcon));
+                image.setGravity(Gravity.CENTER);
+                icon.setBackground(image);
+            } else {
+                icon.setBackground(UniversalOverlayViews.gradientBackground(
+                        config.buttonBackground,
+                        config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
+                        config.iconGradientAngle, Color.TRANSPARENT, 0, config.shape == 1));
+            }
+            icon.setClickable(false);
+            icon.setFocusable(false);
+            icon.setContentDescription("Overlay menu icon");
+            return icon;
+        }
+
         private FrameLayout createConfirmationLayer() {
             FrameLayout layer = new FrameLayout(overlayContext);
             layer.setBackgroundColor(0xB3000000);
@@ -637,15 +718,16 @@ public final class UniversalOverlayRuntime {
             LinearLayout card = new LinearLayout(overlayContext);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(dp(20), dp(18), dp(20), dp(12));
-            card.setBackground(UniversalOverlayViews.background(config.background, config.outline, false, config.outlineWidth));
+            card.setBackground(UniversalOverlayViews.background(config.background, config.outline, false,
+                    config.outlineWidth, !"square".equals(config.menuCorners)));
             card.setClickable(true);
             card.setOnClickListener(v -> { });
 
-            TextView title = text("Close overlay?", 20, config.overlayTextColor);
+            TextView title = text("Close overlay?", 20, config.menuTextColor1);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             card.addView(title, new LinearLayout.LayoutParams(-1, -2));
 
-            TextView message = text("The overlay will be removed for this Activity.", 14, config.overlayTextColor);
+            TextView message = text("The overlay will be removed for this Activity.", 14, config.menuTextColor3);
             LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(-1, -2);
             messageParams.topMargin = dp(8);
             card.addView(message, messageParams);
@@ -726,9 +808,57 @@ public final class UniversalOverlayRuntime {
         }
 
         private void addSectionLabel(LinearLayout parent, String label) {
-            TextView separator = text("—  " + label + "  —", 13, config.overlayTextColor);
-            separator.setAlpha(.65f);
+            int separatorColor = config.menuTextColor2;
+            if ("doubleLine".equals(config.separatorStyle)) {
+                LinearLayout wrapper = new LinearLayout(overlayContext);
+                wrapper.setOrientation(LinearLayout.VERTICAL);
+                View topLine = new View(overlayContext);
+                topLine.setBackgroundColor(config.menuTextColor1);
+                wrapper.addView(topLine, new LinearLayout.LayoutParams(-1, dp(1)));
+                TextView lineLabel = text(label, 13, separatorColor);
+                lineLabel.setGravity(Gravity.CENTER);
+                wrapper.addView(lineLabel, new LinearLayout.LayoutParams(-1, dp(26)));
+                View bottomLine = new View(overlayContext);
+                bottomLine.setBackgroundColor(config.menuTextColor1);
+                wrapper.addView(bottomLine, new LinearLayout.LayoutParams(-1, dp(1)));
+                LinearLayout.LayoutParams wrapperParams = new LinearLayout.LayoutParams(-1, dp(34));
+                wrapperParams.topMargin = dp(4);
+                parent.addView(wrapper, wrapperParams);
+                return;
+            }
+            String separatorText = "inline".equals(config.separatorStyle) ? label : "---  " + label + "  ---";
+            TextView separator = text(separatorText, 13, separatorColor);
+            separator.setAlpha("inline".equals(config.separatorStyle) ? .9f : .65f);
             separator.setGravity(Gravity.CENTER);
+            if ("singleLine".equals(config.separatorStyle)) {
+                separatorText = label;
+                separator.setText(separatorText);
+                View line = new View(overlayContext);
+                line.setBackgroundColor(config.menuTextColor1);
+                LinearLayout wrapper = new LinearLayout(overlayContext);
+                wrapper.setOrientation(LinearLayout.VERTICAL);
+                wrapper.addView(separator, new LinearLayout.LayoutParams(-1, dp(26)));
+                wrapper.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
+                LinearLayout.LayoutParams wrapperParams = new LinearLayout.LayoutParams(-1, dp(30));
+                wrapperParams.topMargin = dp(4);
+                parent.addView(wrapper, wrapperParams);
+                return;
+            }
+            if ("background".equals(config.separatorStyle)) {
+                int base = config.background;
+                float luminance = android.graphics.Color.red(base) * .299f
+                        + android.graphics.Color.green(base) * .587f
+                        + android.graphics.Color.blue(base) * .114f;
+                int contrasting = android.graphics.Color.rgb(
+                        luminance > 128 ? Math.round(android.graphics.Color.red(base) * .65f)
+                                : Math.round(android.graphics.Color.red(base) + (255 - android.graphics.Color.red(base)) * .35f),
+                        luminance > 128 ? Math.round(android.graphics.Color.green(base) * .65f)
+                                : Math.round(android.graphics.Color.green(base) + (255 - android.graphics.Color.green(base)) * .35f),
+                        luminance > 128 ? Math.round(android.graphics.Color.blue(base) * .65f)
+                                : Math.round(android.graphics.Color.blue(base) + (255 - android.graphics.Color.blue(base)) * .35f));
+                separator.setBackgroundColor(contrasting);
+                separator.setPadding(dp(4), 0, dp(4), 0);
+            }
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(32));
             params.topMargin = dp(4);
             parent.addView(separator, params);
@@ -834,21 +964,23 @@ public final class UniversalOverlayRuntime {
             ArrayAdapter<String> adapter = new ArrayAdapter<String>(overlayContext, android.R.layout.simple_spinner_item, labels) {
                 @Override public View getView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getView(position, convertView, parentView);
-                    view.setTextColor(config.overlayTextColor);
+                    view.setTextColor(config.controlForeground);
                     return view;
                 }
                 @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getDropDownView(position, convertView, parentView);
-                    view.setTextColor(config.overlayTextColor);
-                    view.setBackgroundColor(config.background);
+                    view.setTextColor(config.controlForeground);
+                    view.setBackgroundColor(config.controlBackground);
                     return view;
                 }
             };
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spinner.setAdapter(adapter);
-            spinner.setBackground(UniversalOverlayViews.background(config.background, config.outline, false, config.outlineWidth));
+            spinner.setBackground(UniversalOverlayViews.background(config.controlBackground, config.outline, false,
+                    config.outlineWidth, !"square".equals(config.menuCorners)));
             if (android.os.Build.VERSION.SDK_INT >= 16) {
-                spinner.setPopupBackgroundDrawable(UniversalOverlayViews.background(config.background, config.outline, false, config.outlineWidth));
+                spinner.setPopupBackgroundDrawable(UniversalOverlayViews.background(config.controlBackground, config.outline, false,
+                        config.outlineWidth, !"square".equals(config.menuCorners)));
             }
             int current = remembered == null ? module.current(activity) : remembered;
             spinner.setSelection(current == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT ? 1
@@ -874,10 +1006,10 @@ public final class UniversalOverlayRuntime {
             LinearLayout row = new LinearLayout(overlayContext);
             row.setOrientation(LinearLayout.VERTICAL);
             row.setPadding(0, dp(6), 0, dp(6));
-            TextView title = text(label, 16, config.overlayTextColor);
+            TextView title = text(label, 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             row.addView(title, new LinearLayout.LayoutParams(-1, -2));
-            TextView description = text(details, 13, config.overlayTextColor);
+            TextView description = text(details, 13, config.menuTextColor3);
             description.setAlpha(.82f);
             row.addView(description, new LinearLayout.LayoutParams(-1, -2));
             return row;
@@ -896,13 +1028,13 @@ public final class UniversalOverlayRuntime {
 
             LinearLayout copy = new LinearLayout(overlayContext);
             copy.setOrientation(LinearLayout.VERTICAL);
-            TextView title = text(label, 16, config.overlayTextColor);
+            TextView title = text(label, 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             copy.addView(title, new LinearLayout.LayoutParams(-1, -2));
-            TextView details = text(description, 13, config.overlayTextColor);
+            TextView details = text(description, 13, config.menuTextColor3);
             details.setAlpha(.82f);
             copy.addView(details, new LinearLayout.LayoutParams(-1, -2));
-            TextView valueView = text("Disabled", 12, config.overlayTextColor);
+            TextView valueView = text("Disabled", 12, config.menuTextColor4);
             valueView.setAlpha(.72f);
             copy.addView(valueView, new LinearLayout.LayoutParams(-1, -2));
             row.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -914,6 +1046,7 @@ public final class UniversalOverlayRuntime {
                 monitorControl.setChecked(rememberedMonitor != null ? rememberedMonitor : config.enableMonitorsOnLaunch);
                 monitorControl.setText("Monitor");
                 styleCheckBox(monitorControl);
+                monitorControl.setTextColor(config.menuTextColor4);
                 monitorControl.setContentDescription(label + " monitor");
                 module.setMonitorEnabled(monitorControl.isChecked());
                 monitorControl.setOnCheckedChangeListener((button, checked) -> {
@@ -932,6 +1065,7 @@ public final class UniversalOverlayRuntime {
             control.setChecked(remembered != null ? remembered : config.activateStatisticsOnLaunch);
             control.setText("Active");
             styleCheckBox(control);
+            control.setTextColor(config.menuTextColor5);
             control.setContentDescription(label + " active");
             module.bind(valueView, control);
             createStatisticMonitors(module);
@@ -1018,10 +1152,10 @@ public final class UniversalOverlayRuntime {
 
             LinearLayout copy = new LinearLayout(overlayContext);
             copy.setOrientation(LinearLayout.VERTICAL);
-            TextView title = text(feature.label(), 16, config.overlayTextColor);
+            TextView title = text(feature.label(), 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             copy.addView(title, new LinearLayout.LayoutParams(-1, -2));
-            TextView description = text(feature.description(), 13, config.overlayTextColor);
+            TextView description = text(feature.description(), 13, config.menuTextColor3);
             description.setAlpha(.82f);
             LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(-1, -2);
             descriptionParams.topMargin = dp(2);
@@ -1061,38 +1195,66 @@ public final class UniversalOverlayRuntime {
         }
 
         private void styleCheckBox(CheckBox control) {
-            control.setTextColor(config.overlayTextColor);
+            control.setTextColor(config.controlForeground);
             if (android.os.Build.VERSION.SDK_INT >= 21) {
-                control.setButtonTintList(ColorStateList.valueOf(config.overlayTextColor));
+                if ("legacy".equals(config.controlTheme)) {
+                    control.setButtonTintList(ColorStateList.valueOf(config.controlForeground));
+                } else {
+                    control.setButtonTintList(new ColorStateList(
+                            new int[][] { new int[] { android.R.attr.state_checked }, new int[] {} },
+                            new int[] { config.controlForeground, config.controlBackground }));
+                }
             }
         }
 
         private void styleSlider(SeekBar slider) {
             if (android.os.Build.VERSION.SDK_INT >= 21) {
-                ColorStateList tint = ColorStateList.valueOf(config.overlayTextColor);
-                slider.setProgressTintList(tint);
-                slider.setThumbTintList(tint);
-                slider.setProgressBackgroundTintList(ColorStateList.valueOf(config.background));
+                int foreground = "legacy".equals(config.controlTheme) ? config.menuTextColor1 : config.controlForeground;
+                int background = "legacy".equals(config.controlTheme) ? config.background : config.controlBackground;
+                slider.setProgressTintList(ColorStateList.valueOf(foreground));
+                slider.setThumbTintList(ColorStateList.valueOf(foreground));
+                slider.setProgressBackgroundTintList(ColorStateList.valueOf(background));
             }
         }
 
         private void addAction(LinearLayout row, String label, View.OnClickListener listener) {
-            TextView action = text(label, 14, config.overlayTextColor);
+            TextView action = text(label, 14, config.bottomButtonTextColor);
             action.setGravity(Gravity.CENTER);
             action.setContentDescription(label);
             action.setOnClickListener(listener);
-            action.setBackground(UniversalOverlayViews.selectableBackground(overlayContext));
+            boolean hasBackground = !"text".equals(config.bottomButtonStyle);
+            if (hasBackground) {
+                action.setBackground(UniversalOverlayViews.solidOrGradientBackground(
+                        config.bottomButtonBackground1, config.bottomButtonBackground2, 0f,
+                        Color.TRANSPARENT, 0, !"square".equals(config.bottomButtonShape),
+                        "gradient".equals(config.bottomButtonStyle)));
+            } else {
+                action.setBackground(UniversalOverlayViews.selectableBackground(overlayContext));
+            }
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(56), 1f);
+            if (config.bottomButtonPadding) params.setMargins(dp(3), 0, dp(3), 0);
             row.addView(action, params);
         }
 
         private void toggleMenu() {
             if (fullyClosed) return;
-            menuVisible = !menuVisible;
+            boolean opening = menuState == MenuState.CLOSED || menuState == MenuState.CLOSING;
+            menuVisible = opening;
+            menuState = opening ? MenuState.OPENING : MenuState.CLOSING;
             for (UniversalOverlayStatisticModule module : statistics) module.setMenuVisible(menuVisible);
             if (menuVisible) {
                 root.requestFocus();
                 menuLayer.setVisibility(View.VISIBLE);
+                if (menuOutline != null) menuOutline.start();
+                menuLayer.setAlpha(1f);
+                panel.setAlpha(0f);
+                if ("scale".equals(config.menuAnimation)) {
+                    panel.setScaleX(.01f);
+                    panel.setScaleY(.01f);
+                } else {
+                    panel.setScaleX(1f);
+                    panel.setScaleY(1f);
+                }
                 for (UniversalOverlayStatisticModule module : statistics) {
                     if (module.isEnabled() && !module.startSafely()) {
                         rememberModuleState(module.key(), false);
@@ -1103,7 +1265,14 @@ public final class UniversalOverlayRuntime {
                 }
                 menuScrim.animate().cancel();
                 menuScrim.setAlpha(0f);
-                menuScrim.animate().alpha(1f).setDuration(180).start();
+                panel.animate().cancel();
+                menuScrim.animate().alpha(1f).setDuration(animationDuration()).setInterpolator(menuInterpolator(true)).start();
+                android.view.ViewPropertyAnimator panelAnimation = panel.animate().alpha(1f)
+                        .setDuration(animationDuration()).setInterpolator(menuInterpolator(true));
+                if ("scale".equals(config.menuAnimation)) panelAnimation.scaleX(1f).scaleY(1f);
+                panelAnimation.withEndAction(() -> {
+                    if (menuVisible) menuState = MenuState.OPEN;
+                }).start();
             } else {
                 root.clearFocus();
                 hideMenuLayer();
@@ -1117,6 +1286,7 @@ public final class UniversalOverlayRuntime {
         private void closeMenu() {
             boolean wasVisible = menuVisible;
             menuVisible = false;
+            menuState = MenuState.CLOSING;
             root.clearFocus();
             for (UniversalOverlayStatisticModule module : statistics) module.setMenuVisible(false);
             hideMenuLayer();
@@ -1131,12 +1301,34 @@ public final class UniversalOverlayRuntime {
 
         private void hideMenuLayer() {
             menuScrim.animate().cancel();
-            menuScrim.animate().alpha(0f).setDuration(180).withEndAction(() -> {
+            panel.animate().cancel();
+            android.view.ViewPropertyAnimator panelAnimation = panel.animate().alpha(0f)
+                    .setDuration(animationDuration()).setInterpolator(menuInterpolator(false));
+            if ("scale".equals(config.menuAnimation)) panelAnimation.scaleX(.01f).scaleY(.01f);
+            panelAnimation.start();
+            menuScrim.animate().alpha(0f).setDuration(animationDuration()).setInterpolator(menuInterpolator(false)).withEndAction(() -> {
                 if (!menuVisible) {
                     menuLayer.setVisibility(View.GONE);
+                    panel.setAlpha(1f);
+                    panel.setScaleX(1f);
+                    panel.setScaleY(1f);
+                    menuState = MenuState.CLOSED;
+                    if (menuOutline != null) menuOutline.stop();
                     for (UniversalOverlayStatisticModule module : statistics) updateStatisticMonitor(module);
                 }
             }).start();
+        }
+
+        private long animationDuration() {
+            return "disabled".equals(config.menuAnimation) ? 0L : Math.max(0, config.animationDuration);
+        }
+
+        private android.view.animation.Interpolator menuInterpolator(boolean opening) {
+            if (!"logarithmic".equals(config.animationEasing)) {
+                return new android.view.animation.LinearInterpolator();
+            }
+            return opening ? new android.view.animation.DecelerateInterpolator(2.5f)
+                    : new android.view.animation.AccelerateInterpolator(2.5f);
         }
 
         private void showCloseConfirmation() {

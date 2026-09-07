@@ -5,6 +5,7 @@ import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.imageOption
 import app.morphe.patcher.patch.intOption
+import app.morphe.patcher.patch.filePathOption
 import app.morphe.patcher.patch.stringOption
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
@@ -23,7 +24,7 @@ import kotlin.math.roundToInt
 
 private const val RUNTIME_CLASS = "Lunipatch/universaloverlay/UniversalOverlayRuntime;"
 private const val CONFIG_VERSION = "1"
-private const val PRESET_SCHEMA_VERSION = 1
+private const val PRESET_SCHEMA_VERSION = 2
 private const val MAX_CUSTOM_ICON_BYTES = 1024 * 1024
 private const val MAX_TITLE_CHARACTERS = 80
 private const val MAX_DESCRIPTION_CHARACTERS = 500
@@ -42,10 +43,9 @@ private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
     addProperty("format", "unipatches-universal-overlay-preset")
     addProperty("version", PRESET_SCHEMA_VERSION)
     add("settings", JsonObject().apply {
-        addProperty("title", title)
-        addProperty("description", description)
-        addProperty("repositoryText", repositoryText)
-        addProperty("repositoryUrl", repositoryUrl)
+        addProperty("appendDescription", appendDescription)
+        addProperty("appendDescriptionColor", appendDescriptionColor)
+        addProperty("descriptionAlignment", descriptionAlignment)
         addProperty("backgroundColor", background)
         addProperty("backgroundTransparency", backgroundTransparency)
         addProperty("outlineColor", outline)
@@ -70,6 +70,30 @@ private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
         addProperty("buttonPosition", buttonPosition)
         addProperty("activityOverride", activityOverride)
         addProperty("iconTextSize", iconTextSize)
+        addProperty("controlTheme", controlTheme)
+        addProperty("controlBackground", controlBackground)
+        addProperty("controlForeground", controlForeground)
+        addProperty("bottomButtonStyle", bottomButtonStyle)
+        addProperty("bottomButtonShape", bottomButtonShape)
+        addProperty("bottomButtonPadding", bottomButtonPadding)
+        addProperty("bottomButtonTextColor", bottomButtonTextColor)
+        addProperty("bottomButtonBackground1", bottomButtonBackground1)
+        addProperty("bottomButtonBackground2", bottomButtonBackground2)
+        addProperty("menuTextColor1", menuTextColor1)
+        addProperty("menuTextColor2", menuTextColor2)
+        addProperty("menuTextColor3", menuTextColor3)
+        addProperty("menuTextColor4", menuTextColor4)
+        addProperty("menuTextColor5", menuTextColor5)
+        addProperty("separatorStyle", separatorStyle)
+        addProperty("titleIconPlacement", titleIconPlacement)
+        addProperty("titleAlignment", titleAlignment)
+        addProperty("titleSeparator", titleSeparator)
+        addProperty("menuCorners", menuCorners)
+        addProperty("menuOutlineAnimation", menuOutlineAnimation)
+        addProperty("outlineAnimationSpeed", outlineAnimationSpeed)
+        addProperty("menuAnimation", menuAnimation)
+        addProperty("animationDuration", animationDuration)
+        addProperty("animationEasing", animationEasing)
     })
 }
 
@@ -93,7 +117,12 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
         }
         fun number(name: String, current: Int, range: IntRange): Int {
             val value = values.get(name)?.takeIf { it.isJsonPrimitive }?.asInt
-            return value?.takeIf { it in range } ?: current
+            if (value != null && value !in range) {
+                val clamped = value.coerceIn(range)
+                logger.warning("Universal Overlay UI preset value '$name' was clamped from $value to $clamped")
+                return clamped
+            }
+            return value ?: current
         }
         fun flag(name: String, current: Boolean): Boolean =
             values.get(name)?.takeIf { it.isJsonPrimitive }?.asBoolean ?: current
@@ -107,6 +136,8 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
                 else -> current
             }
         }
+        fun choice(name: String, current: String, allowed: Set<String>): String =
+            text(name, current) { it in allowed }
         val backgroundSource = values.get("backgroundColor")?.takeIf {
             it.isJsonPrimitive && it.asJsonPrimitive.isString
         }?.asString
@@ -116,10 +147,9 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             ?.toIntOrNull(16)
             ?.let { ((it * 100f) / 255f).roundToInt() }
         fallback.copy(
-            title = text("title", fallback.title) { it.isNotBlank() && it.length <= MAX_TITLE_CHARACTERS },
-            description = text("description", fallback.description) { it.isNotBlank() && it.length <= MAX_DESCRIPTION_CHARACTERS },
-            repositoryText = text("repositoryText", fallback.repositoryText) { it.isNotBlank() },
-            repositoryUrl = text("repositoryUrl", fallback.repositoryUrl) { it.startsWith("http://") || it.startsWith("https://") },
+            appendDescription = text("appendDescription", fallback.appendDescription) { it.length <= MAX_DESCRIPTION_CHARACTERS },
+            appendDescriptionColor = rgbColor("appendDescriptionColor", fallback.appendDescriptionColor),
+            descriptionAlignment = choice("descriptionAlignment", fallback.descriptionAlignment, setOf("left", "center", "right")),
             background = rgbColor("backgroundColor", fallback.background),
             backgroundTransparency = if (values.has("backgroundTransparency")) {
                 number("backgroundTransparency", fallback.backgroundTransparency, 0..100)
@@ -151,6 +181,30 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             buttonPosition = text("buttonPosition", fallback.buttonPosition) { it in setOf("topLeft", "topMiddle", "topRight", "centerLeft", "centerRight", "bottomLeft", "bottomMiddle", "bottomRight") },
             activityOverride = text("activityOverride", fallback.activityOverride),
             iconTextSize = number("iconTextSize", fallback.iconTextSize, 8..48),
+            controlTheme = choice("controlTheme", fallback.controlTheme, setOf("legacy", "modern", "monet")),
+            controlBackground = rgbColor("controlBackground", fallback.controlBackground),
+            controlForeground = rgbColor("controlForeground", fallback.controlForeground),
+            bottomButtonStyle = choice("bottomButtonStyle", fallback.bottomButtonStyle, setOf("text", "solid", "gradient")),
+            bottomButtonShape = choice("bottomButtonShape", fallback.bottomButtonShape, setOf("square", "squircle")),
+            bottomButtonPadding = flag("bottomButtonPadding", fallback.bottomButtonPadding),
+            bottomButtonTextColor = rgbColor("bottomButtonTextColor", fallback.bottomButtonTextColor),
+            bottomButtonBackground1 = rgbColor("bottomButtonBackground1", fallback.bottomButtonBackground1),
+            bottomButtonBackground2 = rgbColor("bottomButtonBackground2", fallback.bottomButtonBackground2),
+            menuTextColor1 = rgbColor("menuTextColor1", fallback.menuTextColor1),
+            menuTextColor2 = rgbColor("menuTextColor2", fallback.menuTextColor2),
+            menuTextColor3 = rgbColor("menuTextColor3", fallback.menuTextColor3),
+            menuTextColor4 = rgbColor("menuTextColor4", fallback.menuTextColor4),
+            menuTextColor5 = rgbColor("menuTextColor5", fallback.menuTextColor5),
+            separatorStyle = choice("separatorStyle", fallback.separatorStyle, setOf("ascii", "doubleLine", "background", "singleLine", "inline")),
+            titleIconPlacement = choice("titleIconPlacement", fallback.titleIconPlacement, setOf("none", "left", "right", "both")),
+            titleAlignment = choice("titleAlignment", fallback.titleAlignment, setOf("left", "center", "right")),
+            titleSeparator = flag("titleSeparator", fallback.titleSeparator),
+            menuCorners = choice("menuCorners", fallback.menuCorners, setOf("rounded", "square")),
+            menuOutlineAnimation = choice("menuOutlineAnimation", fallback.menuOutlineAnimation, setOf("static", "gradient", "rainbow")),
+            outlineAnimationSpeed = number("outlineAnimationSpeed", fallback.outlineAnimationSpeed, 0..10),
+            menuAnimation = choice("menuAnimation", fallback.menuAnimation, setOf("fade", "scale", "disabled")),
+            animationDuration = number("animationDuration", fallback.animationDuration, 0..5000),
+            animationEasing = choice("animationEasing", fallback.animationEasing, setOf("linear", "logarithmic")),
         )
     }.onFailure {
         logger.warning("Universal Overlay UI preset import skipped: ${it.message ?: "invalid JSON"}. Manual Morphe settings remain active.")
@@ -389,7 +443,7 @@ private fun injectMethod(owner: MutableClass, method: MutableMethod, config: Str
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v1.2 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v1.3 (Experimental)",
     description = """
         Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,
         fullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;
@@ -397,9 +451,10 @@ val universalOverlayPatch = bytecodePatch(
         control the current Activity, and Hook modules control internal app behavior, such as disabling
         animations, through best-effort runtime changes. A selected local image automatically replaces
         the legacy icon; empty or invalid image input falls back to the legacy icon. This is experimental
-        and may not work on all apps. UI presets can save and reuse every General, UI, and Advanced
-        setting, but intentionally exclude Modules and Settings to Modules because hook and module
-        combinations can be app-specific.
+        and may not work on all apps. UI presets can save and reuse supported UI and Advanced
+        settings. The title, description, repository button text, and repository button URL remain
+        controlled by the visible Morphe settings. Modules and Settings to Modules are excluded
+        because hook and module combinations can be app-specific.
 
         The idea and initial works of this Universal Overlay Patch are from Zanuaimi / Noobite.
     """.trimIndent(),
@@ -414,15 +469,16 @@ val universalOverlayPatch = bytecodePatch(
         title = "Presets - Selected preset",
         default = "custom",
         key = "runtimeOverlaySelectedPreset",
-        description = "Choose Custom to use the visible settings. UniPatches, Morphe Blue, Dark, Light, and ZArchiver presets replace the UI settings with readable predefined values. Presets never change Modules or Settings to Modules.",
+        description = "Choose Custom to use the visible settings. UniPatches, Morphe-inspired, Dark, Light, ZArchiver-inspired, LuckyPatcher-inspired, and ReVanced-inspired presets replace supported UI settings. Title, description, repository button text, and repository button URL always remain from the visible Morphe settings. Presets never change Modules or Settings to Modules.",
         values = linkedMapOf("Custom" to "custom").apply {
             OverlayPresetCatalog.definitions.forEach { put(it.displayName, it.id) }
         },
     )
-    val importUiPreset by stringOption(
+    val importUiPreset by filePathOption(
         title = "Presets - Import UI preset",
         default = "",
         key = "runtimeOverlayImportUiPreset",
+        allowedExtensions = listOf("json"),
         description = "Optional path to a Universal Overlay .json preset. Only Custom mode uses it. A valid JSON preset overrides the visible UI settings during patching; an empty, unreadable, malformed, or unsupported file falls back to the visible Morphe settings. The Manager controls do not change visually.",
     )
     val exportUiPreset by stringOption(
@@ -438,6 +494,97 @@ val universalOverlayPatch = bytecodePatch(
         description = "Output name for exported JSON. Defaults to UniversalOverlay.json; .json is added automatically and duplicate names receive -1, -2, and so on.",
     )
 
+    val controlTheme by stringOption(
+        title = "UI - Control theme",
+        default = "modern",
+        key = "runtimeOverlayControlTheme",
+        description = "Theme used by buttons, sliders, checkboxes, and dropdowns.",
+        values = linkedMapOf("Legacy" to "legacy", "Modern (default)" to "modern", "Monet-style" to "monet"),
+    )
+    val controlBackground by stringOption(
+        title = "UI - Control background color",
+        default = "#300000",
+        key = "runtimeOverlayControlBackground",
+        description = "Background color for overlay controls.",
+    )
+    val controlForeground by stringOption(
+        title = "UI - Control foreground color",
+        default = "#FF5656",
+        key = "runtimeOverlayControlForeground",
+        description = "Foreground color for control contents, such as text, slider progress, and checked checkbox state.",
+    )
+    val bottomButtonStyle by stringOption(
+        title = "UI - Bottom action button style",
+        default = "text",
+        key = "runtimeOverlayBottomButtonStyle",
+        description = "Style of the repository, close-menu, and fully-close buttons.",
+        values = linkedMapOf("Text only (default)" to "text", "Solid background" to "solid", "Gradient background" to "gradient"),
+    )
+    val bottomButtonShape by stringOption(
+        title = "UI - Bottom action button shape",
+        default = "square",
+        key = "runtimeOverlayBottomButtonShape",
+        description = "Shape of bottom action button backgrounds.",
+        values = linkedMapOf("Full square" to "square", "Squircle" to "squircle"),
+    )
+    val bottomButtonPadding by booleanOption(
+        title = "UI - Bottom action button padding",
+        default = false,
+        key = "runtimeOverlayBottomButtonPadding",
+        description = "Add padding between the three bottom action buttons.",
+    )
+    val bottomButtonTextColor by stringOption(
+        title = "UI - Bottom action button text color",
+        default = "#FFFFFF",
+        key = "runtimeOverlayBottomButtonTextColor",
+        description = "Text color of the three bottom action buttons.",
+    )
+    val bottomButtonBackground1 by stringOption(
+        title = "UI - Bottom action button background 1",
+        default = "#500000",
+        key = "runtimeOverlayBottomButtonBackground1",
+        description = "First background color for solid or gradient bottom action buttons.",
+    )
+    val bottomButtonBackground2 by stringOption(
+        title = "UI - Bottom action button background 2",
+        default = "#AA0000",
+        key = "runtimeOverlayBottomButtonBackground2",
+        description = "Second background color for gradient bottom action buttons.",
+    )
+    val menuTextColor1 by stringOption(title = "UI - Menu text color 1 (title and lines)", default = "#FF5656", key = "runtimeOverlayMenuTextColor1", description = "Title and title/separator line color.")
+    val menuTextColor2 by stringOption(title = "UI - Menu text color 2 (module names)", default = "#FF5656", key = "runtimeOverlayMenuTextColor2", description = "Module names and separator text color.")
+    val menuTextColor3 by stringOption(title = "UI - Menu text color 3 (descriptions)", default = "#FF5656", key = "runtimeOverlayMenuTextColor3", description = "Overlay and module description color.")
+    val menuTextColor4 by stringOption(title = "UI - Menu text color 4 (monitor)", default = "#FF5656", key = "runtimeOverlayMenuTextColor4", description = "Monitor label color.")
+    val menuTextColor5 by stringOption(title = "UI - Menu text color 5 (active)", default = "#FF5656", key = "runtimeOverlayMenuTextColor5", description = "Active label color.")
+    val separatorStyle by stringOption(
+        title = "UI - Module separator style",
+        default = "ascii",
+        key = "runtimeOverlaySeparatorStyle",
+        description = "How module type separators and hints appear.",
+        values = linkedMapOf("--- Module type ---" to "ascii", "Lines above and below" to "doubleLine", "Background behind text" to "background", "Line below" to "singleLine", "Inline after module name" to "inline"),
+    )
+    val titleIconPlacement by stringOption(
+        title = "UI - Menu title icon placement",
+        default = "none",
+        key = "runtimeOverlayTitleIconPlacement",
+        description = "Show a non-clickable copy of the overlay icon beside the menu title.",
+        values = linkedMapOf("No icons (default)" to "none", "Top left" to "left", "Top right" to "right", "Both sides" to "both"),
+    )
+    val titleAlignment by stringOption(
+        title = "UI - Menu title alignment",
+        default = "left",
+        key = "runtimeOverlayTitleAlignment",
+        description = "Alignment of the overlay menu title.",
+        values = linkedMapOf("Left" to "left", "Center" to "center", "Right" to "right"),
+    )
+    val titleSeparator by booleanOption(title = "UI - Menu title separator", default = false, key = "runtimeOverlayTitleSeparator", description = "Show a Color 1 line below the title.")
+    val menuCorners by stringOption(title = "UI - Menu corners", default = "rounded", key = "runtimeOverlayMenuCorners", description = "Shape of the overlay menu corners.", values = linkedMapOf("Rounded (default)" to "rounded", "Square" to "square"))
+    val menuOutlineAnimation by stringOption(title = "UI - Menu outline animation", default = "static", key = "runtimeOverlayMenuOutlineAnimation", description = "Animation style for the overlay menu outline.", values = linkedMapOf("Static (default)" to "static", "Moving gradient" to "gradient", "Rainbow gradient" to "rainbow"))
+    val outlineAnimationSpeed by intOption(title = "UI - Outline gradient animation speed", default = 1, key = "runtimeOverlayOutlineAnimationSpeed", description = "Gradient animation speed from 0 to 10. Zero disables movement.")
+    val menuAnimation by stringOption(title = "UI - Menu opening and closing animation", default = "fade", key = "runtimeOverlayMenuAnimation", description = "Animation used when opening and closing the menu.", values = linkedMapOf("Fade (default)" to "fade", "Scale" to "scale", "Disabled" to "disabled"))
+    val animationDuration by intOption(title = "UI - Menu animation duration (ms)", default = 180, key = "runtimeOverlayAnimationDuration", description = "Shared animate-in and animate-out duration. Values below 0 are clamped to 0.")
+    val animationEasing by stringOption(title = "UI - Menu animation graph", default = "linear", key = "runtimeOverlayAnimationEasing", description = "Easing used by fade and scale menu animations.", values = linkedMapOf("Linear (default)" to "linear", "Logarithmic" to "logarithmic"))
+
     val title by stringOption(
         title = "General - Overlay title",
         default = "UniPatches Universal Overlay Patch",
@@ -449,6 +596,25 @@ val universalOverlayPatch = bytecodePatch(
         default = DEFAULT_DESCRIPTION,
         key = "runtimeOverlayDescription",
         description = "Description below the title. Limited to 500 characters.",
+    )
+    val appendDescriptionText by stringOption(
+        title = "General - Append to overlay description",
+        default = "",
+        key = "runtimeOverlayAppendDescription",
+        description = "Optional text appended below the overlay description. Useful for credits in UI presets. Limited to 500 characters.",
+    )
+    val descriptionAlignment by stringOption(
+        title = "General - Overlay description alignment",
+        default = "center",
+        key = "runtimeOverlayDescriptionAlignment",
+        description = "Alignment of the main and appended overlay description text.",
+        values = linkedMapOf("Left" to "left", "Center (default)" to "center", "Right" to "right"),
+    )
+    val appendDescriptionColor by stringOption(
+        title = "General - Appended description color",
+        default = "#FF5656",
+        key = "runtimeOverlayAppendDescriptionColor",
+        description = "Color of appended overlay-description text. Presets default to menu text color 3.",
     )
     val repositoryText by stringOption(
         title = "General - Repository button text",
@@ -479,12 +645,6 @@ val universalOverlayPatch = bytecodePatch(
         default = "#FF5656",
         key = "runtimeOverlayOutlineColor",
         description = "Overlay outline color as #RRGGBB.",
-    )
-    val overlayTextColor by stringOption(
-        title = "General - Overlay text color",
-        default = "#FF5656",
-        key = "runtimeOverlayTextColor",
-        description = "Color of text and controls inside the overlay menu as #RRGGBB.",
     )
     val outlineWidth by intOption(
         title = "UI - Menu outline width (dp)",
@@ -760,15 +920,22 @@ val universalOverlayPatch = bytecodePatch(
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)
+        val rawAnimationDuration = animationDuration ?: 180
+        if (rawAnimationDuration < 0) {
+            logger.warning("Universal Overlay animation duration was clamped from $rawAnimationDuration to 0")
+        }
         val manualPreset = OverlayUiPreset(
             title = title.orEmpty().ifBlank { "UniPatches Universal Overlay Patch" }.take(MAX_TITLE_CHARACTERS),
             description = descriptionText.orEmpty().ifBlank { DEFAULT_DESCRIPTION }.take(MAX_DESCRIPTION_CHARACTERS),
+            appendDescription = appendDescriptionText.orEmpty().take(MAX_DESCRIPTION_CHARACTERS),
+            descriptionAlignment = descriptionAlignment.orEmpty().ifBlank { "center" },
+            appendDescriptionColor = appendDescriptionColor.orEmpty().ifBlank { menuTextColor3.orEmpty().ifBlank { "#FF5656" } },
             repositoryText = repositoryText.orEmpty().ifBlank { "UniPatches repository" },
             repositoryUrl = repositoryUrl.orEmpty().ifBlank { "https://github.com/Zanuaimi/UniPatches" },
             background = backgroundColor.orEmpty().ifBlank { "#300000" },
             backgroundTransparency = (backgroundTransparency ?: 80).coerceIn(0, 100),
             outline = outlineColor.orEmpty().ifBlank { "#FF5656" },
-            overlayTextColor = overlayTextColor.orEmpty().ifBlank { "#FF5656" },
+            overlayTextColor = menuTextColor1.orEmpty().ifBlank { "#FF5656" },
             outlineWidth = (outlineWidth ?: 2).coerceIn(1, 8),
             buttonText = buttonText.orEmpty().trim().take(3).ifBlank { "U" },
             iconBold = iconBold != false,
@@ -789,15 +956,48 @@ val universalOverlayPatch = bytecodePatch(
             buttonPosition = buttonPosition.orEmpty().ifBlank { "topRight" },
             activityOverride = activityOverride.orEmpty().trim(),
             iconTextSize = (iconTextSize ?: 18).coerceIn(8, 48),
+            controlTheme = controlTheme.orEmpty().ifBlank { "modern" },
+            controlBackground = controlBackground.orEmpty().ifBlank { "#300000" },
+            controlForeground = controlForeground.orEmpty().ifBlank { "#FF5656" },
+            bottomButtonStyle = bottomButtonStyle.orEmpty().ifBlank { "text" },
+            bottomButtonShape = bottomButtonShape.orEmpty().ifBlank { "square" },
+            bottomButtonPadding = bottomButtonPadding == true,
+            bottomButtonTextColor = bottomButtonTextColor.orEmpty().ifBlank { "#FFFFFF" },
+            bottomButtonBackground1 = bottomButtonBackground1.orEmpty().ifBlank { "#500000" },
+            bottomButtonBackground2 = bottomButtonBackground2.orEmpty().ifBlank { "#AA0000" },
+            menuTextColor1 = menuTextColor1.orEmpty().ifBlank { "#FF5656" },
+            menuTextColor2 = menuTextColor2.orEmpty().ifBlank { "#FF5656" },
+            menuTextColor3 = menuTextColor3.orEmpty().ifBlank { "#FF5656" },
+            menuTextColor4 = menuTextColor4.orEmpty().ifBlank { "#FF5656" },
+            menuTextColor5 = menuTextColor5.orEmpty().ifBlank { "#FF5656" },
+            separatorStyle = separatorStyle.orEmpty().ifBlank { "ascii" },
+            titleIconPlacement = titleIconPlacement.orEmpty().ifBlank { "none" },
+            titleAlignment = titleAlignment.orEmpty().ifBlank { "left" },
+            titleSeparator = titleSeparator == true,
+            menuCorners = menuCorners.orEmpty().ifBlank { "rounded" },
+            menuOutlineAnimation = menuOutlineAnimation.orEmpty().ifBlank { "static" },
+            outlineAnimationSpeed = (outlineAnimationSpeed ?: 1).coerceIn(0, 10),
+            menuAnimation = menuAnimation.orEmpty().ifBlank { "fade" },
+            animationDuration = (animationDuration ?: 180).coerceAtLeast(0),
+            animationEasing = animationEasing.orEmpty().ifBlank { "linear" },
         )
         val customMode = selectedPreset.orEmpty().equals("custom", ignoreCase = true)
-        val selectedUiPreset = if (customMode) {
+        val selectedUiPreset = (if (customMode) {
             readPresetFile(importUiPreset.orEmpty().trim(), manualPreset, logger)
         } else {
             OverlayPresetCatalog.valuesFor(selectedPreset.orEmpty(), manualPreset)
-        }
+        }).copy(
+            // These General values always remain app/user-specific and are never supplied by a UI preset.
+            title = manualPreset.title,
+            description = manualPreset.description,
+            repositoryText = manualPreset.repositoryText,
+            repositoryUrl = manualPreset.repositoryUrl,
+        )
         val titleValue = selectedUiPreset.title
         val descriptionValue = selectedUiPreset.description
+        val appendDescriptionValue = selectedUiPreset.appendDescription
+        val descriptionAlignmentValue = selectedUiPreset.descriptionAlignment
+        val appendDescriptionColorValue = selectedUiPreset.appendDescriptionColor
         val labelValue = selectedUiPreset.repositoryText
         val urlValue = selectedUiPreset.repositoryUrl
         val sizeValue = selectedUiPreset.buttonSize
@@ -807,7 +1007,6 @@ val universalOverlayPatch = bytecodePatch(
         val positionValue = selectedUiPreset.buttonPosition
         val backgroundValue = selectedUiPreset.background
         val outlineValue = selectedUiPreset.outline
-        val overlayTextColorValue = selectedUiPreset.overlayTextColor
         val buttonTextColorValue = selectedUiPreset.buttonTextColor
         val buttonBackgroundValue = selectedUiPreset.buttonBackground
         val outlineWidthValue = selectedUiPreset.outlineWidth
@@ -819,6 +1018,31 @@ val universalOverlayPatch = bytecodePatch(
         val customIconLocalSourceValue = selectedUiPreset.customIconImageLocal
         val customIconStringSourceValue = selectedUiPreset.customIconImageInput
         val iconTextSizeValue = selectedUiPreset.iconTextSize
+        val controlThemeValue = selectedUiPreset.controlTheme
+        val controlBackgroundValue = selectedUiPreset.controlBackground
+        val controlForegroundValue = selectedUiPreset.controlForeground
+        val bottomButtonStyleValue = selectedUiPreset.bottomButtonStyle
+        val bottomButtonShapeValue = selectedUiPreset.bottomButtonShape
+        val bottomButtonPaddingValue = selectedUiPreset.bottomButtonPadding
+        val bottomButtonTextColorValue = selectedUiPreset.bottomButtonTextColor
+        val bottomButtonBackground1Value = selectedUiPreset.bottomButtonBackground1
+        val bottomButtonBackground2Value = selectedUiPreset.bottomButtonBackground2
+        val menuTextColor1Value = selectedUiPreset.menuTextColor1
+        val overlayTextColorValue = menuTextColor1Value
+        val menuTextColor2Value = selectedUiPreset.menuTextColor2
+        val menuTextColor3Value = selectedUiPreset.menuTextColor3
+        val menuTextColor4Value = selectedUiPreset.menuTextColor4
+        val menuTextColor5Value = selectedUiPreset.menuTextColor5
+        val separatorStyleValue = selectedUiPreset.separatorStyle
+        val titleIconPlacementValue = selectedUiPreset.titleIconPlacement
+        val titleAlignmentValue = selectedUiPreset.titleAlignment
+        val titleSeparatorValue = selectedUiPreset.titleSeparator
+        val menuCornersValue = selectedUiPreset.menuCorners
+        val menuOutlineAnimationValue = selectedUiPreset.menuOutlineAnimation
+        val outlineAnimationSpeedValue = selectedUiPreset.outlineAnimationSpeed
+        val menuAnimationValue = selectedUiPreset.menuAnimation
+        val animationDurationValue = selectedUiPreset.animationDuration
+        val animationEasingValue = selectedUiPreset.animationEasing
         val resolvedLocalIconImage = resolveCustomIconImage(customIconLocalSourceValue, allowLocalPath = true, logger, "local")
         val resolvedStringIconImage = if (resolvedLocalIconImage.isBlank() && customIconStringSourceValue.isNotBlank()) {
             resolveCustomIconImage(customIconStringSourceValue, allowLocalPath = false, logger, "string")
@@ -856,6 +1080,20 @@ val universalOverlayPatch = bytecodePatch(
         check(temperatureFormatValue in setOf("celsius", "fahrenheit", "kelvin"))
         check(timeFormatValue in setOf("12", "24"))
         check(selectedUiPreset.buttonText.length <= 3)
+        check(controlThemeValue in setOf("legacy", "modern", "monet"))
+        check(bottomButtonStyleValue in setOf("text", "solid", "gradient"))
+        check(bottomButtonShapeValue in setOf("square", "squircle"))
+        check(separatorStyleValue in setOf("ascii", "doubleLine", "background", "singleLine", "inline"))
+        check(titleIconPlacementValue in setOf("none", "left", "right", "both"))
+        check(titleAlignmentValue in setOf("left", "center", "right"))
+        check(menuCornersValue in setOf("rounded", "square"))
+        check(menuOutlineAnimationValue in setOf("static", "gradient", "rainbow"))
+        check(menuAnimationValue in setOf("fade", "scale", "disabled"))
+        check(animationEasingValue in setOf("linear", "logarithmic"))
+        check(outlineAnimationSpeedValue in 0..10)
+        check(animationDurationValue >= 0)
+        check(descriptionAlignmentValue in setOf("left", "center", "right"))
+        check(appendDescriptionColorValue.matches(Regex("#[0-9a-fA-F]{6}")))
 
         val config = listOf(
             CONFIG_VERSION, titleValue, descriptionValue, labelValue, urlValue,
@@ -900,6 +1138,33 @@ val universalOverlayPatch = bytecodePatch(
             overlayTextColorValue,
             iconOutlineWidthValue.toString(),
             iconTextSizeValue.toString(),
+            controlThemeValue,
+            controlBackgroundValue,
+            controlForegroundValue,
+            bottomButtonStyleValue,
+            bottomButtonShapeValue,
+            if (bottomButtonPaddingValue) "1" else "0",
+            bottomButtonTextColorValue,
+            bottomButtonBackground1Value,
+            bottomButtonBackground2Value,
+            menuTextColor1Value,
+            menuTextColor2Value,
+            menuTextColor3Value,
+            menuTextColor4Value,
+            menuTextColor5Value,
+            separatorStyleValue,
+            titleIconPlacementValue,
+            titleAlignmentValue,
+            if (titleSeparatorValue) "1" else "0",
+            menuCornersValue,
+            menuOutlineAnimationValue,
+            outlineAnimationSpeedValue.toString(),
+            menuAnimationValue,
+            animationDurationValue.toString(),
+            animationEasingValue,
+            appendDescriptionValue,
+            descriptionAlignmentValue,
+            appendDescriptionColorValue,
         ).joinToString("|") { encode(it) }
 
         // Prefer the process Application entry point. The Activity path is a compatibility fallback
