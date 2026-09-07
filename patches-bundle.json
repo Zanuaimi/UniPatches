@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-07T19:05:51",
-  "description": "## [1.7.0](https://github.com/Zanuaimi/UniPatches/compare/v1.6.0...v1.7.0) (2026-09-07)\n\n### ✨ New Features\n\n* **overlay:** add configurable module separator colors ([98442c3](https://github.com/Zanuaimi/UniPatches/commit/98442c376c2b11c9a22c2a196c6336886c99a3c0))\n* **overlay:** expose separator color settings ([fdd3058](https://github.com/Zanuaimi/UniPatches/commit/fdd305803dceff8bc37ca7f95296dce2da07e341))\n* **overlay:** update preset separator themes ([159b3f6](https://github.com/Zanuaimi/UniPatches/commit/159b3f600b838e230acc415fe881f85bcf4ba5b3))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.7.0/patches-1.7.0.mpp",
+  "created_at": "2026-09-07T19:39:14",
+  "description": "## [1.8.0](https://github.com/Zanuaimi/UniPatches/compare/v1.7.0...v1.8.0) (2026-09-07)\n\n### ✨ New Features\n\n* **overlay:** add activity install banlist ([2cc9a8c](https://github.com/Zanuaimi/UniPatches/commit/2cc9a8ce681a094cddd60609529894797a2592ac))\n* **pairip:** add Firebase and installer fallback strategies ([a4d95d7](https://github.com/Zanuaimi/UniPatches/commit/a4d95d76914544e7936086e5d2c5ed884cd878fb))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.8.0/patches-1.8.0.mpp",
   "signature_download_url": "",
-  "version": "1.7.0"
+  "version": "1.8.0"
 }

@@ -1,3 +1,10 @@
+## [1.8.0](https://github.com/Zanuaimi/UniPatches/compare/v1.7.0...v1.8.0) (2026-09-07)
+
+### ✨ New Features
+
+* **overlay:** add activity install banlist ([2cc9a8c](https://github.com/Zanuaimi/UniPatches/commit/2cc9a8ce681a094cddd60609529894797a2592ac))
+* **pairip:** add Firebase and installer fallback strategies ([a4d95d7](https://github.com/Zanuaimi/UniPatches/commit/a4d95d76914544e7936086e5d2c5ed884cd878fb))
+
 ## [1.7.0](https://github.com/Zanuaimi/UniPatches/compare/v1.6.0...v1.7.0) (2026-09-07)
 
 ### ✨ New Features
