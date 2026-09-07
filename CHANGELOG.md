@@ -1,3 +1,11 @@
+## [1.7.0](https://github.com/Zanuaimi/UniPatches/compare/v1.6.0...v1.7.0) (2026-09-07)
+
+### ✨ New Features
+
+* **overlay:** add configurable module separator colors ([98442c3](https://github.com/Zanuaimi/UniPatches/commit/98442c376c2b11c9a22c2a196c6336886c99a3c0))
+* **overlay:** expose separator color settings ([fdd3058](https://github.com/Zanuaimi/UniPatches/commit/fdd305803dceff8bc37ca7f95296dce2da07e341))
+* **overlay:** update preset separator themes ([159b3f6](https://github.com/Zanuaimi/UniPatches/commit/159b3f600b838e230acc415fe881f85bcf4ba5b3))
+
 ## [1.6.0](https://github.com/Zanuaimi/UniPatches/compare/v1.5.0...v1.6.0) (2026-09-07)
 
 ### ✨ New Features
