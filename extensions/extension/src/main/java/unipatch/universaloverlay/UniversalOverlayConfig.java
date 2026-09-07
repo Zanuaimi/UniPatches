@@ -9,10 +9,8 @@ import android.view.Gravity;
  */
 final class UniversalOverlayConfig {
     private static final String DEFAULT_DESCRIPTION =
-            "Welcome to the UniPatches Universal Overlay Patch Menu. This experimental in-app overlay " +
-            "contains optional statistic, activity, and hook modules. More may be added in " +
-            "future updates. The idea and initial works of this Universal Overlay Patch are from " +
-            "Zanuaimi.";
+            "Welcome! This is the UniPatches Universal Overlay Patch Menu. " +
+            "The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.";
     String title, description, appendDescription, descriptionAlignment, repositoryText, repositoryUrl, buttonText;
     int background, outline, overlayTextColor, buttonTextColor, buttonBackground, buttonSize, gravity;
     int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle, iconOutlineWidth, iconTextSize;
@@ -27,13 +25,13 @@ final class UniversalOverlayConfig {
     boolean systemTime, fps, sessionTime;
     boolean batteryStatus, appMemory, networkStatus, deviceInformation, deviceTemperature;
     boolean appBrightness, rotationMode, appAudioMute, disableHaptics, disableAnimations;
-    boolean activateStatisticsOnLaunch, enableMonitorsOnLaunch;
+    boolean activateStatisticsOnLaunch, enableMonitorsOnLaunch, showNoModulesWarning;
     int statisticMonitorPosition, monitorColumns;
     float monitorScale;
     String temperatureFormat, timeFormat;
     String controlTheme, bottomButtonStyle, bottomButtonShape, separatorStyle,
             titleIconPlacement, titleAlignment, menuCorners, menuOutlineAnimation,
-            menuAnimation, animationEasing;
+            openingAnimation, closingAnimation, animationEasing;
     int controlBackground, controlForeground, bottomButtonTextColor,
             bottomButtonBackground1, bottomButtonBackground2,
             menuTextColor1, menuTextColor2, menuTextColor3, menuTextColor4, menuTextColor5,
@@ -45,7 +43,7 @@ final class UniversalOverlayConfig {
         String[] values = encoded == null ? new String[0] : encoded.split("\\|", -1);
         // Version 1 through 16 prepends a version field. Keep accepting the original 14-field format so an
         // older generated patch remains safe when paired with this newer extension.
-        String[] v = new String[63];
+        String[] v = new String[64];
         for (int i = 0; i < v.length; i++) v[i] = i < values.length ? decodePart(values[i]) : "";
         int offset = ("1".equals(v[0]) || "2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0])) ? 1 : 0;
         c.title = limit(field(v, offset, 0), 80, "UniPatches Universal Overlay Patch");
@@ -140,6 +138,7 @@ final class UniversalOverlayConfig {
         c.menuTextColor4 = color(field(v, offset, 46), c.overlayTextColor);
         c.menuTextColor5 = color(field(v, offset, 47), c.overlayTextColor);
         c.appendDescriptionColor = color(field(v, offset, 60), c.menuTextColor3);
+        c.showNoModulesWarning = !"0".equals(field(v, offset, 61));
         c.separatorStyle = choice(field(v, offset, 48), "ascii", "ascii", "doubleLine", "background", "singleLine", "inline");
         c.titleIconPlacement = choice(field(v, offset, 49), "none", "none", "left", "right", "both");
         c.titleAlignment = choice(field(v, offset, 50), "left", "left", "center", "right");
@@ -147,9 +146,15 @@ final class UniversalOverlayConfig {
         c.menuCorners = choice(field(v, offset, 52), "rounded", "rounded", "square");
         c.menuOutlineAnimation = choice(field(v, offset, 53), "static", "static", "gradient", "rainbow");
         c.outlineAnimationSpeed = integer(field(v, offset, 54), 1, 0, 10);
-        c.menuAnimation = choice(field(v, offset, 55), "fade", "fade", "scale", "disabled");
+        c.openingAnimation = choice(field(v, offset, 55), "fade", "fade", "scale", "disabled", "appearRight", "appearTop", "appearBottom", "appearLeft");
         c.animationDuration = integer(field(v, offset, 56), 180, 0, 5000);
         c.animationEasing = choice(field(v, offset, 57), "linear", "linear", "logarithmic");
+        c.closingAnimation = choice(field(v, offset, 62), c.openingAnimation,
+                "fade", "scale", "disabled", "disappearUp", "disappearDown", "disappearLeft", "disappearRight");
+        int descriptionRemaining = Math.max(0, 500 - c.description.length());
+        if (c.appendDescription.length() > descriptionRemaining) {
+            c.appendDescription = c.appendDescription.substring(0, descriptionRemaining);
+        }
         return c;
     }
 

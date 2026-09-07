@@ -451,7 +451,10 @@ public final class UniversalOverlayRuntime {
         }
 
         private Bitmap fitCustomIcon(Bitmap bitmap) {
-            int target = Math.max(1, dp(config.buttonSize) - dp(8));
+            return fitCustomIcon(bitmap, Math.max(1, dp(config.buttonSize) - dp(8)));
+        }
+
+        private Bitmap fitCustomIcon(Bitmap bitmap, int target) {
             int width = bitmap.getWidth();
             int height = bitmap.getHeight();
             if (width <= 0 || height <= 0) return bitmap;
@@ -693,7 +696,7 @@ public final class UniversalOverlayRuntime {
             Bitmap customIcon = "image".equals(config.iconType) ? decodeCustomIcon(config.customIconImage) : null;
             if (customIcon != null) {
                 icon.setText("");
-                BitmapDrawable image = new BitmapDrawable(overlayContext.getResources(), fitCustomIcon(customIcon));
+                BitmapDrawable image = new BitmapDrawable(overlayContext.getResources(), fitCustomIcon(customIcon, dp(24)));
                 image.setGravity(Gravity.CENTER);
                 icon.setBackground(image);
             } else {
@@ -756,6 +759,16 @@ public final class UniversalOverlayRuntime {
             boolean hasActivity = config.keepAwake || config.fullscreen || config.screenshots
                     || config.appBrightness || config.rotationMode || config.appAudioMute;
             boolean hasHooks = config.disableHaptics || config.disableAnimations;
+            if (!hasStatistics && !hasActivity && !hasHooks && config.showNoModulesWarning) {
+                TextView warning = text(
+                        "\n No Runtime Modules Selected. Select modules in patch settings before patching APK if you want to have runtime modules in this app. \n",
+                        14,
+                        config.menuTextColor3);
+                warning.setGravity(Gravity.CENTER);
+                warning.setPadding(dp(4), dp(8), dp(4), dp(8));
+                modules.addView(warning, new LinearLayout.LayoutParams(-1, -2));
+                return;
+            }
             if (hasStatistics) {
                 addSectionLabel(modules, "Statistic modules");
                 if (config.deviceInformation) addStatisticSafely(modules, () -> new DeviceInformationModule(activity));
@@ -1248,13 +1261,7 @@ public final class UniversalOverlayRuntime {
                 if (menuOutline != null) menuOutline.start();
                 menuLayer.setAlpha(1f);
                 panel.setAlpha(0f);
-                if ("scale".equals(config.menuAnimation)) {
-                    panel.setScaleX(.01f);
-                    panel.setScaleY(.01f);
-                } else {
-                    panel.setScaleX(1f);
-                    panel.setScaleY(1f);
-                }
+                prepareOpeningAnimation();
                 for (UniversalOverlayStatisticModule module : statistics) {
                     if (module.isEnabled() && !module.startSafely()) {
                         rememberModuleState(module.key(), false);
@@ -1266,10 +1273,10 @@ public final class UniversalOverlayRuntime {
                 menuScrim.animate().cancel();
                 menuScrim.setAlpha(0f);
                 panel.animate().cancel();
-                menuScrim.animate().alpha(1f).setDuration(animationDuration()).setInterpolator(menuInterpolator(true)).start();
+                menuScrim.animate().alpha(1f).setDuration(animationDuration(true)).setInterpolator(menuInterpolator(true)).start();
                 android.view.ViewPropertyAnimator panelAnimation = panel.animate().alpha(1f)
-                        .setDuration(animationDuration()).setInterpolator(menuInterpolator(true));
-                if ("scale".equals(config.menuAnimation)) panelAnimation.scaleX(1f).scaleY(1f);
+                        .setDuration(animationDuration(true)).setInterpolator(menuInterpolator(true));
+                applyOpeningAnimation(panelAnimation);
                 panelAnimation.withEndAction(() -> {
                     if (menuVisible) menuState = MenuState.OPEN;
                 }).start();
@@ -1303,15 +1310,17 @@ public final class UniversalOverlayRuntime {
             menuScrim.animate().cancel();
             panel.animate().cancel();
             android.view.ViewPropertyAnimator panelAnimation = panel.animate().alpha(0f)
-                    .setDuration(animationDuration()).setInterpolator(menuInterpolator(false));
-            if ("scale".equals(config.menuAnimation)) panelAnimation.scaleX(.01f).scaleY(.01f);
+                    .setDuration(animationDuration(false)).setInterpolator(menuInterpolator(false));
+            applyClosingAnimation(panelAnimation);
             panelAnimation.start();
-            menuScrim.animate().alpha(0f).setDuration(animationDuration()).setInterpolator(menuInterpolator(false)).withEndAction(() -> {
+            menuScrim.animate().alpha(0f).setDuration(animationDuration(false)).setInterpolator(menuInterpolator(false)).withEndAction(() -> {
                 if (!menuVisible) {
                     menuLayer.setVisibility(View.GONE);
                     panel.setAlpha(1f);
                     panel.setScaleX(1f);
                     panel.setScaleY(1f);
+                    panel.setTranslationX(0f);
+                    panel.setTranslationY(0f);
                     menuState = MenuState.CLOSED;
                     if (menuOutline != null) menuOutline.stop();
                     for (UniversalOverlayStatisticModule module : statistics) updateStatisticMonitor(module);
@@ -1319,8 +1328,62 @@ public final class UniversalOverlayRuntime {
             }).start();
         }
 
-        private long animationDuration() {
-            return "disabled".equals(config.menuAnimation) ? 0L : Math.max(0, config.animationDuration);
+        private long animationDuration(boolean opening) {
+            String animation = opening ? config.openingAnimation : config.closingAnimation;
+            return "disabled".equals(animation) ? 0L : Math.max(0, config.animationDuration);
+        }
+
+        private void prepareOpeningAnimation() {
+            panel.setScaleX(1f);
+            panel.setScaleY(1f);
+            panel.setTranslationX(0f);
+            panel.setTranslationY(0f);
+            String animation = config.openingAnimation;
+            if ("scale".equals(animation)) {
+                panel.setScaleX(.01f);
+                panel.setScaleY(.01f);
+            } else if ("appearRight".equals(animation)) {
+                panel.setTranslationX(horizontalAnimationDistance());
+            } else if ("appearLeft".equals(animation)) {
+                panel.setTranslationX(-horizontalAnimationDistance());
+            } else if ("appearTop".equals(animation)) {
+                panel.setTranslationY(-verticalAnimationDistance());
+            } else if ("appearBottom".equals(animation)) {
+                panel.setTranslationY(verticalAnimationDistance());
+            }
+        }
+
+        private void applyOpeningAnimation(android.view.ViewPropertyAnimator animation) {
+            animation.translationX(0f).translationY(0f);
+            if ("scale".equals(config.openingAnimation)) animation.scaleX(1f).scaleY(1f);
+        }
+
+        private void applyClosingAnimation(android.view.ViewPropertyAnimator animation) {
+            animation.scaleX(1f).scaleY(1f).translationX(0f).translationY(0f);
+            if ("disappearUp".equals(config.closingAnimation)) animation.translationY(-verticalAnimationDistance());
+            else if ("disappearDown".equals(config.closingAnimation)) animation.translationY(verticalAnimationDistance());
+            else if ("disappearLeft".equals(config.closingAnimation)) animation.translationX(-horizontalAnimationDistance());
+            else if ("disappearRight".equals(config.closingAnimation)) animation.translationX(horizontalAnimationDistance());
+            else if ("scale".equals(config.closingAnimation)) animation.scaleX(.01f).scaleY(.01f);
+        }
+
+        private float horizontalAnimationDistance() {
+            return animationOffset(panel.getWidth(), root.getWidth());
+        }
+
+        private float verticalAnimationDistance() {
+            return animationOffset(panel.getHeight(), root.getHeight());
+        }
+
+        /**
+         * Keep directional menu motion visible without sending the whole card off-screen.
+         * The cap is important in landscape, where the available width can be much larger
+         * than the centered menu panel.
+         */
+        private float animationOffset(int panelSize, int screenSize) {
+            float proportionalOffset = panelSize * .35f;
+            float screenOffset = screenSize * .22f;
+            return Math.max(dp(24), Math.min(proportionalOffset, screenOffset));
         }
 
         private android.view.animation.Interpolator menuInterpolator(boolean opening) {
