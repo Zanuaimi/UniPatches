@@ -17,6 +17,8 @@ import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import java.util.logging.Logger
 import org.w3c.dom.Element
 import helpers.ads.*
+import helpers.manifest.NS_ANDROID
+import helpers.manifest.applicationOrNull
 
 private fun ResourcePatchContext.discoverPairipAppClass(logger: Logger): String? {
     val dir = try {
@@ -51,7 +53,7 @@ val pairipBypassPatch = bytecodePatch(
         A merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.
 
         Automatic mode applies compatible strategies up to the selected risk level. It defaults to
-        Low and Med Risk Strategies; Low Risk applies only low-risk strategies, while Low, Med, and
+        Low Risk Strategies; Low and Med Risk Strategies enable medium-risk strategies, while Low, Med, and
         High Risk Strategies also enables the invasive high-risk strategies.
 
         Turn off automatic mode to test the individual manual strategies. Manual selections are
@@ -70,13 +72,13 @@ val pairipBypassPatch = bytecodePatch(
     val automaticStrategySelection by booleanOption(
         key = "automaticStrategySelection",
         default = true,
-        title = "Automatic strategy selection",
+        title = "PairIP > Automatic > Strategy selection",
         description = "Automatically apply compatible PairIP strategies according to the risk policy below. Turn this off to select individual strategies for testing.",
     )
     val automaticRiskLevel by stringOption(
         key = "automaticRiskLevel",
-        default = "lowMedium",
-        title = "Automatic mode applying",
+        default = "low",
+        title = "PairIP > Automatic > Risk level",
         description = "Choose the highest risk level that automatic mode may apply. Manual strategy selections are unaffected.",
         values = linkedMapOf(
             "Low Risk Strategies" to "low",
@@ -87,17 +89,26 @@ val pairipBypassPatch = bytecodePatch(
     val applicationRedirectStrategy by booleanOption(
         key = "applicationRedirectStrategy",
         default = false,
-        title = "Redirect PairIP Application (Low Risk)",
+        title = "PairIP > Manifest > Redirect Application (Low Risk)",
         description = "Replace the PairIP Application wrapper with the discovered real application class.",
     )
     val manifestCleanupStrategy by booleanOption(
         key = "manifestCleanupStrategy",
         default = false,
-        title = "Remove PairIP manifest entries (Low Risk)",
+        title = "PairIP > Manifest > Remove PairIP entries (Low Risk)",
         description = "Remove PairIP license activities, provider, and CHECK_LICENSE permission from AndroidManifest.xml.",
+    )
+    // Nai64 Firebase cleanup strategy, integrated with the enhanced patch.
+    val disableFirebase by booleanOption(
+        key = "disableFirebase",
+        default = false,
+        title = "PairIP > Manifest > Disable Firebase auto-init (Opt-in)",
+        description = "Optional Firebase startup cleanup. Enable only for apps that crash during Firebase measurement initialization; it may affect Firebase Auth or Play Games integrations.",
     )
     var applicationRedirectApplied = false
     var manifestCleanupApplied = false
+    var firebaseCleanupApplied = false
+    var installerSpoofApplied: String? = null
     var vmCallSitesApplied = 0
 
     // -- Resource Strategy 1: PairIP Application redirect --
@@ -193,7 +204,96 @@ val pairipBypassPatch = bytecodePatch(
         }
     }
 
-    dependsOn(pairipLicenseManifestCleanupPatch)
+    // -- Resource Strategy 3: Firebase cleanup --
+    // Credit: Nai64Patches / Nai64. This preserves Nai64's metadata switches
+    // and measurement-component removal while keeping it independently toggleable.
+    val firebaseCleanupPatch = resourcePatch(
+        name = "Pairip Firebase Cleanup (internal)",
+        default = false,
+    ) {
+        dependsOn(pairipLicenseManifestCleanupPatch)
+
+        execute {
+            val logger = Logger.getLogger(this::class.java.name)
+            // Credit: Nai64Patches / Nai64. Keep this opt-in because removing
+            // Firebase initialization can affect Firebase Auth and Play Games.
+            if (disableFirebase != true) {
+                logger.info("Firebase cleanup disabled by strategy selection")
+                return@execute
+            }
+
+            val switches = mapOf(
+                "firebase_analytics_collection_enabled" to "false",
+                "firebase_messaging_auto_init_enabled" to "false",
+                "firebase_crashlytics_collection_enabled" to "false",
+                "firebase_performance_collection_enabled" to "false",
+            )
+            var added = 0
+            var updated = 0
+            document("AndroidManifest.xml").use { manifest ->
+                val application = manifest.documentElement.applicationOrNull()
+                    ?: return@use
+                val metadata = application.getElementsByTagName("meta-data")
+                for ((name, value) in switches) {
+                    var target: Element? = null
+                    for (index in 0 until metadata.length) {
+                        val meta = metadata.item(index) as? Element ?: continue
+                        if (meta.getAttributeNS(NS_ANDROID, "name") == name) {
+                            target = meta
+                            break
+                        }
+                    }
+                    if (target != null) {
+                        if (target.getAttributeNS(NS_ANDROID, "value") != value) {
+                            target.setAttributeNS(NS_ANDROID, "android:value", value)
+                            updated++
+                        }
+                    } else {
+                        val meta = manifest.createElement("meta-data")
+                        meta.setAttributeNS(NS_ANDROID, "android:name", name)
+                        meta.setAttributeNS(NS_ANDROID, "android:value", value)
+                        application.appendChild(meta)
+                        added++
+                    }
+                }
+            }
+            if (added > 0 || updated > 0) {
+                logger.info("Firebase auto-init: $added switch(es) added, $updated overridden")
+            }
+
+            val measurementComponents = setOf(
+                "io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider",
+                "com.google.firebase.provider.FirebaseInitProvider",
+                "com.google.android.gms.measurement.AppMeasurementReceiver",
+                "com.google.android.gms.measurement.AppMeasurementService",
+                "com.google.android.gms.measurement.AppMeasurementJobService",
+                "com.google.android.gms.measurement.AppMeasurementContentProvider",
+            )
+            var removed = 0
+            document("AndroidManifest.xml").use { manifest ->
+                for (tag in listOf("provider", "receiver", "service")) {
+                    val nodes = manifest.getElementsByTagName(tag)
+                    for (index in nodes.length - 1 downTo 0) {
+                        val component = nodes.item(index) as? Element ?: continue
+                        val name = component.getAttributeNS(NS_ANDROID, "name")
+                            .ifEmpty { component.getAttribute("android:name") }
+                        if (name in measurementComponents) {
+                            component.parentNode?.removeChild(component)
+                            removed++
+                        }
+                    }
+                }
+            }
+            firebaseCleanupApplied = added > 0 || updated > 0 || removed > 0
+            if (removed > 0) {
+                logger.info("Removed $removed Firebase measurement component(s)")
+            } else {
+                logger.info("No Firebase measurement components found")
+            }
+        }
+    }
+
+    dependsOn(firebaseCleanupPatch)
 
     // Every concrete strategy has its own option. The title prefixes organize
     // the manual settings in the same way as the Universal Overlay settings.
@@ -203,37 +303,37 @@ val pairipBypassPatch = bytecodePatch(
     val pairipLicenseClientStartErrorDialog by booleanOption(
         key = "pairipLicenseClientStartErrorDialog",
         default = false,
-        title = "UI - Suppress LicenseClient error dialog (Low Risk)",
+        title = "PairIP > UI > Suppress LicenseClient error dialog (Low Risk)",
         description = "Disable LicenseClient.startErrorDialogActivity()."
     )
     val pairipLicenseActivityShowErrorDialog by booleanOption(
         key = "pairipLicenseActivityShowErrorDialog",
         default = false,
-        title = "UI - Suppress LicenseActivity error dialog (Low Risk)",
+        title = "PairIP > UI > Suppress LicenseActivity error dialog (Low Risk)",
         description = "Disable LicenseActivity.showErrorDialog()."
     )
     val pairipLicenseActivityLogAndShowErrorDialog by booleanOption(
         key = "pairipLicenseActivityLogAndShowErrorDialog",
         default = false,
-        title = "UI - Suppress logged error dialog (Low Risk)",
+        title = "PairIP > UI > Suppress logged error dialog (Low Risk)",
         description = "Disable LicenseActivity.logAndShowErrorDialog()."
     )
     val pairipLicenseResponseHelperGetRepeatedCheckMetadata by booleanOption(
         key = "pairipLicenseResponseHelperGetRepeatedCheckMetadata",
         default = false,
-        title = "Response - Remove repeated-check metadata (Low Risk)",
+        title = "PairIP > Response > Remove repeated-check metadata (Low Risk)",
         description = "Return null from LicenseResponseHelper.getRepeatedCheckMetadata()."
     )
     val pairipV2ScheduleRepeatedLicenseCheck by booleanOption(
         key = "pairipV2ScheduleRepeatedLicenseCheck",
         default = false,
-        title = "V2 - Disable repeated checks (Low Risk)",
+        title = "PairIP > V2 > Disable repeated checks (Low Risk)",
         description = "Disable V2 repeated license-check scheduling."
     )
     val pairipRepeatedCheckEnabledRead by booleanOption(
         key = "pairipRepeatedCheckEnabledRead",
         default = false,
-        title = "V2 - Disable repeated-check flag (Low Risk)",
+        title = "PairIP > V2 > Disable repeated-check flag (Low Risk)",
         description = "Force LicenseClient.repeatedCheckEnabled reads to false."
     )
 
@@ -241,115 +341,115 @@ val pairipBypassPatch = bytecodePatch(
     val pairipLicenseClientStartPaywall by booleanOption(
         key = "pairipLicenseClientStartPaywall",
         default = false,
-        title = "UI - Suppress LicenseClient paywall (Medium Risk)",
+        title = "PairIP > UI > Suppress LicenseClient paywall (Medium Risk)",
         description = "Disable LicenseClient.startPaywallActivity()."
     )
     val pairipLicenseActivityShowPaywall by booleanOption(
         key = "pairipLicenseActivityShowPaywall",
         default = false,
-        title = "UI - Suppress LicenseActivity paywall (Medium Risk)",
+        title = "PairIP > UI > Suppress LicenseActivity paywall (Medium Risk)",
         description = "Disable LicenseActivity.showPaywallAndCloseApp()."
     )
     val pairipLicenseActivityNnStart by booleanOption(
         key = "pairipLicenseActivityNnStart",
         default = false,
-        title = "UI - Suppress LicenseActivity nnStart (Medium Risk)",
+        title = "PairIP > UI > Suppress LicenseActivity nnStart (Medium Risk)",
         description = "Disable the obfuscated LicenseActivity.nnStart() startup path."
     )
     val pairipLicenseActivityOnStart by booleanOption(
         key = "pairipLicenseActivityOnStart",
         default = false,
-        title = "UI - Suppress LicenseActivity onStart (Medium Risk)",
+        title = "PairIP > UI > Suppress LicenseActivity onStart (Medium Risk)",
         description = "Disable LicenseActivity.onStart()."
     )
     val pairipLicenseActivityCloseApp by booleanOption(
         key = "pairipLicenseActivityCloseApp",
         default = false,
-        title = "UI - Suppress LicenseActivity closeApp (Medium Risk)",
+        title = "PairIP > UI > Suppress LicenseActivity closeApp (Medium Risk)",
         description = "Disable LicenseActivity.closeApp()."
     )
     val pairipLicenseActivityExitApp by booleanOption(
         key = "pairipLicenseActivityExitApp",
         default = false,
-        title = "UI - Suppress LicenseActivity exitApp (Medium Risk)",
+        title = "PairIP > UI > Suppress LicenseActivity exitApp (Medium Risk)",
         description = "Disable LicenseActivity.exitApp()."
     )
     val pairipLicenseActivityCloseapp by booleanOption(
         key = "pairipLicenseActivityCloseapp",
         default = false,
-        title = "UI - Suppress LicenseActivity closeapp (Medium Risk)",
+        title = "PairIP > UI > Suppress LicenseActivity closeapp (Medium Risk)",
         description = "Disable the lowercase LicenseActivity.closeapp() variant."
     )
     val pairipLicenseActivityExitapp by booleanOption(
         key = "pairipLicenseActivityExitapp",
         default = false,
-        title = "UI - Suppress LicenseActivity exitapp (Medium Risk)",
+        title = "PairIP > UI > Suppress LicenseActivity exitapp (Medium Risk)",
         description = "Disable the lowercase LicenseActivity.exitapp() variant."
     )
     val pairipLicenseActivityCloseAllTasks by booleanOption(
         key = "pairipLicenseActivityCloseAllTasks",
         default = false,
-        title = "UI - Suppress LicenseActivity closeAllTasks (Medium Risk)",
+        title = "PairIP > UI > Suppress LicenseActivity closeAllTasks (Medium Risk)",
         description = "Disable LicenseActivity.closeAllTasks()."
     )
     val pairipPerformLocalInstallerCheck by booleanOption(
         key = "pairipPerformLocalInstallerCheck",
         default = false,
-        title = "Installer - Spoof local installer check (Medium Risk)",
+        title = "PairIP > Installer > Spoof local installer check (Medium Risk)",
         description = "Make PairIP performLocalInstallerCheck() report success."
     )
     val pairipLicenseClientCheckLicense by booleanOption(
         key = "pairipLicenseClientCheckLicense",
         default = false,
-        title = "License Client - Bypass checkLicense (Medium Risk)",
+        title = "PairIP > License Client > Bypass checkLicense (Medium Risk)",
         description = "Disable LicenseClient.checkLicense()."
     )
     val pairipLicenseClientInitializeLicenseCheck by booleanOption(
         key = "pairipLicenseClientInitializeLicenseCheck",
         default = false,
-        title = "License Client - Bypass initializeLicenseCheck (Medium Risk)",
+        title = "PairIP > License Client > Bypass initializeLicenseCheck (Medium Risk)",
         description = "Disable LicenseClient.initializeLicenseCheck()."
     )
     val pairipLicenseClientConnectToLicensingService by booleanOption(
         key = "pairipLicenseClientConnectToLicensingService",
         default = false,
-        title = "License Client - Bypass service connection (Medium Risk)",
+        title = "PairIP > License Client > Bypass service connection (Medium Risk)",
         description = "Disable LicenseClient.connectToLicensingService()."
     )
     val pairipLicenseClientProcessResponse by booleanOption(
         key = "pairipLicenseClientProcessResponse",
         default = false,
-        title = "License Client - Bypass processResponse (Medium Risk)",
+        title = "PairIP > License Client > Bypass processResponse (Medium Risk)",
         description = "Disable the older LicenseClient.processResponse() path."
     )
     val pairipLicenseResponseHelperValidateResponse by booleanOption(
         key = "pairipLicenseResponseHelperValidateResponse",
         default = false,
-        title = "Response - Bypass helper validation (Medium Risk)",
+        title = "PairIP > Response > Bypass helper validation (Medium Risk)",
         description = "Disable LicenseResponseHelper.validateResponse()."
     )
     val pairipLicenseResponseHelperVerifySignature by booleanOption(
         key = "pairipLicenseResponseHelperVerifySignature",
         default = false,
-        title = "Response - Bypass helper signature (Medium Risk)",
+        title = "PairIP > Response > Bypass helper signature (Medium Risk)",
         description = "Make the legacy response helper signature check succeed."
     )
     val pairipResponseValidatorValidateResponse by booleanOption(
         key = "pairipResponseValidatorValidateResponse",
         default = false,
-        title = "Response - Bypass validator validation (Medium Risk)",
+        title = "PairIP > Response > Bypass validator validation (Medium Risk)",
         description = "Disable the legacy ResponseValidator.validateResponse() path."
     )
     val pairipResponseValidatorVerifySignature by booleanOption(
         key = "pairipResponseValidatorVerifySignature",
         default = false,
-        title = "Response - Bypass validator signature (Medium Risk)",
+        title = "PairIP > Response > Bypass validator signature (Medium Risk)",
         description = "Make the legacy ResponseValidator signature check succeed."
     )
     val pairipResponseValidatorV3ValidateResponse by booleanOption(
         key = "pairipResponseValidatorV3ValidateResponse",
         default = false,
-        title = "V3 - Bypass response validation (Medium Risk)",
+        title = "PairIP > V3 > Bypass response validation (Medium Risk)",
         description = "Disable licensecheck3.ResponseValidator.validateResponse()."
     )
 
@@ -357,97 +457,97 @@ val pairipBypassPatch = bytecodePatch(
     val pairipApplicationAttachBaseContext by booleanOption(
         key = "pairipApplicationAttachBaseContext",
         default = false,
-        title = "Application - Bypass attachBaseContext (High Risk)",
+        title = "PairIP > Application > Bypass attachBaseContext (High Risk)",
         description = "Skip PairIP startup code in Application.attachBaseContext()."
     )
     val pairipApplicationOnCreate by booleanOption(
         key = "pairipApplicationOnCreate",
         default = false,
-        title = "Application - Bypass onCreate (High Risk)",
+        title = "PairIP > Application > Bypass onCreate (High Risk)",
         description = "Skip PairIP startup code in Application.onCreate()."
     )
     val pairipApplicationClinit by booleanOption(
         key = "pairipApplicationClinit",
         default = false,
-        title = "Runtime - Bypass Application static initializer (High Risk)",
+        title = "PairIP > Runtime > Bypass Application static initializer (High Risk)",
         description = "Prevent PairIP Application.<clinit>() from starting its runtime."
     )
     val pairipVmRunnerInvoke by booleanOption(
         key = "pairipVmRunnerInvoke",
         default = false,
-        title = "Runtime - Bypass VMRunner.invoke (High Risk)",
+        title = "PairIP > Runtime > Bypass VMRunner.invoke (High Risk)",
         description = "Return null from PairIP VMRunner.invoke()."
     )
     val pairipStartupLauncherLaunch by booleanOption(
         key = "pairipStartupLauncherLaunch",
         default = false,
-        title = "Runtime - Bypass StartupLauncher.launch (High Risk)",
+        title = "PairIP > Runtime > Bypass StartupLauncher.launch (High Risk)",
         description = "Disable PairIP StartupLauncher.launch()."
     )
     val pairipStartupLauncherPairip by booleanOption(
         key = "pairipStartupLauncherPairip",
         default = false,
-        title = "Runtime - Bypass StartupLauncher.pairip (High Risk)",
+        title = "PairIP > Runtime > Bypass StartupLauncher.pairip (High Risk)",
         description = "Disable the PairIP StartupLauncher.pairip() entry point."
     )
     val pairipLicenseClientV3OnActivityCreate by booleanOption(
         key = "pairipLicenseClientV3OnActivityCreate",
         default = false,
-        title = "V3 - Bypass LicenseClient activity (High Risk)",
+        title = "PairIP > V3 > Bypass LicenseClient activity (High Risk)",
         description = "Disable LicenseClientV3.onActivityCreate()."
     )
     val pairipGenericInstallerSource by booleanOption(
         key = "pairipGenericInstallerSource",
         default = false,
-        title = "Installer - Spoof installer source (High Risk)",
+        title = "PairIP > Installer > Spoof installer source (High Risk)",
         description = "Return the Play Store package name from a generic installer-source check."
     )
     val pairipSignatureVerifyIntegrity by booleanOption(
         key = "pairipSignatureVerifyIntegrity",
         default = false,
-        title = "Integrity - Bypass signature integrity (High Risk)",
+        title = "PairIP > Integrity > Bypass signature integrity (High Risk)",
         description = "Disable SignatureCheck.verifyIntegrity()."
     )
     val pairipSignatureVerifySignatureMatches by booleanOption(
         key = "pairipSignatureVerifySignatureMatches",
         default = false,
-        title = "Integrity - Bypass signature match (High Risk)",
+        title = "PairIP > Integrity > Bypass signature match (High Risk)",
         description = "Make SignatureCheck.verifySignatureMatches() report success."
     )
     val pairipLicenseContentProviderOnCreate by booleanOption(
         key = "pairipLicenseContentProviderOnCreate",
         default = false,
-        title = "Provider - Bypass initialization (High Risk)",
+        title = "PairIP > Provider > Bypass initialization (High Risk)",
         description = "Make LicenseContentProvider.onCreate() report success."
     )
     val pairipLicenseContentProviderQuery by booleanOption(
         key = "pairipLicenseContentProviderQuery",
         default = false,
-        title = "Provider - Bypass query (High Risk)",
+        title = "PairIP > Provider > Bypass query (High Risk)",
         description = "Return no result from LicenseContentProvider.query()."
     )
     val pairipInitContextProviderGetContext by booleanOption(
         key = "pairipInitContextProviderGetContext",
         default = false,
-        title = "Provider - Bypass context provider (High Risk)",
+        title = "PairIP > Provider > Bypass context provider (High Risk)",
         description = "Return null from InitContextProvider.getContext()."
     )
     val pairipV2CheckLicenseInternal by booleanOption(
         key = "pairipV2CheckLicenseInternal",
         default = false,
-        title = "V2 - Bypass checkLicenseInternal (High Risk)",
+        title = "PairIP > V2 > Bypass checkLicenseInternal (High Risk)",
         description = "Route the V2 check directly to its success callback."
     )
     val pairipV2VerifySignature by booleanOption(
         key = "pairipV2VerifySignature",
         default = false,
-        title = "V2 - Bypass response signature (High Risk)",
+        title = "PairIP > V2 > Bypass response signature (High Risk)",
         description = "Disable the V2 response signature check."
     )
     val vmCallSiteChecks by booleanOption(
         key = "vmCallSiteChecks",
         default = false,
-        title = "Advanced - External VMRunner call sites (High Risk)",
+        title = "PairIP > Advanced > External VMRunner call sites (High Risk)",
         description = "Neutralize void callers of VMRunner.invoke() outside com.pairip. This is invasive and may affect app features."
     )
 
@@ -528,16 +628,42 @@ val pairipBypassPatch = bytecodePatch(
                 logger.info("Applied Pairip performLocalInstallerCheck spoof")
             }
 
-            // -- Strategy 2: Generic installer-source string --
-            // Return the Play Store package name when PairIP checks the installer source.
-            if (isSelected(pairipGenericInstallerSource)) GenericStringInstallerCheckFingerprint.methodOrNull?.let {
-                it.addInstructions(
-                    0, """
-                const-string v0, "com.android.vending"
-                return-object v0
-            """.trimIndent()
-                )
-                logger.info("Applied Play Store installer source spoof")
+            // -- Strategy 2: Generic Play Store installer spoof --
+            // Credit: Nai64Patches / Nai64. Try the boolean and string forms,
+            // then the fallback fingerprints, stopping after the first match.
+            if (isSelected(pairipGenericInstallerSource, risk = "high")) {
+                if (installerSpoofApplied == null) GenericBooleanInstallerCheckFingerprint.methodOrNull?.let {
+                    it.addInstructions(0, listOf(
+                        BuilderInstruction11n(Opcode.CONST_4, 0, 1),
+                        BuilderInstruction11x(Opcode.RETURN, 0),
+                    ))
+                    installerSpoofApplied = "generic boolean installer spoof"
+                    logger.info("Applied generic boolean Play Store spoof")
+                }
+                if (installerSpoofApplied == null) GenericStringInstallerCheckFingerprint.methodOrNull?.let {
+                    it.addInstructions(0, """
+                        const-string v0, "com.android.vending"
+                        return-object v0
+                    """.trimIndent())
+                    installerSpoofApplied = "generic string installer spoof"
+                    logger.info("Applied Play Store installer source spoof")
+                }
+                if (installerSpoofApplied == null) FallbackBooleanInstallerCheckFingerprint.methodOrNull?.let {
+                    it.addInstructions(0, listOf(
+                        BuilderInstruction11n(Opcode.CONST_4, 0, 1),
+                        BuilderInstruction11x(Opcode.RETURN, 0),
+                    ))
+                    installerSpoofApplied = "fallback boolean installer spoof"
+                    logger.info("Applied fallback boolean Play Store spoof")
+                }
+                if (installerSpoofApplied == null) FallbackStringInstallerCheckFingerprint.methodOrNull?.let {
+                    it.addInstructions(0, """
+                        const-string v0, "com.android.vending"
+                        return-object v0
+                    """.trimIndent())
+                    installerSpoofApplied = "fallback string installer spoof"
+                    logger.info("Applied fallback installer source spoof")
+                }
             }
 
         }
@@ -977,6 +1103,7 @@ val pairipBypassPatch = bytecodePatch(
 
             if (applicationRedirectApplied) add("manifest Application redirect")
             if (manifestCleanupApplied) add("manifest license cleanup")
+            if (firebaseCleanupApplied) add("Firebase cleanup")
             if (isSelected(vmCallSiteChecks, risk = "high") && vmCallSitesApplied > 0) {
                 add("external VMRunner call sites")
             }
@@ -986,11 +1113,7 @@ val pairipBypassPatch = bytecodePatch(
                 "performLocalInstallerCheck",
                 PerformLocalInstallerCheckFingerprint.methodOrNull != null
             )
-            addIfMatched(
-                isSelected(pairipGenericInstallerSource, risk = "high"),
-                "installer source",
-                GenericStringInstallerCheckFingerprint.methodOrNull != null
-            )
+            installerSpoofApplied?.let { add(it) }
             addIfMatched(
                 isSelected(pairipSignatureVerifyIntegrity, risk = "high"),
                 "verifyIntegrity",
