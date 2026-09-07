@@ -2,7 +2,7 @@ group = "unipatches"
 
 patches {
     about {
-        name = "Zanuaimi's Morphe UniPatches"
+        name = "Zanuaimi's UniPatches"
         description = "Curated universal APK target level patches with selected community patches and original UniPatches patches."
         source = "https://github.com/Zanuaimi/UniPatches"
         author = "Zanuaimi"
