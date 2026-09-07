@@ -1,8 +1,9 @@
 # Universal Overlay UI presets
 
-Universal Overlay UI presets are build-time configurations for the overlay’s General, UI, and
-Advanced settings. They do not run inside the patched APK and do not contain statistic, Activity, or
-Hook modules.
+Universal Overlay UI presets are build-time configurations for the overlay’s UI and Advanced
+settings. They do not run inside the patched APK and do not contain statistic, Activity, or Hook
+modules. The overlay title, description, repository button text, and repository button URL always
+come from the visible Morphe settings and are not preset values.
 
 ## Available presets
 
@@ -10,19 +11,22 @@ The patch currently includes:
 
 - Custom: uses the visible Morphe settings and optional imported JSON.
 - UniPatches: the default UniPatches red appearance.
-- Morphe Blue: the Morphe-style appearance based on the Nai64Patches fork.
+- Morphe-inspired: the Morphe-style appearance based on the Nai64Patches fork.
 - Dark: dark menu with light controls.
 - Light: light menu with dark controls.
-- ZArchiver: opaque gray menu, white text, green outline, and a dark-green `Z` icon.
+- ZArchiver-inspired: opaque gray menu, white text, green outline, and a dark-green `Z` icon.
+- LuckyPatcher-inspired: black square menu, yellow outline, green text accents, and padded gradient action buttons.
+- ReVanced-inspired: near-black menu, blue and purple text accents, Monet controls, and a blue-pink gradient outline.
 
-Built-in presets define every UI value explicitly. They do not inherit the user’s Custom icon,
-button position, title, or other manual settings.
+Built-in presets define every supported UI value explicitly. They do not inherit the user’s Custom
+icon or button position. The title, description, repository button text, and repository button URL
+are exceptions and always remain from the visible Morphe settings.
 
 ## Importing a preset
 
 Import is available only when `Presets - Selected preset` is set to `Custom`.
 
-1. Set `Presets - Import UI preset` to an existing `.json` file.
+1. Use the Morphe file selector for `Presets - Import UI preset` and choose an existing `.json` file.
 2. Patch the APK.
 3. The imported values override the visible Morphe UI settings for that patch run.
 
@@ -62,23 +66,51 @@ Exports use a versioned format:
 ```json
 {
   "format": "unipatches-universal-overlay-preset",
-  "version": 1,
+  "version": 2,
   "settings": {
+    "appendDescription": "",
+    "descriptionAlignment": "center",
+    "appendDescriptionColor": "#FF5656",
     "backgroundColor": "#300000",
     "backgroundTransparency": 80,
     "outlineColor": "#FF5656",
     "textColor": "#FF5656",
     "iconText": "U",
     "iconTextSize": 18,
+    "controlTheme": "modern",
+    "controlBackground": "#300000",
+    "controlForeground": "#FF5656",
+    "bottomButtonStyle": "text",
+    "bottomButtonShape": "square",
+    "bottomButtonPadding": false,
+    "bottomButtonTextColor": "#FFFFFF",
+    "bottomButtonBackground1": "#500000",
+    "bottomButtonBackground2": "#AA0000",
+    "menuTextColor1": "#FF5656",
+    "menuTextColor2": "#FF5656",
+    "menuTextColor3": "#FF5656",
+    "menuTextColor4": "#FF5656",
+    "menuTextColor5": "#FF5656",
+    "separatorStyle": "ascii",
+    "titleIconPlacement": "none",
+    "titleAlignment": "left",
+    "titleSeparator": false,
+    "menuCorners": "rounded",
+    "menuOutlineAnimation": "static",
+    "outlineAnimationSpeed": 1,
+    "menuAnimation": "fade",
+    "animationDuration": 180,
+    "animationEasing": "linear",
     "customIconImageLocal": "",
     "customIconImageInput": ""
   }
 }
 ```
 
-The actual export contains all supported General, UI, and Advanced values. Modules and Settings to
-Modules values are intentionally absent. Unknown fields are ignored, missing fields use the current
-manual values, and future schema versions are rejected safely instead of being applied partially.
+The actual export contains all supported UI and Advanced values. Title, description, repository
+button text, and repository button URL are intentionally absent, as are Modules and Settings to
+Modules values. Unknown fields are ignored, missing fields use the current manual values, and future
+schema versions are rejected safely instead of being applied partially.
 
 ## Example: adding a preset
 

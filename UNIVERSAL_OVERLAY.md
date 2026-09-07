@@ -13,16 +13,30 @@ belongs to the patched app's Activity content; it is not an Android system-level
 
 ## UI presets
 
-Version 1.2 adds build-time UI presets. `Custom` uses the visible Morphe settings, including user
-adjustments. `UniPatches`, `Morphe Blue`, `Dark`, `Light`, and `ZArchiver` provide predefined
-readable UI values. ZArchiver uses an opaque gray menu, white text, a green outline, and a
-non-gradient dark-green `Z` icon.
+Version 1.3 adds build-time UI presets. `Custom` uses the visible Morphe settings, including user
+adjustments. `UniPatches`, `Morphe-inspired`, `Dark`, `Light`, and `ZArchiver-inspired` provide predefined
+readable UI values. ZArchiver-inspired uses an opaque gray menu, white text, a green outline, and a
+non-gradient dark-green `Z` icon. `LuckyPatcher-inspired` provides a black and yellow promotional style.
 The UniPatches default values are intentionally identical to the default Custom values.
 
-Presets cover every General, UI, and Advanced setting, including the custom icon input. They do not
-contain the Settings to Modules group or any Statistic, Activity, or Hook module toggle. Those values
-remain independent because hook and module combinations can be app-specific and may prevent an APK
-from working correctly.
+Presets cover the supported UI and Advanced settings, including the custom icon input. The overlay
+title, description, repository button text, and repository button URL always come from the visible
+Morphe settings and are exceptions to preset application. Presets do not contain the Settings to
+Modules group or any Statistic, Activity, or Hook module toggle. Those values remain independent
+because hook and module combinations can be app-specific and may prevent an APK from working
+correctly.
+
+The v1.3 UI settings include legacy or modern control themes, control background and foreground
+colors, independent bottom action button styles, five menu text colors, module separator styles,
+title icon placement and alignment, square or rounded menu corners, outline width and animation,
+and fade, scale, or disabled menu opening and closing animations. Animation duration is shared by
+opening and closing, and logarithmic easing applies only to fade and scale menu animations.
+The control theme also supports a fixed Monet-style Material You appearance. Its colors come from
+the configured preset values and do not depend on the host app, device wallpaper, or system theme.
+The optional appended description text is shown below the main description and can be used for
+credits or attribution in a UI preset.
+Main and appended description text support left, center, and right alignment, with center as the
+default.
 
 `Import UI preset` accepts a path to a JSON file and is used only in Custom mode. A valid supported
 preset overrides the visible settings during patching; an empty, unreadable, malformed, or
@@ -84,10 +98,12 @@ UniPatches
 |   |-- presets/OverlayPreset.kt         Shared preset model and value builder
 |   |-- presets/OverlayPresetCatalog.kt Central preset registry
 |   |-- presets/UniPatchesPreset.kt     UniPatches preset
-|   |-- presets/MorpheBluePreset.kt     Morphe Blue preset
+|   |-- presets/MorpheBluePreset.kt     Morphe-inspired preset
 |   |-- presets/DarkPreset.kt            Dark preset
 |   |-- presets/LightPreset.kt           Light preset
-|   `-- presets/ZArchiverPreset.kt       ZArchiver preset
+|   |-- presets/ZArchiverPreset.kt       ZArchiver-inspired preset
+|   |-- presets/LuckyPatcherPreset.kt   LuckyPatcher-inspired preset
+|   `-- presets/ReVancedPreset.kt       ReVanced-inspired preset
 |-- patches/src/main/kotlin/helpers/startup/
 |   `-- StartupHooks.kt                Application/activity discovery and Smali helpers
 |-- patches/src/main/kotlin/helpers/manifest/
@@ -161,11 +177,11 @@ This decodes and sanitizes the payload produced by the Kotlin patch. Configurati
 positional, so new fields are appended and version-aware defaults preserve older payloads.
 Malformed colors, enums, dimensions, and missing values receive safe fallbacks.
 
-The current configuration uses RGB-only color values in `#RRGGBB` format. Overlay background
+The current configuration uses payload version 1 and RGB-only color values in `#RRGGBB` format. Overlay background
 transparency is serialized separately as a percentage because Morphe's color picker does not
 edit alpha. The default background `#300000` with 80% opacity reproduces the previous `#CC300000`
 value. Menu outline and menu text are independent settings, and the icon outline width is
-independent from the menu outline width. Version 1.2 also stores the configurable legacy icon text
+independent from the menu outline width. Version 1.3 also stores the configurable legacy icon text
 size and supports two build-time custom icon inputs: a local image file and a String Handler input.
 The local image takes priority when valid; otherwise file URI, Base64, data URI, and HTTPS inputs are
 tried before falling back to the legacy icon.
@@ -179,8 +195,9 @@ invalidating older presets.
 
 extensions/extension/src/main/java/unipatch/universaloverlay/UniversalOverlayViews.java
 
-This contains reusable overlay backgrounds, gradient rendering, outline rendering, and selectable
-button backgrounds. It keeps visual construction separate from lifecycle and module behavior.
+This contains reusable overlay backgrounds, gradient rendering, animated outline rendering, and
+selectable or styled button backgrounds. It keeps visual construction separate from lifecycle and
+module behavior. v1.3 uses explicit configured colors for buttons, sliders, checkboxes, and dropdowns.
 
 Overlay views use an isolated Android theme context and then apply configured colors explicitly. This
 prevents a host app's legacy or custom theme from changing checkbox, spinner, slider, or overlay

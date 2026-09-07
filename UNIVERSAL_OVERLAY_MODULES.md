@@ -78,18 +78,21 @@ Configuration fields are positional and Base64 encoded. When adding fields:
 - preserve decoding for older versions;
 - validate bounded numeric values and enum strings before serialization.
 
-The current configuration payload uses version 1 for this new UniPatches repository. It includes
-the v1.2 icon text size alongside background transparency, overlay text color, and icon outline width.
+The current configuration payload uses version 1 for the v1.3 UniPatches patch. It includes
+the v1.3 UI fields alongside background transparency, split menu text colors, control styling,
+separator styling, menu geometry, and animation settings.
 Colors remain RGB-only; background alpha is applied by the runtime from the percentage field. The
 runtime still accepts older positional payloads.
 
-UI presets are versioned JSON files handled by the patch-time Kotlin layer. They contain General,
-UI, and Advanced settings, including both custom icon inputs, but exclude Settings to Modules and all
-module toggles. Import is Custom-only and falls back field-by-field to visible Morphe settings when
-values are missing or invalid. Export is Custom-only, happens after patch work, and logs failures
-without failing the APK patch.
+UI presets are version 2 JSON files handled by the patch-time Kotlin layer. They contain supported UI
+and Advanced settings, including both custom icon inputs, but exclude the title, description,
+repository button text, repository button URL, Settings to Modules, and all module toggles. Import is
+Custom-only and falls back field-by-field to visible Morphe settings when values are missing or
+invalid. Export is Custom-only, happens after patch work, and logs failures without failing the APK
+patch.
 
-Keep the runtime fallback safe when a setting is missing or malformed.
+Keep the runtime fallback safe when a setting is missing or malformed. Numeric values are clamped
+to valid bounds, and patch-time warnings identify values that were clamped.
 
 ## Review checklist
 
