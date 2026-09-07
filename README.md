@@ -8,14 +8,14 @@ Curated list of universal patches for [Morphe](https://morphe.software), includi
 
 UniPatches brings together a concise selection of community-favorite universal APK target-level patches and contains some patches of my own. Community patches are selected from projects I find useful, including:
 
-- [Entree](https://github.com/Entree3k/Morning-Entree-Patches)
-- [Nai64](https://github.com/Zanuaimi/Nai64Patches)
-- [Adobo](https://github.com/jkennethcarino/adobo)
-- [kondratjev](https://github.com/kondratjev/morphe-patches)
-- [MiguelNinja19](https://github.com/MiguelNinja19/miguel-morphe-patches)
-- [BlazeFTL](https://github.com/BlazeFTL/FTL-Patches)
-- [xob0t](https://github.com/xob0t/morphe-patches)
-- [rushiranpise (Doom)](https://github.com/rushiranpise/morphe-patches)
+- [Morning-Entree-Patches by Entree3k](https://github.com/Entree3k/Morning-Entree-Patches)
+- [Nai64Patches by Nai64](https://github.com/Nai64/Nai64Patches)
+- [Adobo by jkennethcarino](https://github.com/jkennethcarino/adobo)
+- [morphe-patches by kondratjev](https://github.com/kondratjev/morphe-patches)
+- [miguel-morphe-patches by MiguelNinja19](https://github.com/MiguelNinja19/miguel-morphe-patches)
+- [FTL-Patches by BlazeFTL](https://github.com/BlazeFTL/FTL-Patches)
+- [morphe-patches by xob0t](https://github.com/xob0t/morphe-patches)
+- [morphe-patches by rushiranpise (aka Doom)](https://github.com/rushiranpise/morphe-patches)
 
 These patches may be merged, refined, or enhanced where practical to improve compatibility, functionality, configuration, and usability.
 
