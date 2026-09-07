@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "patches": [
     {
       "name": "Ads Free Rewards (Experimental)",
@@ -836,7 +836,7 @@
       "options": []
     },
     {
-      "name": "UniPatches Universal Overlay Patch v1.3.1 (Experimental)",
+      "name": "UniPatches Universal Overlay Patch v1.3.2 (Experimental)",
       "description": "Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,\nfullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;\nselect them in Morphe settings before patching. Statistic modules show information, Activity modules\ncontrol the current Activity, and Hook modules control internal app behavior, such as disabling\nanimations, through best-effort runtime changes. A selected local image automatically replaces\nthe legacy icon; empty or invalid image input falls back to the legacy icon. This is experimental\nand may not work on all apps. UI presets can save and reuse supported UI and Advanced\nsettings. The title, description, repository button text, and repository button URL remain\ncontrolled by the visible Morphe settings. Modules and Settings to Modules are excluded\nbecause hook and module combinations can be app-specific.\n\nThe idea and initial works of this Universal Overlay Patch are from Zanuaimi / Noobite.",
       "default": false,
       "dependencies": [
@@ -993,7 +993,7 @@
         {
           "key": "runtimeOverlayMenuTextColor2",
           "title": "UI > Menu > Text color 2 (module names)",
-          "description": "Module names and separator text color.",
+          "description": "Module name color.",
           "required": false,
           "type": "kotlin.String",
           "default": "#FF5656",
@@ -1024,6 +1024,24 @@
           "required": false,
           "type": "kotlin.String",
           "default": "#FF5656",
+          "values": null
+        },
+        {
+          "key": "runtimeOverlayMenuTextColor6",
+          "title": "UI > Menu > Text color 6 (module separators)",
+          "description": "Module separator text color.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "#FF5656",
+          "values": null
+        },
+        {
+          "key": "runtimeOverlaySeparatorBackgroundColor",
+          "title": "UI > Menu > Separator background color",
+          "description": "Background color used by the module separator when Background behind text is selected. Custom preset defaults to a darker shade than the overlay background.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "#210000",
           "values": null
         },
         {
