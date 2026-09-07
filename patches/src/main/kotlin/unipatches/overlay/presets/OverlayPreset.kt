@@ -53,7 +53,8 @@ internal data class OverlayUiPreset(
     val menuCorners: String = "rounded",
     val menuOutlineAnimation: String = "static",
     val outlineAnimationSpeed: Int = 1,
-    val menuAnimation: String = "fade",
+    val openingAnimation: String = "fade",
+    val closingAnimation: String = "fade",
     val animationDuration: Int = 180,
     val animationEasing: String = "linear",
 )
@@ -98,17 +99,17 @@ internal fun explicitOverlayPreset(
     menuCorners: String = "rounded",
     menuOutlineAnimation: String = "static",
     outlineAnimationSpeed: Int = 1,
-    menuAnimation: String = "fade",
+    openingAnimation: String = "fade",
+    closingAnimation: String = "fade",
     animationDuration: Int = 180,
     animationEasing: String = "linear",
     appendDescription: String = "",
     descriptionAlignment: String = "center",
     appendDescriptionColor: String = menuTextColor3,
+    outlineWidth: Int = 2,
 ): OverlayUiPreset = OverlayUiPreset(
     title = "UniPatches Universal Overlay Patch",
     description = "Welcome! This is the UniPatches Universal Overlay Patch Menu.\n" +
-        "You will find modules below the description if you enabled some modules\n" +
-        "in this patch settings before patching this APK.\n" +
         "The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.",
     appendDescription = appendDescription,
     descriptionAlignment = descriptionAlignment,
@@ -119,7 +120,7 @@ internal fun explicitOverlayPreset(
     backgroundTransparency = backgroundTransparency,
     outline = outline,
     overlayTextColor = overlayTextColor,
-    outlineWidth = 2,
+    outlineWidth = outlineWidth,
     buttonText = buttonText,
     iconBold = true,
     buttonTextColor = buttonTextColor,
@@ -160,7 +161,8 @@ internal fun explicitOverlayPreset(
     menuCorners = menuCorners,
     menuOutlineAnimation = menuOutlineAnimation,
     outlineAnimationSpeed = outlineAnimationSpeed,
-    menuAnimation = menuAnimation,
+    openingAnimation = openingAnimation,
+    closingAnimation = closingAnimation,
     animationDuration = animationDuration,
     animationEasing = animationEasing,
 )
