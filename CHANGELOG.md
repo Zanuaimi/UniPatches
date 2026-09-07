@@ -1,3 +1,14 @@
+## [1.5.0](https://github.com/Zanuaimi/UniPatches/compare/v1.4.0...v1.5.0) (2026-09-07)
+
+### 🐛 Bug Fixes
+
+* **ci:** preserve README patch generation markers ([8b35ae1](https://github.com/Zanuaimi/UniPatches/commit/8b35ae16b93ff2a930272cd07c37df550fae5db9))
+
+### ✨ New Features
+
+* **overlay:** add themed UI presets ([90737ec](https://github.com/Zanuaimi/UniPatches/commit/90737ecd862b6387703d85184d29efbf1400984f))
+* **overlay:** expand configurable UI themes and animations ([b757b59](https://github.com/Zanuaimi/UniPatches/commit/b757b59ac0ca78c148c995a617a88d7d54a2fccf))
+
 ## [1.4.0](https://github.com/Zanuaimi/UniPatches/compare/v1.3.0...v1.4.0) (2026-09-05)
 
 ### ✨ New Features
