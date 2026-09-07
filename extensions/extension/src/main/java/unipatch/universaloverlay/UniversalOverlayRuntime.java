@@ -14,6 +14,9 @@ import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -29,6 +32,7 @@ import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.ArrayAdapter;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.GradientDrawable;
 
 import unipatch.universaloverlay.modules.activity.AppAudioMuteModule;
 import unipatch.universaloverlay.modules.activity.AppBrightnessModule;
@@ -222,6 +226,7 @@ public final class UniversalOverlayRuntime {
         private float startY;
         private boolean dragged;
         private boolean customIconFallbackRequired;
+        private String pendingInlineSectionLabel;
         private final Runnable dragVisibilityFade;
 
         Controller(Activity activity, UniversalOverlayConfig config) {
@@ -634,6 +639,15 @@ public final class UniversalOverlayRuntime {
             titleParams.rightMargin = rightTitleIcon ? dp(8) : 0;
             titleRow.addView(title, titleParams);
             if (rightTitleIcon) titleRow.addView(createMenuTitleIcon(), titleIconParams());
+            final TextView leftIconView = leftTitleIcon ? (TextView) titleRow.getChildAt(0) : null;
+            final TextView rightIconView = rightTitleIcon
+                    ? (TextView) titleRow.getChildAt(titleRow.getChildCount() - 1) : null;
+            titleRow.addOnLayoutChangeListener((view, left, top, right, bottom,
+                    oldLeft, oldTop, oldRight, oldBottom) -> {
+                int iconSize = Math.max(dp(32), title.getHeight() - dp(4));
+                resizeMenuTitleIcon(leftIconView, iconSize);
+                resizeMenuTitleIcon(rightIconView, iconSize);
+            });
             menu.addView(titleRow, new LinearLayout.LayoutParams(-1, -2));
             if (config.titleSeparator) {
                 View titleLine = new View(overlayContext);
@@ -709,6 +723,23 @@ public final class UniversalOverlayRuntime {
             icon.setFocusable(false);
             icon.setContentDescription("Overlay menu icon");
             return icon;
+        }
+
+        private void resizeMenuTitleIcon(TextView icon, int size) {
+            if (icon == null || icon.getLayoutParams() == null) return;
+            ViewGroup.LayoutParams params = icon.getLayoutParams();
+            if (params.width == size && params.height == size) return;
+            params.width = size;
+            params.height = size;
+            icon.setLayoutParams(params);
+            if (!"image".equals(config.iconType)) return;
+            Bitmap customIcon = decodeCustomIcon(config.customIconImage);
+            if (customIcon == null) return;
+            BitmapDrawable image = new BitmapDrawable(overlayContext.getResources(),
+                    fitCustomIcon(customIcon, Math.max(1, size - dp(6))));
+            image.setGravity(Gravity.CENTER);
+            image.setAntiAlias(true);
+            icon.setBackground(image);
         }
 
         private FrameLayout createConfirmationLayer() {
@@ -821,7 +852,11 @@ public final class UniversalOverlayRuntime {
         }
 
         private void addSectionLabel(LinearLayout parent, String label) {
-            int separatorColor = config.menuTextColor2;
+            int separatorColor = config.menuTextColor6;
+            if ("inline".equals(config.separatorStyle)) {
+                pendingInlineSectionLabel = label;
+                return;
+            }
             if ("doubleLine".equals(config.separatorStyle)) {
                 LinearLayout wrapper = new LinearLayout(overlayContext);
                 wrapper.setOrientation(LinearLayout.VERTICAL);
@@ -839,7 +874,7 @@ public final class UniversalOverlayRuntime {
                 parent.addView(wrapper, wrapperParams);
                 return;
             }
-            String separatorText = "inline".equals(config.separatorStyle) ? label : "---  " + label + "  ---";
+            String separatorText = "background".equals(config.separatorStyle) ? label : "---  " + label + "  ---";
             TextView separator = text(separatorText, 13, separatorColor);
             separator.setAlpha("inline".equals(config.separatorStyle) ? .9f : .65f);
             separator.setGravity(Gravity.CENTER);
@@ -858,18 +893,7 @@ public final class UniversalOverlayRuntime {
                 return;
             }
             if ("background".equals(config.separatorStyle)) {
-                int base = config.background;
-                float luminance = android.graphics.Color.red(base) * .299f
-                        + android.graphics.Color.green(base) * .587f
-                        + android.graphics.Color.blue(base) * .114f;
-                int contrasting = android.graphics.Color.rgb(
-                        luminance > 128 ? Math.round(android.graphics.Color.red(base) * .65f)
-                                : Math.round(android.graphics.Color.red(base) + (255 - android.graphics.Color.red(base)) * .35f),
-                        luminance > 128 ? Math.round(android.graphics.Color.green(base) * .65f)
-                                : Math.round(android.graphics.Color.green(base) + (255 - android.graphics.Color.green(base)) * .35f),
-                        luminance > 128 ? Math.round(android.graphics.Color.blue(base) * .65f)
-                                : Math.round(android.graphics.Color.blue(base) + (255 - android.graphics.Color.blue(base)) * .35f));
-                separator.setBackgroundColor(contrasting);
+                separator.setBackgroundColor(config.separatorBackgroundColor);
                 separator.setPadding(dp(4), 0, dp(4), 0);
             }
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(32));
@@ -982,8 +1006,8 @@ public final class UniversalOverlayRuntime {
                 }
                 @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getDropDownView(position, convertView, parentView);
-                    view.setTextColor(config.controlForeground);
-                    view.setBackgroundColor(config.controlBackground);
+                    view.setTextColor(config.menuTextColor1);
+                    view.setBackgroundColor(config.background);
                     return view;
                 }
             };
@@ -992,8 +1016,10 @@ public final class UniversalOverlayRuntime {
             spinner.setBackground(UniversalOverlayViews.background(config.controlBackground, config.outline, false,
                     config.outlineWidth, !"square".equals(config.menuCorners)));
             if (android.os.Build.VERSION.SDK_INT >= 16) {
-                spinner.setPopupBackgroundDrawable(UniversalOverlayViews.background(config.controlBackground, config.outline, false,
-                        config.outlineWidth, !"square".equals(config.menuCorners)));
+                GradientDrawable popupBackground = new GradientDrawable();
+                popupBackground.setColor(config.background);
+                popupBackground.setCornerRadius("square".equals(config.menuCorners) ? 0f : dp(24));
+                spinner.setPopupBackgroundDrawable(popupBackground);
             }
             int current = remembered == null ? module.current(activity) : remembered;
             spinner.setSelection(current == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT ? 1
@@ -1019,7 +1045,7 @@ public final class UniversalOverlayRuntime {
             LinearLayout row = new LinearLayout(overlayContext);
             row.setOrientation(LinearLayout.VERTICAL);
             row.setPadding(0, dp(6), 0, dp(6));
-            TextView title = text(label, 16, config.menuTextColor2);
+            TextView title = text(moduleTitleText(label), 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             row.addView(title, new LinearLayout.LayoutParams(-1, -2));
             TextView description = text(details, 13, config.menuTextColor3);
@@ -1041,7 +1067,7 @@ public final class UniversalOverlayRuntime {
 
             LinearLayout copy = new LinearLayout(overlayContext);
             copy.setOrientation(LinearLayout.VERTICAL);
-            TextView title = text(label, 16, config.menuTextColor2);
+            TextView title = text(moduleTitleText(label), 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             copy.addView(title, new LinearLayout.LayoutParams(-1, -2));
             TextView details = text(description, 13, config.menuTextColor3);
@@ -1165,7 +1191,7 @@ public final class UniversalOverlayRuntime {
 
             LinearLayout copy = new LinearLayout(overlayContext);
             copy.setOrientation(LinearLayout.VERTICAL);
-            TextView title = text(feature.label(), 16, config.menuTextColor2);
+            TextView title = text(moduleTitleText(feature.label()), 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             copy.addView(title, new LinearLayout.LayoutParams(-1, -2));
             TextView description = text(feature.description(), 13, config.menuTextColor3);
@@ -1199,12 +1225,26 @@ public final class UniversalOverlayRuntime {
             parent.addView(row, new LinearLayout.LayoutParams(-1, -2));
         }
 
-        private TextView text(String value, float size, int color) {
+        private CharSequence moduleTitleText(String label) {
+            if (pendingInlineSectionLabel == null) return label;
+            String suffix = "  •  " + pendingInlineSectionLabel;
+            SpannableString result = new SpannableString(label + suffix);
+            result.setSpan(new ForegroundColorSpan(config.menuTextColor6), label.length(), result.length(),
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            pendingInlineSectionLabel = null;
+            return result;
+        }
+
+        private TextView text(CharSequence value, float size, int color) {
             TextView view = new TextView(overlayContext);
             view.setText(value);
             view.setTextSize(size);
             view.setTextColor(color);
             return view;
+        }
+
+        private TextView text(String value, float size, int color) {
+            return text((CharSequence) value, size, color);
         }
 
         private void styleCheckBox(CheckBox control) {
@@ -1259,6 +1299,7 @@ public final class UniversalOverlayRuntime {
                 root.requestFocus();
                 menuLayer.setVisibility(View.VISIBLE);
                 if (menuOutline != null) menuOutline.start();
+                panel.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 menuLayer.setAlpha(1f);
                 panel.setAlpha(0f);
                 prepareOpeningAnimation();
@@ -1321,6 +1362,7 @@ public final class UniversalOverlayRuntime {
                     panel.setScaleY(1f);
                     panel.setTranslationX(0f);
                     panel.setTranslationY(0f);
+                    panel.setLayerType(View.LAYER_TYPE_NONE, null);
                     menuState = MenuState.CLOSED;
                     if (menuOutline != null) menuOutline.stop();
                     for (UniversalOverlayStatisticModule module : statistics) updateStatisticMonitor(module);

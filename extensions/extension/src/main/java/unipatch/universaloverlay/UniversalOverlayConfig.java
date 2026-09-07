@@ -34,8 +34,8 @@ final class UniversalOverlayConfig {
             openingAnimation, closingAnimation, animationEasing;
     int controlBackground, controlForeground, bottomButtonTextColor,
             bottomButtonBackground1, bottomButtonBackground2,
-            menuTextColor1, menuTextColor2, menuTextColor3, menuTextColor4, menuTextColor5,
-            outlineAnimationSpeed, animationDuration, appendDescriptionColor;
+            menuTextColor1, menuTextColor2, menuTextColor3, menuTextColor4, menuTextColor5, menuTextColor6,
+            outlineAnimationSpeed, animationDuration, appendDescriptionColor, separatorBackgroundColor;
     boolean bottomButtonPadding, titleSeparator;
 
     static UniversalOverlayConfig decode(String encoded) {
@@ -43,7 +43,7 @@ final class UniversalOverlayConfig {
         String[] values = encoded == null ? new String[0] : encoded.split("\\|", -1);
         // Version 1 through 16 prepends a version field. Keep accepting the original 14-field format so an
         // older generated patch remains safe when paired with this newer extension.
-        String[] v = new String[64];
+        String[] v = new String[66];
         for (int i = 0; i < v.length; i++) v[i] = i < values.length ? decodePart(values[i]) : "";
         int offset = ("1".equals(v[0]) || "2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0])) ? 1 : 0;
         c.title = limit(field(v, offset, 0), 80, "UniPatches Universal Overlay Patch");
@@ -137,6 +137,8 @@ final class UniversalOverlayConfig {
         c.menuTextColor3 = color(field(v, offset, 45), c.overlayTextColor);
         c.menuTextColor4 = color(field(v, offset, 46), c.overlayTextColor);
         c.menuTextColor5 = color(field(v, offset, 47), c.overlayTextColor);
+        c.menuTextColor6 = color(field(v, offset, 63), c.menuTextColor2);
+        c.separatorBackgroundColor = color(field(v, offset, 64), c.background);
         c.appendDescriptionColor = color(field(v, offset, 60), c.menuTextColor3);
         c.showNoModulesWarning = !"0".equals(field(v, offset, 61));
         c.separatorStyle = choice(field(v, offset, 48), "ascii", "ascii", "doubleLine", "background", "singleLine", "inline");
