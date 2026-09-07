@@ -33,6 +33,7 @@ internal val reVancedPreset = OverlayPresetDefinition(
         menuTextColor3 = "#D0D0D5",
         menuTextColor4 = "#8DB8F5",
         menuTextColor5 = "#8DB8F5",
+        menuTextColor6 = "#A990D0",
         separatorStyle = "inline",
         menuOutlineAnimation = "gradient",
         openingAnimation = "scale",
