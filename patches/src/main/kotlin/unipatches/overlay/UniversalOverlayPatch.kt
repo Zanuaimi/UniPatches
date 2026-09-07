@@ -24,10 +24,11 @@ import kotlin.math.roundToInt
 
 private const val RUNTIME_CLASS = "Lunipatch/universaloverlay/UniversalOverlayRuntime;"
 private const val CONFIG_VERSION = "1"
-private const val PRESET_SCHEMA_VERSION = 3
+private const val PRESET_SCHEMA_VERSION = 4
 private const val MAX_CUSTOM_ICON_BYTES = 1024 * 1024
 private const val MAX_TITLE_CHARACTERS = 80
 private const val MAX_DESCRIPTION_CHARACTERS = 500
+private const val CUSTOM_SEPARATOR_BACKGROUND_DEFAULT = "#210000"
 private val DEFAULT_DESCRIPTION =
     """
     Welcome! This is the UniPatches Universal Overlay Patch Menu.
@@ -82,6 +83,8 @@ private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
         addProperty("menuTextColor3", menuTextColor3)
         addProperty("menuTextColor4", menuTextColor4)
         addProperty("menuTextColor5", menuTextColor5)
+        addProperty("menuTextColor6", menuTextColor6)
+        addProperty("separatorBackgroundColor", separatorBackgroundColor)
         addProperty("separatorStyle", separatorStyle)
         addProperty("titleIconPlacement", titleIconPlacement)
         addProperty("titleAlignment", titleAlignment)
@@ -194,6 +197,8 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             menuTextColor3 = rgbColor("menuTextColor3", fallback.menuTextColor3),
             menuTextColor4 = rgbColor("menuTextColor4", fallback.menuTextColor4),
             menuTextColor5 = rgbColor("menuTextColor5", fallback.menuTextColor5),
+            menuTextColor6 = rgbColor("menuTextColor6", fallback.menuTextColor6),
+            separatorBackgroundColor = rgbColor("separatorBackgroundColor", fallback.separatorBackgroundColor),
             separatorStyle = choice("separatorStyle", fallback.separatorStyle, setOf("ascii", "doubleLine", "background", "singleLine", "inline")),
             titleIconPlacement = choice("titleIconPlacement", fallback.titleIconPlacement, setOf("none", "left", "right", "both")),
             titleAlignment = choice("titleAlignment", fallback.titleAlignment, setOf("left", "center", "right")),
@@ -456,7 +461,7 @@ private fun injectMethod(owner: MutableClass, method: MutableMethod, config: Str
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v1.3.1 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v1.3.2 (Experimental)",
     description = """
         Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,
         fullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;
@@ -565,10 +570,12 @@ val universalOverlayPatch = bytecodePatch(
         description = "Second background color for gradient bottom action buttons.",
     )
     val menuTextColor1 by stringOption(title = "UI > Menu > Text color 1 (title and lines)", default = "#FF5656", key = "runtimeOverlayMenuTextColor1", description = "Title and title/separator line color.")
-    val menuTextColor2 by stringOption(title = "UI > Menu > Text color 2 (module names)", default = "#FF5656", key = "runtimeOverlayMenuTextColor2", description = "Module names and separator text color.")
+    val menuTextColor2 by stringOption(title = "UI > Menu > Text color 2 (module names)", default = "#FF5656", key = "runtimeOverlayMenuTextColor2", description = "Module name color.")
     val menuTextColor3 by stringOption(title = "UI > Menu > Text color 3 (descriptions)", default = "#FF5656", key = "runtimeOverlayMenuTextColor3", description = "Overlay and module description color.")
     val menuTextColor4 by stringOption(title = "UI > Menu > Text color 4 (monitor)", default = "#FF5656", key = "runtimeOverlayMenuTextColor4", description = "Monitor label color.")
     val menuTextColor5 by stringOption(title = "UI > Menu > Text color 5 (active)", default = "#FF5656", key = "runtimeOverlayMenuTextColor5", description = "Active label color.")
+    val menuTextColor6 by stringOption(title = "UI > Menu > Text color 6 (module separators)", default = "#FF5656", key = "runtimeOverlayMenuTextColor6", description = "Module separator text color.")
+    val separatorBackgroundColor by stringOption(title = "UI > Menu > Separator background color", default = CUSTOM_SEPARATOR_BACKGROUND_DEFAULT, key = "runtimeOverlaySeparatorBackgroundColor", description = "Background color used by the module separator when Background behind text is selected. Custom preset defaults to a darker shade than the overlay background.")
     val separatorStyle by stringOption(
         title = "UI > Menu > Module separator style",
         default = "ascii",
@@ -960,6 +967,7 @@ val universalOverlayPatch = bytecodePatch(
         val manualAppendDescription = appendDescriptionText.orEmpty().take(
             (MAX_DESCRIPTION_CHARACTERS - manualDescription.length).coerceAtLeast(0),
         )
+        val manualBackground = backgroundColor.orEmpty().ifBlank { "#300000" }
         val manualPreset = OverlayUiPreset(
             title = title.orEmpty().ifBlank { "UniPatches Universal Overlay Patch" }.take(MAX_TITLE_CHARACTERS),
             description = manualDescription,
@@ -968,7 +976,7 @@ val universalOverlayPatch = bytecodePatch(
             appendDescriptionColor = appendDescriptionColor.orEmpty().ifBlank { menuTextColor3.orEmpty().ifBlank { "#FF5656" } },
             repositoryText = repositoryText.orEmpty().ifBlank { "UniPatches repository" },
             repositoryUrl = repositoryUrl.orEmpty().ifBlank { "https://github.com/Zanuaimi/UniPatches" },
-            background = backgroundColor.orEmpty().ifBlank { "#300000" },
+            background = manualBackground,
             backgroundTransparency = (backgroundTransparency ?: 80).coerceIn(0, 100),
             outline = outlineColor.orEmpty().ifBlank { "#FF5656" },
             overlayTextColor = menuTextColor1.orEmpty().ifBlank { "#FF5656" },
@@ -1006,6 +1014,8 @@ val universalOverlayPatch = bytecodePatch(
             menuTextColor3 = menuTextColor3.orEmpty().ifBlank { "#FF5656" },
             menuTextColor4 = menuTextColor4.orEmpty().ifBlank { "#FF5656" },
             menuTextColor5 = menuTextColor5.orEmpty().ifBlank { "#FF5656" },
+            menuTextColor6 = menuTextColor6.orEmpty().ifBlank { menuTextColor2.orEmpty().ifBlank { "#FF5656" } },
+            separatorBackgroundColor = separatorBackgroundColor.orEmpty().ifBlank { CUSTOM_SEPARATOR_BACKGROUND_DEFAULT },
             separatorStyle = separatorStyle.orEmpty().ifBlank { "ascii" },
             titleIconPlacement = titleIconPlacement.orEmpty().ifBlank { "none" },
             titleAlignment = titleAlignment.orEmpty().ifBlank { "left" },
@@ -1070,6 +1080,8 @@ val universalOverlayPatch = bytecodePatch(
         val menuTextColor3Value = selectedUiPreset.menuTextColor3
         val menuTextColor4Value = selectedUiPreset.menuTextColor4
         val menuTextColor5Value = selectedUiPreset.menuTextColor5
+        val menuTextColor6Value = selectedUiPreset.menuTextColor6
+        val separatorBackgroundColorValue = selectedUiPreset.separatorBackgroundColor
         val separatorStyleValue = selectedUiPreset.separatorStyle
         val titleIconPlacementValue = selectedUiPreset.titleIconPlacement
         val titleAlignmentValue = selectedUiPreset.titleAlignment
@@ -1133,6 +1145,8 @@ val universalOverlayPatch = bytecodePatch(
         check(animationDurationValue >= 0)
         check(descriptionAlignmentValue in setOf("left", "center", "right"))
         check(appendDescriptionColorValue.matches(Regex("#[0-9a-fA-F]{6}")))
+        check(menuTextColor6Value.matches(Regex("#[0-9a-fA-F]{6}")))
+        check(separatorBackgroundColorValue.matches(Regex("#[0-9a-fA-F]{6}")))
 
         val config = listOf(
             CONFIG_VERSION, titleValue, descriptionValue, labelValue, urlValue,
@@ -1206,6 +1220,8 @@ val universalOverlayPatch = bytecodePatch(
             appendDescriptionColorValue,
             if (showNoModulesWarning == true) "1" else "0",
             closingAnimationValue,
+            menuTextColor6Value,
+            separatorBackgroundColorValue,
         ).joinToString("|") { encode(it) }
 
         // Prefer the process Application entry point. The Activity path is a compatibility fallback
