@@ -1,3 +1,11 @@
+## [1.6.0](https://github.com/Zanuaimi/UniPatches/compare/v1.5.0...v1.6.0) (2026-09-07)
+
+### ✨ New Features
+
+* **overlay:** add directional menu animations ([437d913](https://github.com/Zanuaimi/UniPatches/commit/437d9136a48f4581210e1d70cee012352359aaa8))
+* **overlay:** organize settings and preset schema ([e49f8df](https://github.com/Zanuaimi/UniPatches/commit/e49f8df1c39fd8ef3a97880a2163f28f011b7741))
+* **overlay:** update themed preset animations ([1f5204b](https://github.com/Zanuaimi/UniPatches/commit/1f5204b57f9f77ad00edf793c3c5794c6b13f27d))
+
 ## [1.5.0](https://github.com/Zanuaimi/UniPatches/compare/v1.4.0...v1.5.0) (2026-09-07)
 
 ### 🐛 Bug Fixes
