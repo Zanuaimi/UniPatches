@@ -1,3 +1,9 @@
+## [1.9.0](https://github.com/Zanuaimi/UniPatches/compare/v1.8.1...v1.9.0) (2026-09-08)
+
+### ✨ New Features
+
+* **overlay:** add configurable icons and vertical outline animation ([c4a7c6e](https://github.com/Zanuaimi/UniPatches/commit/c4a7c6ec491b3a0360cc925be50bb496ebe385f7))
+
 ## [1.8.1](https://github.com/Zanuaimi/UniPatches/compare/v1.8.0...v1.8.1) (2026-09-07)
 
 ### 🐛 Bug Fixes
