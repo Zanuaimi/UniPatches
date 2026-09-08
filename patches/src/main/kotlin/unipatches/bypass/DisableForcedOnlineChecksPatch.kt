@@ -64,12 +64,25 @@ private fun engineFlags(types: List<String>): EngineFlags = EngineFlags(
     },
 )
 
+private fun isKnownAdOrNetworkClass(type: String): Boolean {
+    val name = type.lowercase(Locale.ROOT)
+    return listOf(
+        "google/android/gms/ads", "applovin", "ironsource", "unity3d/ads", "vungle",
+        "facebook/ads", "bytedance", "pangle", "yandex", "mytarget", "inmobi",
+        "chartboost", "startapp", "mopub", "okhttp", "retrofit",
+    ).any(name::contains)
+}
+
 @Suppress("unused")
 val disableForcedOnlineChecksPatch = bytecodePatch(
     name = "Disable Forced Online Checks (Experimental)",
     description = """
         Try to bypass high-confidence client-side offline gates. It cannot bypass server-side login,
         entitlement, or game-state checks.
+
+        Compatibility: Control App Ads can intentionally block ad hosts. Keep “Exclude ad SDK and
+        networking code” enabled when both patches are selected so blocked ads are not falsely told
+        the device is online and repeatedly retried. This does not bypass server-enforced online play.
     """.trimIndent(),
     default = false,
 ) {
@@ -109,6 +122,12 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
         description = "Scan app bytecode for high-confidence online gate methods without engine detection",
         default = false,
     )
+    val excludeAdAndNetworkCode by booleanOption(
+        key = "excludeAdAndNetworkCode",
+        title = "Compatibility > Exclude ad SDK and networking code",
+        description = "Skip known advertising SDK and common HTTP-client classes when changing connectivity checks. Keep enabled to avoid making blocked ads retry as if the device were online.",
+        default = true,
+    )
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)
@@ -134,6 +153,7 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
                         "isConnectedOrConnecting" to "0x1",
                     ),
                 ),
+                excludeClass = { type -> excludeAdAndNetworkCode == true && isKnownAdOrNetworkClass(type) },
             )
         }
 
@@ -144,6 +164,7 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
         }
         if (useGeneric || enabledEngineStrategies.isNotEmpty()) {
             classDefForEach { classDef ->
+                if (excludeAdAndNetworkCode == true && isKnownAdOrNetworkClass(classDef.type)) return@classDefForEach
                 val mutableClass = mutableClassDefBy(classDef)
                 for (method in mutableClass.methods) {
                     if (method.returnType != "Z") continue

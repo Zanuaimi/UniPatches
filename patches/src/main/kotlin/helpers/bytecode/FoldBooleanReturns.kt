@@ -20,9 +20,11 @@ import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 internal fun BytecodePatchContext.foldBooleanReturns(
     targets: Map<String, Map<String, String>>,
     returnType: String = "Z",
+    excludeClass: (String) -> Boolean = { false },
 ): Int {
     var patched = 0
     classDefForEach { classDef ->
+        if (excludeClass(classDef.type)) return@classDefForEach
         var hasRef = false
         for (m in classDef.methods) {
             val impl = m.implementation ?: continue

@@ -223,6 +223,11 @@ val controlAppAdsPatch = bytecodePatch(
         hosts stored as literal strings by the app; they cannot block dynamically generated hosts,
         encrypted traffic, or requests made entirely inside Google Play services.
 
+        Compatibility: when combined with Disable Forced Online Checks, keep that patch's “Exclude
+        ad SDK and networking code” option enabled; otherwise blocked ad hosts may be treated as
+        online and retried. PairIP Firebase cleanup/removal can disable Firebase-backed reward,
+        sign-in, billing, and attribution flows, which this patch cannot restore.
+
         Credits: Nai64Patches from Nai64; host-blocking approach inspired by Entree and Adobo.
     """.trimIndent(),
     default = false,
