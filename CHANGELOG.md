@@ -1,3 +1,9 @@
+## [1.8.1](https://github.com/Zanuaimi/UniPatches/compare/v1.8.0...v1.8.1) (2026-09-07)
+
+### 🐛 Bug Fixes
+
+* cleanup patch list and change patch source name to Zanuaimi's UniPatches ([5002181](https://github.com/Zanuaimi/UniPatches/commit/50021813bf76e369125cdd2bed7161e5363cd66c))
+
 ## [1.8.0](https://github.com/Zanuaimi/UniPatches/compare/v1.7.0...v1.8.0) (2026-09-07)
 
 ### ✨ New Features

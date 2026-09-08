@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-07T19:39:14",
-  "description": "## [1.8.0](https://github.com/Zanuaimi/UniPatches/compare/v1.7.0...v1.8.0) (2026-09-07)\n\n### ✨ New Features\n\n* **overlay:** add activity install banlist ([2cc9a8c](https://github.com/Zanuaimi/UniPatches/commit/2cc9a8ce681a094cddd60609529894797a2592ac))\n* **pairip:** add Firebase and installer fallback strategies ([a4d95d7](https://github.com/Zanuaimi/UniPatches/commit/a4d95d76914544e7936086e5d2c5ed884cd878fb))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.8.0/patches-1.8.0.mpp",
+  "created_at": "2026-09-07T20:00:35",
+  "description": "## [1.8.1](https://github.com/Zanuaimi/UniPatches/compare/v1.8.0...v1.8.1) (2026-09-07)\n\n### 🐛 Bug Fixes\n\n* cleanup patch list and change patch source name to Zanuaimi's UniPatches ([5002181](https://github.com/Zanuaimi/UniPatches/commit/50021813bf76e369125cdd2bed7161e5363cd66c))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.8.1/patches-1.8.1.mpp",
   "signature_download_url": "",
-  "version": "1.8.0"
+  "version": "1.8.1"
 }
