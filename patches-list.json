@@ -1,10 +1,10 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
-      "description": "Hides emulator traces by spoofing Build info and related checks so apps cannot detect an emulator.\n\nCredits: Nai64Patches from Nai64.",
+      "description": "Hides emulator traces by spoofing Build info and related checks so apps cannot detect an emulator.\n\nCompatibility: PairIP Bypass and other server-side integrity systems can still reject a\ndevice when entitlement is bound to genuine device signals, package identity, or attestation.\nCombining spoofing with those patches is app-specific and cannot safely bypass remote checks.\n\nCredits: Nai64Patches from Nai64.",
       "default": false,
       "dependencies": [],
       "compatiblePackages": null,
@@ -71,7 +71,7 @@
     },
     {
       "name": "Control App Ads Patch (Experimental, Enhanced)",
-      "description": "A merged ad-control patch based on Nai64's No Ads and Ads Free Rewards patches, plus\nliteral-host blocking inspired by Entree and Adobo. Block common ad formats, choose the\nSDKs to target, optionally grant ad rewards without an ad, and redirect matching literal\nad/tracker hosts embedded in the APK.\n\nHost filters are built-in domain sets, not downloaded subscriptions. They only affect\nhosts stored as literal strings by the app; they cannot block dynamically generated hosts,\nencrypted traffic, or requests made entirely inside Google Play services.\n\nCredits: Nai64Patches from Nai64; host-blocking approach inspired by Entree and Adobo.",
+      "description": "A merged ad-control patch based on Nai64's No Ads and Ads Free Rewards patches, plus\nliteral-host blocking inspired by Entree and Adobo. Block common ad formats, choose the\nSDKs to target, optionally grant ad rewards without an ad, and redirect matching literal\nad/tracker hosts embedded in the APK.\n\nHost filters are built-in domain sets, not downloaded subscriptions. They only affect\nhosts stored as literal strings by the app; they cannot block dynamically generated hosts,\nencrypted traffic, or requests made entirely inside Google Play services.\n\nCompatibility: when combined with Disable Forced Online Checks, keep that patch's “Exclude\nad SDK and networking code” option enabled; otherwise blocked ad hosts may be treated as\nonline and retried. PairIP Firebase cleanup/removal can disable Firebase-backed reward,\nsign-in, billing, and attribution flows, which this patch cannot restore.\n\nCredits: Nai64Patches from Nai64; host-blocking approach inspired by Entree and Adobo.",
       "default": false,
       "dependencies": [],
       "compatiblePackages": null,
@@ -454,7 +454,7 @@
     },
     {
       "name": "Custom App Output Patch (Experimental, Enhanced)",
-      "description": "Customize an APK's install identity and launcher presentation in one patch. Clone mode can\ninstall a side-by-side copy, while name, icon, hide-icon, and target-SDK options are\nindependent. This cannot preserve original-app data when a package or signing identity\nchanges. Clone mode rewrites supported manifest identifiers only; it does not rewrite\nbytecode strings, explicit process names, task affinities, or arbitrary SDK configuration.\n\nInspired by Nai64Patches from Nai64: Clone, Custom App Icon, Hide App Icon, and target\nSDK customization patches.",
+      "description": "Customize an APK's install identity and launcher presentation in one patch. Clone mode can\ninstall a side-by-side copy, while name, icon, hide-icon, and target-SDK options are\nindependent. This cannot preserve original-app data when a package or signing identity\nchanges. Clone mode rewrites supported manifest identifiers only; it does not rewrite\nbytecode strings, explicit process names, task affinities, or arbitrary SDK configuration.\nA clone has a new Android package identity and normally a new signing identity: package- or\ncertificate-bound OAuth, Firebase, Google Play Games, billing, deep links, and server\nlicenses may therefore not work and cannot be repaired safely by this patch. If PairIP\nBypass is also enabled, server/package-bound PairIP enforcement can still reject the clone.\n\nInspired by Nai64Patches from Nai64: Clone, Custom App Icon, Hide App Icon, and target\nSDK customization patches.",
       "default": false,
       "dependencies": [],
       "compatiblePackages": null,
@@ -462,7 +462,7 @@
         {
           "key": "customAppOutputCloneEnabled",
           "title": "Clone > Enable clone",
-          "description": "Create a side-by-side install by changing the manifest package name. Disabled by default. This does not bypass app signatures or preserve data from the original app.",
+          "description": "Create a side-by-side install by changing the manifest package name. Disabled by default. This does not bypass app signatures or preserve original-app data. Package/certificate-bound OAuth, Firebase, Google Play Games, billing, deep links, and server licenses may stop working; PairIP cannot reliably bypass server package checks on a clone.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,
@@ -592,7 +592,7 @@
     },
     {
       "name": "Disable Forced Online Checks (Experimental)",
-      "description": "Try to bypass high-confidence client-side offline gates. It cannot bypass server-side login,\nentitlement, or game-state checks.",
+      "description": "Try to bypass high-confidence client-side offline gates. It cannot bypass server-side login,\nentitlement, or game-state checks.\n\nCompatibility: Control App Ads can intentionally block ad hosts. Keep “Exclude ad SDK and\nnetworking code” enabled when both patches are selected so blocked ads are not falsely told\nthe device is online and repeatedly retried. This does not bypass server-enforced online play.",
       "default": false,
       "dependencies": [],
       "compatiblePackages": null,
@@ -650,12 +650,21 @@
           "type": "kotlin.Boolean",
           "default": false,
           "values": null
+        },
+        {
+          "key": "excludeAdAndNetworkCode",
+          "title": "Compatibility > Exclude ad SDK and networking code",
+          "description": "Skip known advertising SDK and common HTTP-client classes when changing connectivity checks. Keep enabled to avoid making blocked ads retry as if the device were online.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
         }
       ]
     },
     {
       "name": "PairIP Bypass Patch (Experimental, Enhanced)",
-      "description": "A merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.\n\nAutomatic mode applies compatible strategies up to the selected risk level. It defaults to\nLow and Med Risk Strategies; Low and Med Risk Strategies enable medium-risk strategies, while Low, Med, and\nHigh Risk Strategies also enables the invasive high-risk strategies.\n\nTurn off automatic mode to test the individual manual strategies. Manual selections are\nindependent of the automatic risk-level setting, and every manual strategy is disabled by default.\n\nThis patch is experimental and app-dependent. It does not bypass server-side Play Integrity,\nserver-side licensing, or other server-side enforcement.\n\nThis enhanced patch is a merged product of the PairIP bypass patches from the credited\ndevelopers, with improvements for broader functionality, safer strategy selection, and usability.\n\nCredits: Nai64Patches from Nai64, Entree, kondratjev, and rushiranpise (Doom).",
+      "description": "A merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.\n\nAutomatic mode applies compatible strategies up to the selected risk level. It defaults to\nLow and Med Risk Strategies; Low and Med Risk Strategies enable medium-risk strategies, while Low, Med, and\nHigh Risk Strategies also enables the invasive high-risk strategies.\n\nTurn off automatic mode to test the individual manual strategies. Manual selections are\nindependent of the automatic risk-level setting, and every manual strategy is disabled by default.\n\nThis patch is experimental and app-dependent. It does not bypass server-side Play Integrity,\nserver-side licensing, or other server-side enforcement.\n\nCompatibility: cloned APKs can still fail when PairIP or a server binds entitlement to the\noriginal package or signing certificate. Firebase component removal can break Firebase Auth,\nGoogle Play Games, billing, analytics, and ad rewards. Device spoofing can also change apps'\ndevice-integrity behavior. These identity and server-side conditions cannot be fixed safely\nby combining PairIP Bypass with Custom App Output, Control App Ads, or Emulator Detection.\n\nThis enhanced patch is a merged product of the PairIP bypass patches from the credited\ndevelopers, with improvements for broader functionality, safer strategy selection, and usability.\n\nCredits: Nai64Patches from Nai64, Entree, kondratjev, and rushiranpise (Doom).",
       "default": false,
       "dependencies": [
         "ResourcePatch"
@@ -705,7 +714,7 @@
         {
           "key": "disableFirebase",
           "title": "PairIP > Opt-in > Disable Firebase auto-init metadata",
-          "description": "Add Firebase metadata switches that stop Analytics, Messaging, Crashlytics, and Performance from auto-initializing. Enable only for a Firebase startup crash; it can affect analytics and notifications.",
+          "description": "Add Firebase metadata switches that stop Analytics, Messaging, Crashlytics, and Performance from auto-initializing. Enable only for a Firebase startup crash; it can affect analytics, notifications, Play Games, Firebase Auth, billing, and Control App Ads reward flows.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,
@@ -714,7 +723,7 @@
         {
           "key": "pairipRemoveFirebaseMeasurementComponents",
           "title": "PairIP > Opt-in > Remove Firebase measurement components",
-          "description": "Remove Firebase measurement providers, receivers, and services from the manifest. Higher compatibility risk: leave disabled for Google Play Games, Firebase Auth, billing, or sign-in issues.",
+          "description": "Remove Firebase measurement providers, receivers, and services from the manifest. Higher compatibility risk: leave disabled for Google Play Games, Firebase Auth, billing, sign-in, and Control App Ads reward flows. This cannot be made universally compatible.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,

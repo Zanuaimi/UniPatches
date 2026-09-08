@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-08T19:57:24",
-  "description": "## [1.10.0](https://github.com/Zanuaimi/UniPatches/compare/v1.9.0...v1.10.0) (2026-09-08)\n\n### 🐛 Bug Fixes\n\n* **bypass:** harden experimental bypass strategies ([703eaeb](https://github.com/Zanuaimi/UniPatches/commit/703eaeb242190a8f1c47b64928331dcd3e618568))\n\n### ✨ New Features\n\n* **ads:** consolidate configurable ad controls ([3b3030d](https://github.com/Zanuaimi/UniPatches/commit/3b3030d599d9c9e71e77e17ed7c502f0c1fdbc65))\n* **display:** add configurable app display controls ([0dbea11](https://github.com/Zanuaimi/UniPatches/commit/0dbea11d24ed3bcad8afd0eb88d2dee722110e11))\n* **output:** add safe custom app output controls ([0dae4a4](https://github.com/Zanuaimi/UniPatches/commit/0dae4a4069dda5e0b414b9cab4c52fb068a949f8))\n* **overlay:** enhance universal overlay customization ([3ee6262](https://github.com/Zanuaimi/UniPatches/commit/3ee62629b7966656bf998ec500d8e0a6db00772f))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.10.0/patches-1.10.0.mpp",
+  "created_at": "2026-09-08T20:12:48",
+  "description": "## [1.10.1](https://github.com/Zanuaimi/UniPatches/compare/v1.10.0...v1.10.1) (2026-09-08)\n\n### 🐛 Bug Fixes\n\n* **network:** avoid forcing ad traffic online ([1f169e0](https://github.com/Zanuaimi/UniPatches/commit/1f169e0630a8e5d539ca1780aebd4c1d4633a528))\n* **pairip:** synchronize overlay and compatibility diagnostics ([37997e9](https://github.com/Zanuaimi/UniPatches/commit/37997e900ac7fbc7ae0e3b297c60f33606e4a2d5))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.10.1/patches-1.10.1.mpp",
   "signature_download_url": "",
-  "version": "1.10.0"
+  "version": "1.10.1"
 }

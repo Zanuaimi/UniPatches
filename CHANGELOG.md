@@ -1,3 +1,10 @@
+## [1.10.1](https://github.com/Zanuaimi/UniPatches/compare/v1.10.0...v1.10.1) (2026-09-08)
+
+### 🐛 Bug Fixes
+
+* **network:** avoid forcing ad traffic online ([1f169e0](https://github.com/Zanuaimi/UniPatches/commit/1f169e0630a8e5d539ca1780aebd4c1d4633a528))
+* **pairip:** synchronize overlay and compatibility diagnostics ([37997e9](https://github.com/Zanuaimi/UniPatches/commit/37997e900ac7fbc7ae0e3b297c60f33606e4a2d5))
+
 ## [1.10.0](https://github.com/Zanuaimi/UniPatches/compare/v1.9.0...v1.10.0) (2026-09-08)
 
 ### 🐛 Bug Fixes
