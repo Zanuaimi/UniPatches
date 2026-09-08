@@ -39,6 +39,10 @@ val customAppOutputPatch = resourcePatch(
         independent. This cannot preserve original-app data when a package or signing identity
         changes. Clone mode rewrites supported manifest identifiers only; it does not rewrite
         bytecode strings, explicit process names, task affinities, or arbitrary SDK configuration.
+        A clone has a new Android package identity and normally a new signing identity: package- or
+        certificate-bound OAuth, Firebase, Google Play Games, billing, deep links, and server
+        licenses may therefore not work and cannot be repaired safely by this patch. If PairIP
+        Bypass is also enabled, server/package-bound PairIP enforcement can still reject the clone.
 
         Inspired by Nai64Patches from Nai64: Clone, Custom App Icon, Hide App Icon, and target
         SDK customization patches.
@@ -49,7 +53,7 @@ val customAppOutputPatch = resourcePatch(
         title = "Clone > Enable clone",
         default = false,
         key = "customAppOutputCloneEnabled",
-        description = "Create a side-by-side install by changing the manifest package name. Disabled by default. This does not bypass app signatures or preserve data from the original app.",
+        description = "Create a side-by-side install by changing the manifest package name. Disabled by default. This does not bypass app signatures or preserve original-app data. Package/certificate-bound OAuth, Firebase, Google Play Games, billing, deep links, and server licenses may stop working; PairIP cannot reliably bypass server package checks on a clone.",
     )
     val cloneMode by stringOption(
         title = "Clone > Package name mode",
@@ -242,6 +246,7 @@ val customAppOutputPatch = resourcePatch(
                     root.insertBefore(created, root.applicationOrNull())
                 }
                 logger.info("Custom App Output: targetSdkVersion set to $target")
+                logger.info("Custom App Output compatibility: test runtime overlay installation and display overrides after changing target SDK, because Android window and compatibility behavior can vary by target level.")
             }
         }
     }

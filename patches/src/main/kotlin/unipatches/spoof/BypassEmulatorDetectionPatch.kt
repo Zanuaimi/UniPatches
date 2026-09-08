@@ -291,6 +291,10 @@ val bypassEmulatorDetectionPatch = bytecodePatch(
     description = """
         Hides emulator traces by spoofing Build info and related checks so apps cannot detect an emulator.
 
+        Compatibility: PairIP Bypass and other server-side integrity systems can still reject a
+        device when entitlement is bound to genuine device signals, package identity, or attestation.
+        Combining spoofing with those patches is app-specific and cannot safely bypass remote checks.
+
         Credits: Nai64Patches from Nai64.
     """.trimIndent(),
     default = false,
