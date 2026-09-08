@@ -20,6 +20,7 @@ import helpers.ads.*
 import helpers.bytecode.cloneMutableAndPreserveParameters
 import helpers.manifest.NS_ANDROID
 import helpers.manifest.applicationOrNull
+import helpers.startup.StartupHooks
 
 private fun ResourcePatchContext.discoverPairipAppClass(logger: Logger): String? {
     val dir = try {
@@ -83,6 +84,12 @@ val pairipBypassPatch = bytecodePatch(
         This patch is experimental and app-dependent. It does not bypass server-side Play Integrity,
         server-side licensing, or other server-side enforcement.
 
+        Compatibility: cloned APKs can still fail when PairIP or a server binds entitlement to the
+        original package or signing certificate. Firebase component removal can break Firebase Auth,
+        Google Play Games, billing, analytics, and ad rewards. Device spoofing can also change apps'
+        device-integrity behavior. These identity and server-side conditions cannot be fixed safely
+        by combining PairIP Bypass with Custom App Output, Control App Ads, or Emulator Detection.
+
         This enhanced patch is a merged product of the PairIP bypass patches from the credited
         developers, with improvements for broader functionality, safer strategy selection, and usability.
 
@@ -125,13 +132,13 @@ val pairipBypassPatch = bytecodePatch(
         key = "disableFirebase",
         default = false,
         title = "PairIP > Opt-in > Disable Firebase auto-init metadata",
-        description = "Add Firebase metadata switches that stop Analytics, Messaging, Crashlytics, and Performance from auto-initializing. Enable only for a Firebase startup crash; it can affect analytics and notifications.",
+        description = "Add Firebase metadata switches that stop Analytics, Messaging, Crashlytics, and Performance from auto-initializing. Enable only for a Firebase startup crash; it can affect analytics, notifications, Play Games, Firebase Auth, billing, and Control App Ads reward flows.",
     )
     val removeFirebaseMeasurementComponents by booleanOption(
         key = "pairipRemoveFirebaseMeasurementComponents",
         default = false,
         title = "PairIP > Opt-in > Remove Firebase measurement components",
-        description = "Remove Firebase measurement providers, receivers, and services from the manifest. Higher compatibility risk: leave disabled for Google Play Games, Firebase Auth, billing, or sign-in issues.",
+        description = "Remove Firebase measurement providers, receivers, and services from the manifest. Higher compatibility risk: leave disabled for Google Play Games, Firebase Auth, billing, sign-in, and Control App Ads reward flows. This cannot be made universally compatible.",
     )
     val applicationRedirectStrategy by booleanOption(
         key = "applicationRedirectStrategy",
@@ -191,6 +198,9 @@ val pairipBypassPatch = bytecodePatch(
                     return@execute
                 }
                 app.setAttributeNS(ns, "android:name", real)
+                // Keep startup-hook patches synchronized if their manifest resolver ran before
+                // this PairIP redirect resource patch.
+                StartupHooks.resolvedApplicationDescriptor = "L${real.replace('.', '/')};"
                 applicationRedirectApplied = true
                 logger.info("Redirected PairIP -> $real - PairIP Application Redirect (internal) patch succeeded")
             }
@@ -332,6 +342,9 @@ val pairipBypassPatch = bytecodePatch(
                 }
             }
             firebaseCleanupApplied = added > 0 || updated > 0 || removed > 0
+            if (firebaseCleanupApplied) {
+                logger.warning("PairIP Firebase cleanup can break Firebase Auth, Google Play Games, billing, analytics, and ad-reward flows. Prefer metadata-only cleanup; enable component removal only for a confirmed Firebase startup crash.")
+            }
             if (removed > 0) {
                 logger.info("Removed $removed Firebase measurement component(s)")
             } else {
@@ -362,6 +375,12 @@ val pairipBypassPatch = bytecodePatch(
                 0
             }
             logger.info("PairIP compatibility scan: $pairipClassCount com.pairip class(es) detected")
+            document("AndroidManifest.xml").use { manifest ->
+                val packageName = manifest.documentElement.getAttribute("package")
+                if (packageName.endsWith(".u") || packageName.contains(".clone") || packageName.contains(".patched")) {
+                    logger.warning("PairIP compatibility: this APK appears cloned ($packageName). Package-bound or server-side licensing may still fail after client-side PairIP strategies.")
+                }
+            }
         }
     }
 
