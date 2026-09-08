@@ -2,106 +2,10 @@ package unipatches.ads
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.removeInstructions
-import app.morphe.patcher.patch.booleanOption
-import app.morphe.patcher.patch.bytecodePatch
-import app.morphe.patcher.patch.stringOption
 import app.morphe.patcher.patch.BytecodePatchContext
 import helpers.ads.*
 import helpers.bytecode.*
 import java.util.logging.Logger
-
-@Suppress("unused")
-val adsFreeRewardsPatch = bytecodePatch(
-    name = "Ads Free Rewards (Experimental)",
-    description = """
-        Get rewards without watching ads. Combine with No Ads for other formats, but keep No Ads' rewarded block off.
-
-        Credits: Nai64Patches from Nai64.
-    """.trimIndent(),
-    default = false,
-) {
-    val patchVersion by stringOption(
-        key = "patchVersion",
-        default = "1.41.0",
-        title = "Patch version",
-        description = "Choose the implementation to use. Each version is a snapshot - newer ones support more networks. If the latest does not work for your app, try an older version.",
-        values = linkedMapOf(
-            "1.41.0" to "1.41.0",
-            "1.40.0" to "1.40.0",
-            "1.38.0" to "1.38.0",
-            "1.34.0" to "1.34.0",
-            "1.33.0" to "1.33.0",
-            "1.32.0" to "1.32.0",
-            "1.31.0" to "1.31.0",
-            "1.30.0" to "1.30.0",
-            "1.22.0" to "1.22.0",
-            "1.21.0" to "1.21.0",
-            "1.20.0" to "1.20.0",
-            "1.19.0" to "1.19.0",
-            "1.18.1" to "1.18.1",
-            "1.18.0" to "1.18.0",
-            "1.17.0" to "1.17.0",
-            "1.16.0" to "1.16.0",
-            "1.15.0" to "1.15.0",
-            "1.1.0 (Original)" to "1.1.0",
-        ),
-    )
-    val rewardStrategy by stringOption(
-        key = "rewardStrategy",
-        default = "auto",
-        title = "Reward Strategy",
-        description = "Which ad-network integration to patch. 'Auto' covers every supported network",
-        values = mapOf(
-            "Auto (all networks)" to "auto",
-            "AppLovin MAX" to "max",
-            "Unity Ads" to "unityAds",
-            "ironSource / LevelPlay" to "ironSource",
-            "RuStore / VK MyTarget" to "rustore",
-            "Huawei Ads Kit / Petal Ads" to "huawei",
-        ),
-    )
-    val instantReward by booleanOption(
-        key = "instantReward",
-        default = true,
-        title = "Instant reward",
-        description = "Claim the reward immediately without showing an ad (applies to the current patch version)",
-    )
-    val fakeAdAvailability by booleanOption(
-        key = "fakeAdAvailability",
-        default = true,
-        title = "Fake ad availability",
-        description = "Force ad SDKs to report ads as available so the reward flow triggers (needed when no real ad can fill)",
-    )
-
-    execute {
-        val logger = Logger.getLogger(this::class.java.name)
-        logger.info("Ads Free Rewards: patchVersion=$patchVersion strategy=$rewardStrategy instantReward=$instantReward")
-        when (patchVersion) {
-            "1.1.0" -> applyAdsFreeRewardsV110(logger)
-            "1.15.0" -> applyAdsFreeRewardsV1150(logger)
-            "1.16.0" -> applyAdsFreeRewardsV1160(logger)
-            "1.17.0" -> applyAdsFreeRewardsV1170(logger)
-            "1.18.0" -> applyAdsFreeRewardsV1180(logger)
-            "1.18.1" -> applyAdsFreeRewardsV1181(logger)
-            "1.19.0" -> applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
-            "1.20.0" -> applyAdsFreeRewardsV1200(logger, rewardStrategy, instantReward)
-            "1.21.0" -> applyAdsFreeRewardsV1210(logger, rewardStrategy, instantReward)
-            "1.22.0" -> applyAdsFreeRewardsV1220(logger, rewardStrategy, instantReward)
-            "1.30.0" -> applyAdsFreeRewardsV1300(logger, rewardStrategy, instantReward)
-            "1.31.0" -> applyAdsFreeRewardsV1310(logger, rewardStrategy, instantReward)
-            "1.33.0" -> applyAdsFreeRewardsV1330(logger, rewardStrategy, instantReward)
-            "1.34.0" -> applyAdsFreeRewardsV1340(logger, rewardStrategy, instantReward)
-            "1.38.0" -> applyAdsFreeRewardsV1380(logger, rewardStrategy, instantReward)
-            "1.40.0" -> applyAdsFreeRewardsV1400(logger, rewardStrategy, instantReward)
-            "1.41.0" -> applyAdsFreeRewardsV1410(logger, rewardStrategy, instantReward)
-            else -> applyAdsFreeRewardsV1320(logger, rewardStrategy, instantReward)
-        }
-        if (fakeAdAvailability == true) {
-            val faked = forceAdAvailability(logger, rewardStrategy)
-            if (faked > 0) logger.info("Ads Free Rewards: faked availability for $faked SDK check(s)")
-        }
-    }
-}
 
 /**
  * Forces ad SDKs to report that an ad is currently available.
@@ -115,7 +19,7 @@ val adsFreeRewardsPatch = bytecodePatch(
  * the gates to return true makes the game proceed to show(), letting the
  * reward flow grant without a real ad.
  */
-private fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStrategy: String?): Int {
+internal fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStrategy: String?): Int {
     var patched = 0
     fun patchIsReady(label: String, fingerprint: app.morphe.patcher.Fingerprint) {
         val method = fingerprint.methodOrNull ?: return
@@ -173,6 +77,7 @@ private fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStrat
 
 private fun BytecodePatchContext.applyAdsFreeRewardsV1190(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
     val strategy = rewardStrategy
+    val auto = strategy == "auto"
     val useMax = strategy == "auto" || strategy == "max"
     val useUnityAds = strategy == "auto" || strategy == "unityAds"
     val useIronSource = strategy == "auto" || strategy == "ironSource"
@@ -242,15 +147,15 @@ private fun BytecodePatchContext.applyAdsFreeRewardsV1190(logger: Logger, reward
         applyMyTargetStrategy(logger)
         applyYandexWrapperStrategy(logger)
     }
-    if (applyMaxUnityStrategy(logger, useMax, instantReward)) return
+    applyMaxUnityStrategy(logger, useMax, instantReward)
     applyNativeMaxStrategy(logger, useMax, instantReward)
-    applyInMobiRewardedStrategy(logger, useMax, instantReward)
+    applyInMobiRewardedStrategy(logger, auto, instantReward)
     applyIronSourceAdsStrategy(logger, useIronSource, instantReward)
     applyIronSourceAdsWrapperStrategy(logger, useIronSource, instantReward)
     applyMadsStrategy(logger, useIronSource, instantReward)
     applyAdMobRewardedStrategy(logger, useMax, instantReward)
     applyLevelPlayStrategy(logger, useIronSource)
-    if (applyIronSourceBridgeStrategy(logger, useIronSource, instantReward)) return
+    applyIronSourceBridgeStrategy(logger, useIronSource, instantReward)
     applyUnityAdsStrategy(logger, useUnityAds, instantReward)
     applyUnityAdsV4Strategy(logger, useUnityAds, instantReward)
 }
@@ -315,17 +220,16 @@ private fun BytecodePatchContext.applyYandexWrapperStrategy(logger: Logger) {
     logger.info("Ads Free Rewards: RuStore / Yandex Unity rewarded patch succeeded")
 }
 
-private fun BytecodePatchContext.applyInMobiRewardedStrategy(logger: Logger, useMax: Boolean, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyInMobiRewardedStrategy(logger: Logger, useAutoFallback: Boolean, instantReward: Boolean?) {
     // These fingerprints belong to the InMobi adapter used by MAX. Do not
     // modify it when MAX has been disabled by the selected reward strategy.
-    if (!useMax || instantReward != true) return
+    if (!useAutoFallback || instantReward != true) return
     // InMobi mediated via AppLovin MAX - patching the show to instantly reward covers both interstitial and rewarded
     // Use the rewarded fingerprint if available, otherwise fallback to interstitial
     val target = InMobiRewardedShowFingerprint.methodOrNull ?: InMobiInterstitialShowFingerprint.methodOrNull ?: return
     try {
         target.addInstructions(0, """
-            const/4 v0, 0x1
-            return v0
+            return-void
         """.trimIndent())
         logger.info("Ads Free Rewards: InMobi patch - forced show to success")
     } catch (e: Exception) {
@@ -338,8 +242,7 @@ private fun BytecodePatchContext.applyIronSourceAdsStrategy(logger: Logger, useI
     val ironAds = IronSourceAdsRewardedShowFingerprint.methodOrNull ?: return
     try {
         ironAds.addInstructions(0, """
-            const/4 v0, 0x1
-            return v0
+            return-void
         """.trimIndent())
         logger.info("Ads Free Rewards: Unity IronSourceAds patch - forced show to success")
     } catch (e: Exception) {
@@ -400,9 +303,12 @@ private fun BytecodePatchContext.applyMadsStrategy(logger: Logger, useIronSource
         return
     }
     try {
-        val showClass = MadsWrapperShowAdFingerprint.classDefOrNull ?: return
-        val cloned = show.cloneMutableAndPreserveParameters(showClass)
-        cloned.addInstructions(0, """
+        val localRegisters = (show.implementation?.registerCount ?: 0) - show.numberOfParameterRegisters
+        if (localRegisters < 8) {
+            logger.warning("Ads Free Rewards: MADS show patch needs eight local registers; skipped to avoid an unsafe bytecode rewrite.")
+            return
+        }
+        show.addInstructions(0, """
             sget-object v0, Lcom/miniclip/madsunityplugin/utils/MAdsSDKWrapperUtils${'$'}MAdsWrapperAdFormat;->RewardedVideos:Lcom/miniclip/madsunityplugin/utils/MAdsSDKWrapperUtils${'$'}MAdsWrapperAdFormat;
             iget v0, v0, Lcom/miniclip/madsunityplugin/utils/MAdsSDKWrapperUtils${'$'}MAdsWrapperAdFormat;->id:I
             if-ne p1, v0, :morphe_mads_original
@@ -424,10 +330,9 @@ private fun BytecodePatchContext.applyMadsStrategy(logger: Logger, useIronSource
         logger.info("Ads Free Rewards: MADS patch succeeded (instant reward)")
         val ready = MadsWrapperIsReadyFingerprint.methodOrNull
         if (ready != null) {
-            val readyClass = MadsWrapperIsReadyFingerprint.classDefOrNull
-            if (readyClass != null) {
-                val clonedReady = ready.cloneMutableAndPreserveParameters(readyClass)
-                clonedReady.addInstructions(0, """
+            val readyLocals = (ready.implementation?.registerCount ?: 0) - ready.numberOfParameterRegisters
+            if (readyLocals >= 1) {
+                ready.addInstructions(0, """
                     sget-object v0, Lcom/miniclip/madsunityplugin/utils/MAdsSDKWrapperUtils${'$'}MAdsWrapperAdFormat;->RewardedVideos:Lcom/miniclip/madsunityplugin/utils/MAdsSDKWrapperUtils${'$'}MAdsWrapperAdFormat;
                     iget v0, v0, Lcom/miniclip/madsunityplugin/utils/MAdsSDKWrapperUtils${'$'}MAdsWrapperAdFormat;->id:I
                     if-ne p1, v0, :morphe_mads_ready_original
@@ -436,7 +341,7 @@ private fun BytecodePatchContext.applyMadsStrategy(logger: Logger, useIronSource
                     :morphe_mads_ready_original
                 """.trimIndent())
                 logger.info("Ads Free Rewards: MADS patch succeeded (fake ready)")
-            }
+            } else logger.warning("Ads Free Rewards: MADS ready patch needs one local register; skipped.")
         }
     } catch (e: Exception) {
         logger.warning("Ads Free Rewards: MADS patch failed: ${e.message}")
@@ -536,20 +441,7 @@ private fun BytecodePatchContext.applyNativeMaxStrategy(logger: Logger, useMax: 
         val rc = nativeShow.implementation?.registerCount ?: 0
         if (rc >= 7) {
             nativeShow.addInstructions(0, fireRewardedAdCallbacks())
-        } else {
-            val showClass = MaxRewardedAdShowAdFingerprint.classDefOrNull
-            if (showClass != null) {
-                try {
-                    val cloned = nativeShow.cloneMutableAndPreserveParameters(showClass)
-                    cloned.addInstructions(0, fireRewardedAdCallbacks())
-                    logger.info("Ads Free Rewards: native MAX via clone (low regs $rc)")
-                } catch (e: Exception) {
-                    logger.warning("Ads Free Rewards: clone failed for native MAX: ${e.message}")
-                }
-            } else {
-                logger.warning("Ads Free Rewards: skip native MAX showAd()  -  registerCount $rc < 7")
-            }
-        }
+        } else logger.warning("Ads Free Rewards: native MAX showAd() needs seven local registers; skipped to avoid an unsafe bytecode rewrite.")
     }
 }
 
@@ -734,3 +626,10 @@ private fun BytecodePatchContext.applyAdsFreeRewardsV1410(logger: Logger, reward
     logger.info("Ads Free Rewards v1.41.0 selected")
     applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
 }
+
+/** Latest stable strategy shared by Control App Ads. */
+internal fun BytecodePatchContext.applyLatestAdsFreeRewards(
+    logger: Logger,
+    rewardStrategy: String?,
+    instantReward: Boolean?,
+) = applyAdsFreeRewardsV1320(logger, rewardStrategy, instantReward)
