@@ -301,11 +301,12 @@ public final class UniversalOverlayRuntime {
             };
             menuLayer = new FrameLayout(overlayContext);
             menuScrim = createMenuScrim();
-            menuOutline = "static".equals(config.menuOutlineAnimation) || config.outlineAnimationSpeed <= 0 ? null
+            menuOutline = "static".equals(config.menuOutlineAnimation) || config.outlineAnimationSpeed == 0 ? null
                     : UniversalOverlayViews.animatedOutline(
                             config.background,
                             config.buttonBackground,
                             config.iconBackground2,
+                            "vertical".equals(config.menuOutlineAnimation),
                             "rainbow".equals(config.menuOutlineAnimation),
                             config.outlineWidth,
                             !"square".equals(config.menuCorners),
@@ -433,19 +434,49 @@ public final class UniversalOverlayRuntime {
                 button.setBackground(image);
             } else {
                 customIconFallbackRequired = config.iconType.equals("image");
-                button.setText(config.buttonText);
-                button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, config.iconTextSize);
-                button.setTypeface(Typeface.DEFAULT, config.iconBold ? Typeface.BOLD : Typeface.NORMAL);
-                button.setBackground(UniversalOverlayViews.gradientBackground(
-                        config.buttonBackground,
-                        config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
-                        config.iconGradientAngle,
-                        config.iconOutline ? config.iconOutlineColor : Color.TRANSPARENT,
-                        config.iconOutline ? config.iconOutlineWidth : 0, config.shape == 1));
+                if (!"text".equals(config.iconStyle)) {
+                    button.setText("");
+                    button.setBackground(legacyIconDrawable());
+                    button.setContentDescription(config.iconShape + " overlay icon");
+                } else {
+                    button.setText(config.buttonText);
+                    button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, config.iconTextSize);
+                    button.setTypeface(Typeface.DEFAULT, config.iconBold ? Typeface.BOLD : Typeface.NORMAL);
+                    button.setBackground(UniversalOverlayViews.gradientBackground(
+                            config.buttonBackground,
+                            config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
+                            config.iconGradientAngle,
+                            config.iconOutline ? config.iconOutlineColor : Color.TRANSPARENT,
+                            config.iconOutline ? config.iconOutlineWidth : 0, config.shape == 1));
+                }
             }
             button.setOnClickListener(v -> toggleMenu());
             button.setOnTouchListener(this::onButtonTouch);
             return button;
+        }
+
+        private android.graphics.drawable.Drawable legacyIconDrawable() {
+            return UniversalOverlayViews.icon(
+                    config.buttonBackground,
+                    config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
+                    config.iconGradientAngle,
+                    config.gradientBackground,
+                    config.iconOutline ? config.iconOutlineColor : Color.TRANSPARENT,
+                    config.iconOutline ? config.iconOutlineColor2 : Color.TRANSPARENT,
+                    config.iconOutlineGradientAngle,
+                    config.iconOutline && config.iconOutlineGradient,
+                    config.iconOutline ? dp(config.iconOutlineWidth) : 0,
+                    config.shape == 1,
+                    config.iconStyle,
+                    config.iconShape,
+                    config.iconShapeColor1,
+                    config.iconShapeColor2,
+                    config.iconShapeGradient,
+                    config.iconShapeGradientAngle,
+                    dp(config.iconShapeStrokeWidth),
+                    config.iconShapeScale / 100f,
+                    config.iconHighlight,
+                    config.iconShadow);
         }
 
         /** Shows the fallback notice after the overlay root is attached to the Activity. */
@@ -734,10 +765,15 @@ public final class UniversalOverlayRuntime {
                 image.setGravity(Gravity.CENTER);
                 icon.setBackground(image);
             } else {
-                icon.setBackground(UniversalOverlayViews.gradientBackground(
-                        config.buttonBackground,
-                        config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
-                        config.iconGradientAngle, Color.TRANSPARENT, 0, config.shape == 1));
+                if (!"text".equals(config.iconStyle)) {
+                    icon.setText("");
+                    icon.setBackground(legacyIconDrawable());
+                } else {
+                    icon.setBackground(UniversalOverlayViews.gradientBackground(
+                            config.buttonBackground,
+                            config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
+                            config.iconGradientAngle, Color.TRANSPARENT, 0, config.shape == 1));
+                }
             }
             icon.setClickable(false);
             icon.setFocusable(false);

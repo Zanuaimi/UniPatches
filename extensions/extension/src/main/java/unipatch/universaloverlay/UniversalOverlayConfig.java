@@ -47,19 +47,22 @@ final class UniversalOverlayConfig {
     String temperatureFormat, timeFormat;
     String controlTheme, bottomButtonStyle, bottomButtonShape, separatorStyle,
             titleIconPlacement, titleAlignment, menuCorners, menuOutlineAnimation,
-            openingAnimation, closingAnimation, animationEasing;
+            openingAnimation, closingAnimation, animationEasing,
+            iconStyle, iconShape;
     int controlBackground, controlForeground, bottomButtonTextColor,
             bottomButtonBackground1, bottomButtonBackground2,
             menuTextColor1, menuTextColor2, menuTextColor3, menuTextColor4, menuTextColor5, menuTextColor6,
-            outlineAnimationSpeed, animationDuration, appendDescriptionColor, separatorBackgroundColor;
-    boolean bottomButtonPadding, titleSeparator;
+            outlineAnimationSpeed, animationDuration, appendDescriptionColor, separatorBackgroundColor,
+            iconShapeColor1, iconShapeColor2, iconShapeGradientAngle, iconShapeStrokeWidth, iconShapeScale,
+            iconOutlineColor2, iconOutlineGradientAngle;
+    boolean bottomButtonPadding, titleSeparator, iconShapeGradient, iconHighlight, iconShadow, iconOutlineGradient;
 
     static UniversalOverlayConfig decode(String encoded) {
         UniversalOverlayConfig c = new UniversalOverlayConfig();
         String[] values = encoded == null ? new String[0] : encoded.split("\\|", -1);
         // Version 1 through 16 prepends a version field. Keep accepting the original 14-field format so an
         // older generated patch remains safe when paired with this newer extension.
-        String[] v = new String[67];
+        String[] v = new String[80];
         for (int i = 0; i < v.length; i++) v[i] = i < values.length ? decodePart(values[i]) : "";
         int offset = ("1".equals(v[0]) || "2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0])) ? 1 : 0;
         c.title = limit(field(v, offset, 0), 80, "UniPatches Universal Overlay Patch");
@@ -156,6 +159,19 @@ final class UniversalOverlayConfig {
         c.menuTextColor6 = color(field(v, offset, 63), c.menuTextColor2);
         c.separatorBackgroundColor = color(field(v, offset, 64), c.background);
         c.activityInstallBanlist = empty(field(v, offset, 65), DEFAULT_ACTIVITY_INSTALL_BANLIST);
+        c.iconStyle = choice(field(v, offset, 66), "text", "text", "shape", "multi");
+        c.iconShape = choice(field(v, offset, 67), "triangle", "triangle", "chevron", "smile", "circle");
+        c.iconShapeColor1 = color(field(v, offset, 68), 0xFFFFFFFF);
+        c.iconShapeColor2 = color(field(v, offset, 69), c.iconShapeColor1);
+        c.iconShapeGradient = "1".equals(field(v, offset, 70));
+        c.iconShapeGradientAngle = integer(field(v, offset, 71), 0, 0, 360);
+        c.iconShapeStrokeWidth = integer(field(v, offset, 72), 3, 1, 12);
+        c.iconShapeScale = integer(field(v, offset, 73), 70, 20, 100);
+        c.iconHighlight = "1".equals(field(v, offset, 74));
+        c.iconShadow = "1".equals(field(v, offset, 75));
+        c.iconOutlineGradient = "1".equals(field(v, offset, 76));
+        c.iconOutlineColor2 = color(field(v, offset, 77), c.iconOutlineColor);
+        c.iconOutlineGradientAngle = integer(field(v, offset, 78), 0, 0, 360);
         c.appendDescriptionColor = color(field(v, offset, 60), c.menuTextColor3);
         c.showNoModulesWarning = !"0".equals(field(v, offset, 61));
         c.separatorStyle = choice(field(v, offset, 48), "ascii", "ascii", "doubleLine", "background", "singleLine", "inline");
@@ -163,8 +179,8 @@ final class UniversalOverlayConfig {
         c.titleAlignment = choice(field(v, offset, 50), "left", "left", "center", "right");
         c.titleSeparator = "1".equals(field(v, offset, 51));
         c.menuCorners = choice(field(v, offset, 52), "rounded", "rounded", "square");
-        c.menuOutlineAnimation = choice(field(v, offset, 53), "static", "static", "gradient", "rainbow");
-        c.outlineAnimationSpeed = integer(field(v, offset, 54), 1, 0, 10);
+        c.menuOutlineAnimation = choice(field(v, offset, 53), "static", "static", "gradient", "vertical", "rainbow");
+        c.outlineAnimationSpeed = integer(field(v, offset, 54), 1, -10, 10);
         c.openingAnimation = choice(field(v, offset, 55), "fade", "fade", "scale", "disabled", "appearRight", "appearTop", "appearBottom", "appearLeft");
         c.animationDuration = integer(field(v, offset, 56), 180, 0, 5000);
         c.animationEasing = choice(field(v, offset, 57), "linear", "linear", "logarithmic");

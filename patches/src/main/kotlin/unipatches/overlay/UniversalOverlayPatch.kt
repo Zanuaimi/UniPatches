@@ -7,6 +7,7 @@ import app.morphe.patcher.patch.imageOption
 import app.morphe.patcher.patch.intOption
 import app.morphe.patcher.patch.filePathOption
 import app.morphe.patcher.patch.stringOption
+import app.morphe.patcher.patch.stringsOption
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import helpers.bytecode.*
@@ -24,7 +25,7 @@ import kotlin.math.roundToInt
 
 private const val RUNTIME_CLASS = "Lunipatch/universaloverlay/UniversalOverlayRuntime;"
 private const val CONFIG_VERSION = "1"
-private const val PRESET_SCHEMA_VERSION = 4
+private const val PRESET_SCHEMA_VERSION = 5
 private const val MAX_CUSTOM_ICON_BYTES = 1024 * 1024
 private const val MAX_TITLE_CHARACTERS = 80
 private const val MAX_DESCRIPTION_CHARACTERS = 500
@@ -76,6 +77,19 @@ private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
         addProperty("iconOutline", iconOutline)
         addProperty("iconOutlineWidth", iconOutlineWidth)
         addProperty("iconOutlineColor", iconOutlineColor)
+        addProperty("iconStyle", iconStyle)
+        addProperty("iconShape", iconShape)
+        addProperty("iconShapeColor1", iconShapeColor1)
+        addProperty("iconShapeColor2", iconShapeColor2)
+        addProperty("iconShapeGradient", iconShapeGradient)
+        addProperty("iconShapeGradientAngle", iconShapeGradientAngle)
+        addProperty("iconShapeStrokeWidth", iconShapeStrokeWidth)
+        addProperty("iconShapeScale", iconShapeScale)
+        addProperty("iconHighlight", iconHighlight)
+        addProperty("iconShadow", iconShadow)
+        addProperty("iconOutlineGradient", iconOutlineGradient)
+        addProperty("iconOutlineColor2", iconOutlineColor2)
+        addProperty("iconOutlineGradientAngle", iconOutlineGradientAngle)
         addProperty("customIconImageLocal", customIconImageLocal)
         addProperty("customIconImageInput", customIconImageInput)
         addProperty("buttonShape", buttonShape)
@@ -187,6 +201,19 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             iconOutline = flag("iconOutline", fallback.iconOutline),
             iconOutlineWidth = number("iconOutlineWidth", fallback.iconOutlineWidth, 1..8),
             iconOutlineColor = rgbColor("iconOutlineColor", fallback.iconOutlineColor),
+            iconStyle = choice("iconStyle", fallback.iconStyle, setOf("text", "shape", "multi")),
+            iconShape = choice("iconShape", fallback.iconShape, setOf("triangle", "chevron", "smile", "circle")),
+            iconShapeColor1 = rgbColor("iconShapeColor1", fallback.iconShapeColor1),
+            iconShapeColor2 = rgbColor("iconShapeColor2", fallback.iconShapeColor2),
+            iconShapeGradient = flag("iconShapeGradient", fallback.iconShapeGradient),
+            iconShapeGradientAngle = number("iconShapeGradientAngle", fallback.iconShapeGradientAngle, 0..360),
+            iconShapeStrokeWidth = number("iconShapeStrokeWidth", fallback.iconShapeStrokeWidth, 1..12),
+            iconShapeScale = number("iconShapeScale", fallback.iconShapeScale, 20..100),
+            iconHighlight = flag("iconHighlight", fallback.iconHighlight),
+            iconShadow = flag("iconShadow", fallback.iconShadow),
+            iconOutlineGradient = flag("iconOutlineGradient", fallback.iconOutlineGradient),
+            iconOutlineColor2 = rgbColor("iconOutlineColor2", fallback.iconOutlineColor2),
+            iconOutlineGradientAngle = number("iconOutlineGradientAngle", fallback.iconOutlineGradientAngle, 0..360),
             customIconImageLocal = text(
                 "customIconImageLocal",
                 text("customIconImage", fallback.customIconImageLocal),
@@ -220,8 +247,8 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             titleAlignment = choice("titleAlignment", fallback.titleAlignment, setOf("left", "center", "right")),
             titleSeparator = flag("titleSeparator", fallback.titleSeparator),
             menuCorners = choice("menuCorners", fallback.menuCorners, setOf("rounded", "square")),
-            menuOutlineAnimation = choice("menuOutlineAnimation", fallback.menuOutlineAnimation, setOf("static", "gradient", "rainbow")),
-            outlineAnimationSpeed = number("outlineAnimationSpeed", fallback.outlineAnimationSpeed, 0..10),
+            menuOutlineAnimation = choice("menuOutlineAnimation", fallback.menuOutlineAnimation, setOf("static", "gradient", "vertical", "rainbow")),
+            outlineAnimationSpeed = number("outlineAnimationSpeed", fallback.outlineAnimationSpeed, -10..10),
             openingAnimation = choice(
                 "openingAnimation",
                 choice("menuAnimation", fallback.openingAnimation, setOf("fade", "scale", "disabled")),
@@ -477,14 +504,16 @@ private fun injectMethod(owner: MutableClass, method: MutableMethod, config: Str
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v1.3.3 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v1.4 (Experimental)",
     description = """
         Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,
         fullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;
         select them in Morphe settings before patching. Statistic modules show information, Activity modules
         control the current Activity, and Hook modules control internal app behavior, such as disabling
-        animations, through best-effort runtime changes. A selected local image automatically replaces
-        the legacy icon; empty or invalid image input falls back to the legacy icon. This is experimental
+        animations, through best-effort runtime changes. The legacy icon can be text, an original
+        geometric shape, or a multi-part shape with configurable colors, gradients, highlights, shadows,
+        and outlines. A selected local image automatically replaces the legacy icon; empty or invalid
+        image input falls back to the configured legacy icon. This is experimental
         and may not work on all apps. UI presets can save and reuse supported UI and Advanced
         settings. The title, description, repository button text, and repository button URL remain
         controlled by the visible Morphe settings. Modules and Settings to Modules are excluded
@@ -615,8 +644,8 @@ val universalOverlayPatch = bytecodePatch(
     )
     val titleSeparator by booleanOption(title = "UI > Menu > Title separator", default = false, key = "runtimeOverlayTitleSeparator", description = "Show a Color 1 line below the title.")
     val menuCorners by stringOption(title = "UI > Menu > Corners", default = "rounded", key = "runtimeOverlayMenuCorners", description = "Shape of the overlay menu corners.", values = linkedMapOf("Rounded (default)" to "rounded", "Square" to "square"))
-    val menuOutlineAnimation by stringOption(title = "UI > Menu > Outline animation", default = "static", key = "runtimeOverlayMenuOutlineAnimation", description = "Animation style for the overlay menu outline.", values = linkedMapOf("Static (default)" to "static", "Moving gradient" to "gradient", "Rainbow gradient" to "rainbow"))
-    val outlineAnimationSpeed by intOption(title = "UI > Menu > Outline gradient animation speed", default = 1, key = "runtimeOverlayOutlineAnimationSpeed", description = "Gradient animation speed from 0 to 10. Zero disables movement.")
+    val menuOutlineAnimation by stringOption(title = "UI > Menu > Outline animation", default = "static", key = "runtimeOverlayMenuOutlineAnimation", description = "Animation style for the overlay menu outline. Rotating gradient moves the existing gradient around the outline. Vertical gradient moves the gradient through the outline vertically.", values = linkedMapOf("Static (default)" to "static", "Rotating gradient" to "gradient", "Vertical gradient" to "vertical", "Rainbow gradient" to "rainbow"))
+    val outlineAnimationSpeed by intOption(title = "UI > Menu > Outline gradient animation speed", default = 1, key = "runtimeOverlayOutlineAnimationSpeed", description = "Animation speed from -10 to 10. Zero disables movement. For Vertical gradient, positive values move upward and negative values move downward; for example, 3 is faster upward motion and -2 is slower downward motion.")
     val openingAnimation by stringOption(
         title = "UI > Menu > Opening animation",
         default = "fade",
@@ -656,7 +685,7 @@ val universalOverlayPatch = bytecodePatch(
         title = "General > Overlay > Appended description",
         default = "",
         key = "runtimeOverlayAppendDescription",
-        description = "Optional text appended below the overlay description. Useful for credits in UI presets. The main and appended descriptions share a combined 500-character limit.",
+        description = "Optional text appended below the overlay description. Useful for short inspiration or attribution notes such as Inspired by Example. The main and appended descriptions share a combined 500-character limit.",
     )
     val descriptionAlignment by stringOption(
         title = "General > Overlay > Description alignment",
@@ -725,6 +754,68 @@ val universalOverlayPatch = bytecodePatch(
         key = "runtimeOverlayIconTextSizeSp",
         description = "Text size of the legacy icon in scaled pixels, from 8 to 48sp. The default is slightly larger than the pre-v1.2 fixed size.",
     )
+    val iconStyle by stringOption(
+        title = "UI > Icon > Icon style",
+        default = "text",
+        key = "runtimeOverlayIconStyle",
+        description = "Choose how the legacy icon is drawn. Text keeps the classic text icon; Shape draws one simple symbol; Multi-part combines several simple shapes, such as a face or a symbol with an accent.",
+        values = linkedMapOf("Text icon (default)" to "text", "Shape icon" to "shape", "Multi-part icon" to "multi"),
+    )
+    val iconShape by stringOption(
+        title = "UI > Icon > Shape",
+        default = "triangle",
+        key = "runtimeOverlayIconShape",
+        description = "Shape used by Shape and Multi-part icon styles. Triangle is useful for a central mark, Chevron for a simple angled mark, Smile for an original face-like mark, and Circle for a ring.",
+        values = linkedMapOf("Triangle" to "triangle", "Chevron" to "chevron", "Smile" to "smile", "Circle" to "circle"),
+    )
+    val iconShapeColor1 by stringOption(
+        title = "UI > Icon > Shape color 1",
+        default = "#FFFFFF",
+        key = "runtimeOverlayIconShapeColor1",
+        description = "Primary color of the selected icon shape. Use #RRGGBB, for example #E651A0.",
+    )
+    val iconShapeColor2 by stringOption(
+        title = "UI > Icon > Shape color 2",
+        default = "#FFFFFF",
+        key = "runtimeOverlayIconShapeColor2",
+        description = "Second shape color when Shape gradient is enabled. Use #RRGGBB, for example #6564D3.",
+    )
+    val iconShapeGradient by booleanOption(
+        title = "UI > Icon > Shape gradient",
+        default = false,
+        key = "runtimeOverlayIconShapeGradient",
+        description = "Blend Shape color 1 into Shape color 2 inside the symbol. Disable it for a solid shape color.",
+    )
+    val iconShapeGradientAngle by intOption(
+        title = "UI > Icon > Shape gradient angle (degrees)",
+        default = 0,
+        key = "runtimeOverlayIconShapeGradientAngle",
+        description = "Direction of the shape gradient. 0 degrees runs top to bottom and 90 degrees runs left to right.",
+    )
+    val iconShapeStrokeWidth by intOption(
+        title = "UI > Icon > Shape stroke width (dp)",
+        default = 3,
+        key = "runtimeOverlayIconShapeStrokeWidthDp",
+        description = "Thickness of line-based shapes such as Chevron, Smile, and Circle. Use 1 to 12dp.",
+    )
+    val iconShapeScale by intOption(
+        title = "UI > Icon > Shape size (%)",
+        default = 70,
+        key = "runtimeOverlayIconShapeScalePercent",
+        description = "Size of the drawn symbol inside the button, from 20% to 100%. Leave room for the outline and background to stay visible.",
+    )
+    val iconHighlight by booleanOption(
+        title = "UI > Icon > Shape highlight",
+        default = false,
+        key = "runtimeOverlayIconHighlight",
+        description = "Add a subtle glossy highlight to the upper-left of the icon. This affects Shape and Multi-part styles.",
+    )
+    val iconShadow by booleanOption(
+        title = "UI > Icon > Shape shadow",
+        default = false,
+        key = "runtimeOverlayIconShadow",
+        description = "Add a small dark shadow behind the drawn shape to improve contrast on bright backgrounds.",
+    )
     val gradientBackground by booleanOption(
         title = "UI > Icon > Gradient background",
         default = true,
@@ -766,6 +857,24 @@ val universalOverlayPatch = bytecodePatch(
         default = "#FFFFFF",
         key = "runtimeOverlayIconOutlineColor",
         description = "Color used only when the icon outline is enabled.",
+    )
+    val iconOutlineGradient by booleanOption(
+        title = "UI > Icon > Outline gradient",
+        default = false,
+        key = "runtimeOverlayIconOutlineGradient",
+        description = "Blend two colors around the legacy icon outline. This can create a moving-looking pink-to-blue ring when combined with a large outline width.",
+    )
+    val iconOutlineColor2 by stringOption(
+        title = "UI > Icon > Outline color 2",
+        default = "#FFFFFF",
+        key = "runtimeOverlayIconOutlineColor2",
+        description = "Second outline color used when Outline gradient is enabled. Use #RRGGBB.",
+    )
+    val iconOutlineGradientAngle by intOption(
+        title = "UI > Icon > Outline gradient angle (degrees)",
+        default = 0,
+        key = "runtimeOverlayIconOutlineGradientAngle",
+        description = "Direction of the icon outline gradient. 0 degrees runs top to bottom and 90 degrees runs left to right.",
     )
     val customIconImage by imageOption(
         title = "UI > Icon > Custom button icon (local image)",
@@ -823,11 +932,11 @@ val universalOverlayPatch = bytecodePatch(
         key = "runtimeOverlayActivityNameOverride",
         description = "Optional fallback Activity class used only when Application startup cannot be found. Leave blank for universal automatic discovery. Example: com.example.MainActivity or Lcom/example/MainActivity;.",
     )
-    val activityInstallBanlist by stringOption(
+    val activityInstallBanlist by stringsOption(
         title = "Advanced > Activity > Overlay install banlist",
-        default = DEFAULT_ACTIVITY_INSTALL_BANLIST,
+        default = DEFAULT_ACTIVITY_INSTALL_BANLIST.lines(),
         key = "runtimeOverlayActivityInstallBanlist",
-        description = "Activity class or package prefixes that must not receive the overlay. Enter one per line, comma, or semicolon; use * for a prefix. Common store, billing, and sign-in popup prefixes are included by default. Enter none to disable the default banlist.",
+        description = "List of Activity class or package prefixes that must not receive the overlay. Add one entry per row; entries ending in * match a prefix. The default list protects common store, billing, and sign-in popups. Replace the list with a single entry none to disable it.",
     )
     val activateStatisticsOnLaunch by booleanOption(
         title = "Modules > Settings > Activate statistic modules on launch",
@@ -990,7 +1099,6 @@ val universalOverlayPatch = bytecodePatch(
             (MAX_DESCRIPTION_CHARACTERS - manualDescription.length).coerceAtLeast(0),
         )
         val manualBackground = backgroundColor.orEmpty().ifBlank { "#300000" }
-        val activityInstallBanlistValue = activityInstallBanlist.orEmpty().trim().take(4096).ifBlank { DEFAULT_ACTIVITY_INSTALL_BANLIST }
         val manualPreset = OverlayUiPreset(
             title = title.orEmpty().ifBlank { "UniPatches Universal Overlay Patch" }.take(MAX_TITLE_CHARACTERS),
             description = manualDescription,
@@ -1014,6 +1122,19 @@ val universalOverlayPatch = bytecodePatch(
             iconOutline = iconOutline == true,
             iconOutlineWidth = (iconOutlineWidth ?: 3).coerceIn(1, 8),
             iconOutlineColor = iconOutlineColor.orEmpty().ifBlank { "#FFFFFF" },
+            iconStyle = iconStyle.orEmpty().ifBlank { "text" },
+            iconShape = iconShape.orEmpty().ifBlank { "triangle" },
+            iconShapeColor1 = iconShapeColor1.orEmpty().ifBlank { "#FFFFFF" },
+            iconShapeColor2 = iconShapeColor2.orEmpty().ifBlank { iconShapeColor1.orEmpty().ifBlank { "#FFFFFF" } },
+            iconShapeGradient = iconShapeGradient == true,
+            iconShapeGradientAngle = ((iconShapeGradientAngle ?: 0) % 361 + 361) % 361,
+            iconShapeStrokeWidth = (iconShapeStrokeWidth ?: 3).coerceIn(1, 12),
+            iconShapeScale = (iconShapeScale ?: 70).coerceIn(20, 100),
+            iconHighlight = iconHighlight == true,
+            iconShadow = iconShadow == true,
+            iconOutlineGradient = iconOutlineGradient == true,
+            iconOutlineColor2 = iconOutlineColor2.orEmpty().ifBlank { "#FFFFFF" },
+            iconOutlineGradientAngle = ((iconOutlineGradientAngle ?: 0) % 361 + 361) % 361,
             customIconImageLocal = customIconImage.orEmpty().trim(),
             customIconImageInput = customIconImageInput.orEmpty().trim(),
             buttonShape = buttonShape.orEmpty().ifBlank { "circle" },
@@ -1045,7 +1166,7 @@ val universalOverlayPatch = bytecodePatch(
             titleSeparator = titleSeparator == true,
             menuCorners = menuCorners.orEmpty().ifBlank { "rounded" },
             menuOutlineAnimation = menuOutlineAnimation.orEmpty().ifBlank { "static" },
-            outlineAnimationSpeed = (outlineAnimationSpeed ?: 1).coerceIn(0, 10),
+            outlineAnimationSpeed = (outlineAnimationSpeed ?: 1).coerceIn(-10, 10),
             openingAnimation = openingAnimation.orEmpty().ifBlank { "fade" },
             closingAnimation = closingAnimation.orEmpty().ifBlank { "fade" },
             animationDuration = (animationDuration ?: 180).coerceAtLeast(0),
@@ -1064,8 +1185,10 @@ val universalOverlayPatch = bytecodePatch(
             repositoryUrl = manualPreset.repositoryUrl,
         )
         val titleValue = selectedUiPreset.title
-        val descriptionValue = selectedUiPreset.description
-        val appendDescriptionValue = selectedUiPreset.appendDescription
+        val descriptionValue = selectedUiPreset.description.take(MAX_DESCRIPTION_CHARACTERS)
+        val appendDescriptionValue = selectedUiPreset.appendDescription.take(
+            (MAX_DESCRIPTION_CHARACTERS - descriptionValue.length).coerceAtLeast(0),
+        )
         val descriptionAlignmentValue = selectedUiPreset.descriptionAlignment
         val appendDescriptionColorValue = selectedUiPreset.appendDescriptionColor
         val labelValue = selectedUiPreset.repositoryText
@@ -1085,6 +1208,19 @@ val universalOverlayPatch = bytecodePatch(
         val iconGradientAngleValue = selectedUiPreset.iconGradientAngle
         val backgroundTransparencyValue = selectedUiPreset.backgroundTransparency
         val iconOutlineWidthValue = selectedUiPreset.iconOutlineWidth
+        val iconStyleValue = selectedUiPreset.iconStyle
+        val iconShapeValue = selectedUiPreset.iconShape
+        val iconShapeColor1Value = selectedUiPreset.iconShapeColor1
+        val iconShapeColor2Value = selectedUiPreset.iconShapeColor2
+        val iconShapeGradientValue = selectedUiPreset.iconShapeGradient
+        val iconShapeGradientAngleValue = selectedUiPreset.iconShapeGradientAngle
+        val iconShapeStrokeWidthValue = selectedUiPreset.iconShapeStrokeWidth
+        val iconShapeScaleValue = selectedUiPreset.iconShapeScale
+        val iconHighlightValue = selectedUiPreset.iconHighlight
+        val iconShadowValue = selectedUiPreset.iconShadow
+        val iconOutlineGradientValue = selectedUiPreset.iconOutlineGradient
+        val iconOutlineColor2Value = selectedUiPreset.iconOutlineColor2
+        val iconOutlineGradientAngleValue = selectedUiPreset.iconOutlineGradientAngle
         val customIconLocalSourceValue = selectedUiPreset.customIconImageLocal
         val customIconStringSourceValue = selectedUiPreset.customIconImageInput
         val iconTextSizeValue = selectedUiPreset.iconTextSize
@@ -1140,6 +1276,11 @@ val universalOverlayPatch = bytecodePatch(
         val monitorColumnsValue = monitorColumns.orEmpty().ifBlank { "2" }
         val temperatureFormatValue = temperatureFormat.orEmpty().ifBlank { "celsius" }
         val timeFormatValue = timeFormat.orEmpty().ifBlank { "12" }
+        val activityInstallBanlistValue = activityInstallBanlist.orEmpty()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
+            .ifBlank { "none" }
         validate(
             titleValue, descriptionValue, labelValue, urlValue,
             backgroundValue, outlineValue, overlayTextColorValue, buttonTextColorValue, buttonBackgroundValue,
@@ -1147,6 +1288,15 @@ val universalOverlayPatch = bytecodePatch(
             iconGradientAngleValue, backgroundTransparencyValue, iconOutlineWidthValue,
             shapeValue, positionValue, sizeValue, opacityValue,
         )
+        check(iconStyleValue in setOf("text", "shape", "multi"))
+        check(iconShapeValue in setOf("triangle", "chevron", "smile", "circle"))
+        check(iconShapeColor1Value.matches(Regex("#[0-9a-fA-F]{6}")))
+        check(iconShapeColor2Value.matches(Regex("#[0-9a-fA-F]{6}")))
+        check(iconOutlineColor2Value.matches(Regex("#[0-9a-fA-F]{6}")))
+        check(iconShapeGradientAngleValue in 0..360)
+        check(iconOutlineGradientAngleValue in 0..360)
+        check(iconShapeStrokeWidthValue in 1..12)
+        check(iconShapeScaleValue in 20..100)
         check(monitorPositionValue in setOf("none", "top", "bottom"))
         check(monitorScaleValue.toFloatOrNull() in listOf(.75f, 1f, 1.25f, 1.5f, 2f))
         check(monitorColumnsValue in setOf("1", "2", "3"))
@@ -1160,11 +1310,11 @@ val universalOverlayPatch = bytecodePatch(
         check(titleIconPlacementValue in setOf("none", "left", "right", "both"))
         check(titleAlignmentValue in setOf("left", "center", "right"))
         check(menuCornersValue in setOf("rounded", "square"))
-        check(menuOutlineAnimationValue in setOf("static", "gradient", "rainbow"))
+        check(menuOutlineAnimationValue in setOf("static", "gradient", "vertical", "rainbow"))
         check(openingAnimationValue in setOf("fade", "scale", "disabled", "appearRight", "appearTop", "appearBottom", "appearLeft"))
         check(closingAnimationValue in setOf("fade", "scale", "disabled", "disappearUp", "disappearDown", "disappearLeft", "disappearRight"))
         check(animationEasingValue in setOf("linear", "logarithmic"))
-        check(outlineAnimationSpeedValue in 0..10)
+        check(outlineAnimationSpeedValue in -10..10)
         check(animationDurationValue >= 0)
         check(descriptionAlignmentValue in setOf("left", "center", "right"))
         check(appendDescriptionColorValue.matches(Regex("#[0-9a-fA-F]{6}")))
@@ -1246,6 +1396,19 @@ val universalOverlayPatch = bytecodePatch(
             menuTextColor6Value,
             separatorBackgroundColorValue,
             activityInstallBanlistValue,
+            iconStyleValue,
+            iconShapeValue,
+            iconShapeColor1Value,
+            iconShapeColor2Value,
+            if (iconShapeGradientValue) "1" else "0",
+            iconShapeGradientAngleValue.toString(),
+            iconShapeStrokeWidthValue.toString(),
+            iconShapeScaleValue.toString(),
+            if (iconHighlightValue) "1" else "0",
+            if (iconShadowValue) "1" else "0",
+            if (iconOutlineGradientValue) "1" else "0",
+            iconOutlineColor2Value,
+            iconOutlineGradientAngleValue.toString(),
         ).joinToString("|") { encode(it) }
 
         // Prefer the process Application entry point. The Activity path is a compatibility fallback
