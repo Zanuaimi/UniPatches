@@ -72,6 +72,9 @@ internal data class OverlayUiPreset(
     val iconOutlineGradient: Boolean = false,
     val iconOutlineColor2: String = iconOutlineColor,
     val iconOutlineGradientAngle: Int = 0,
+    val iconBackgroundStyle: String = "flat",
+    val iconBackgroundColor3: String = iconBackground2,
+    val iconBackgroundColor4: String = buttonBackground,
 )
 
 internal data class OverlayPresetDefinition(
@@ -126,6 +129,7 @@ internal fun explicitOverlayPreset(
     outlineWidth: Int = 2,
     iconOutline: Boolean = false,
     iconOutlineWidth: Int = 3,
+    buttonShape: String = "circle",
     iconStyle: String = "text",
     iconShape: String = "triangle",
     iconShapeColor1: String = "#FFFFFF",
@@ -139,6 +143,9 @@ internal fun explicitOverlayPreset(
     iconOutlineGradient: Boolean = false,
     iconOutlineColor2: String = iconOutlineColor,
     iconOutlineGradientAngle: Int = 0,
+    iconBackgroundStyle: String = "flat",
+    iconBackgroundColor3: String = iconBackground2,
+    iconBackgroundColor4: String = background,
 ): OverlayUiPreset = OverlayUiPreset(
     title = "UniPatches Universal Overlay Patch",
     description = "Welcome! This is the UniPatches Universal Overlay Patch Menu.\n" +
@@ -165,7 +172,7 @@ internal fun explicitOverlayPreset(
     iconOutlineColor = iconOutlineColor,
     customIconImageLocal = "",
     customIconImageInput = "",
-    buttonShape = "circle",
+    buttonShape = buttonShape,
     buttonSize = 56,
     buttonOpacity = 50,
     dragVisibilityDuration = 2,
@@ -212,4 +219,7 @@ internal fun explicitOverlayPreset(
     iconOutlineGradient = iconOutlineGradient,
     iconOutlineColor2 = iconOutlineColor2,
     iconOutlineGradientAngle = iconOutlineGradientAngle,
+    iconBackgroundStyle = iconBackgroundStyle,
+    iconBackgroundColor3 = iconBackgroundColor3,
+    iconBackgroundColor4 = iconBackgroundColor4,
 )

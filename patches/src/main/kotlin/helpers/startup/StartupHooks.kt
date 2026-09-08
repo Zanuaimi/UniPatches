@@ -47,10 +47,11 @@ internal object StartupHooks {
             try {
                 document("AndroidManifest.xml").use { doc ->
                     val application = doc.documentElement.applicationOrNull()
-                    val appName = application?.getAttribute("android:name")
-                        ?: application?.getAttributeNS(NS_ANDROID, "name")
+                    val appName = application?.getAttributeNS(NS_ANDROID, "name")
+                        ?.ifEmpty { application.getAttribute("android:name") }
+                        .orEmpty()
                     resolvedApplicationDescriptor = if (!appName.isNullOrEmpty()) {
-                        "L" + appName.replace('.', '/') + ";"
+                        componentDescriptor(appName, doc.documentElement.getAttribute("package"))
                     } else {
                         null
                     }

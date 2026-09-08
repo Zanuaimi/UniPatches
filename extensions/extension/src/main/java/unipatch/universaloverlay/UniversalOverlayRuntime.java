@@ -476,7 +476,10 @@ public final class UniversalOverlayRuntime {
                     dp(config.iconShapeStrokeWidth),
                     config.iconShapeScale / 100f,
                     config.iconHighlight,
-                    config.iconShadow);
+                    config.iconShadow,
+                    config.iconBackgroundStyle,
+                    config.iconBackgroundColor3,
+                    config.iconBackgroundColor4);
         }
 
         /** Shows the fallback notice after the overlay root is attached to the Activity. */
@@ -817,7 +820,7 @@ public final class UniversalOverlayRuntime {
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             card.addView(title, new LinearLayout.LayoutParams(-1, -2));
 
-            TextView message = text("The overlay will be removed for this Activity.", 14, config.menuTextColor3);
+            TextView message = text("The overlay will close for this app process until the app is restarted.", 14, config.menuTextColor3);
             LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(-1, -2);
             messageParams.topMargin = dp(8);
             card.addView(message, messageParams);
@@ -1057,24 +1060,31 @@ public final class UniversalOverlayRuntime {
             ArrayAdapter<String> adapter = new ArrayAdapter<String>(overlayContext, android.R.layout.simple_spinner_item, labels) {
                 @Override public View getView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getView(position, convertView, parentView);
-                    view.setTextColor(config.controlForeground);
+                    view.setTextColor(config.menuTextColor1);
+                    view.setBackgroundColor(config.background);
+                    view.setPadding(dp(12), dp(8), dp(12), dp(8));
                     return view;
                 }
                 @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getDropDownView(position, convertView, parentView);
                     view.setTextColor(config.menuTextColor1);
                     view.setBackgroundColor(config.background);
+                    view.setPadding(dp(12), dp(10), dp(12), dp(10));
                     return view;
                 }
             };
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spinner.setAdapter(adapter);
-            spinner.setBackground(UniversalOverlayViews.background(config.controlBackground, config.outline, false,
-                    config.outlineWidth, !"square".equals(config.menuCorners)));
+            // Keep the collapsed control and popup visually attached to the same menu surface.
+            // The platform Spinner outline can otherwise become a large black rectangle outside
+            // the panel, especially when a preset uses a dark control background.
+            spinner.setBackground(UniversalOverlayViews.background(
+                    config.background, Color.TRANSPARENT, false, 0, !"square".equals(config.menuCorners)));
             if (android.os.Build.VERSION.SDK_INT >= 16) {
                 GradientDrawable popupBackground = new GradientDrawable();
                 popupBackground.setColor(config.background);
                 popupBackground.setCornerRadius("square".equals(config.menuCorners) ? 0f : dp(24));
+                popupBackground.setStroke(0, Color.TRANSPARENT);
                 spinner.setPopupBackgroundDrawable(popupBackground);
             }
             int current = remembered == null ? module.current(activity) : remembered;

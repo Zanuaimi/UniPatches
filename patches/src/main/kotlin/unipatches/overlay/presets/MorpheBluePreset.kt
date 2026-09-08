@@ -2,5 +2,13 @@ package unipatches.overlay.presets
 
 internal val morpheBluePreset = OverlayPresetDefinition(
     "morpheBlue", "Morphe-inspired", "Morphe-inspired UI preset based on the Nai64Patches fork.",
-    explicitOverlayPreset("M", "#101820", 80, "#55D6BE", "#55D6BE", "#FFFFFF", true, "#000083", "#00AF7C", 30, "#FFFFFF"),
+    explicitOverlayPreset(
+        buttonText = "M", background = "#101820", backgroundTransparency = 80, outline = "#55D6BE",
+        overlayTextColor = "#55D6BE", buttonTextColor = "#FFFFFF", gradientBackground = true,
+        buttonBackground = "#000083", iconBackground2 = "#00AF7C", iconGradientAngle = 30,
+        iconOutlineColor = "#FFFFFF", appendDescription = "Inspired by Morphe",
+        controlBackground = "#101820", controlForeground = "#55D6BE",
+        bottomButtonStyle = "solid", bottomButtonTextColor = "#101820",
+        bottomButtonBackground1 = "#55D6BE", bottomButtonBackground2 = "#55D6BE",
+    ),
 )

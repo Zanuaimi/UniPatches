@@ -4,7 +4,7 @@ import android.app.Activity;
 import android.media.AudioManager;
 import unipatch.universaloverlay.modules.UniversalOverlayActivityModule;
 
-/** Best-effort temporary mute for the app's music stream. */
+/** Best-effort temporary mute for the device music stream. */
 public final class AppAudioMuteModule extends UniversalOverlayActivityModule {
     private static int activeInstances;
     private static int sharedOriginalVolume = -1;
@@ -12,7 +12,7 @@ public final class AppAudioMuteModule extends UniversalOverlayActivityModule {
     private int stream = AudioManager.STREAM_MUSIC;
     @Override public String key() { return "appAudioMute"; }
     @Override public String label() { return "App audio mute"; }
-    @Override public String description() { return "Temporarily mute the app music stream."; }
+    @Override public String description() { return "Temporarily mute the device music stream. Other apps using music audio are also muted."; }
     @Override protected boolean readEnabled(Activity activity, int flags, int systemUi) { return false; }
     @Override protected void applyEnabled(Activity activity, int flags, int systemUi) {
         AudioManager audio = (AudioManager) activity.getSystemService(Activity.AUDIO_SERVICE);
@@ -30,7 +30,6 @@ public final class AppAudioMuteModule extends UniversalOverlayActivityModule {
         activeInstances = Math.max(0, activeInstances - 1);
         if (activeInstances == 0) {
             audio.adjustStreamVolume(stream, AudioManager.ADJUST_UNMUTE, 0);
-            if (sharedOriginalVolume >= 0) audio.setStreamVolume(stream, sharedOriginalVolume, 0);
             sharedOriginalVolume = -1;
         }
         applied = false;

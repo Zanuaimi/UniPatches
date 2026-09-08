@@ -36,11 +36,12 @@ final class UniversalOverlayViews {
                          int outline1, int outline2, float outlineAngle, boolean outlineGradient,
                          int outlineWidth, boolean circle, String style, String shape,
                          int shapeColor1, int shapeColor2, boolean shapeGradient, float shapeAngle,
-                         float shapeStrokeWidth, float shapeScale, boolean highlight, boolean shadow) {
+                         float shapeStrokeWidth, float shapeScale, boolean highlight, boolean shadow,
+                         String backgroundStyle, int backgroundColor3, int backgroundColor4) {
         return new IconDrawable(background1, background2, backgroundAngle, backgroundGradient,
                 outline1, outline2, outlineAngle, outlineGradient, outlineWidth, circle,
                 style, shape, shapeColor1, shapeColor2, shapeGradient, shapeAngle,
-                shapeStrokeWidth, shapeScale, highlight, shadow);
+                shapeStrokeWidth, shapeScale, highlight, shadow, backgroundStyle, backgroundColor3, backgroundColor4);
     }
 
     /** Uses the overlay theme context so host-app selectable colors do not leak into our controls. */
@@ -74,6 +75,8 @@ final class UniversalOverlayViews {
         private final boolean rounded;
         private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final int[] colors;
+        private final float[] positions;
         private final android.animation.ValueAnimator animator;
         private float phase;
 
@@ -90,6 +93,14 @@ final class UniversalOverlayViews {
             fill.setColor(fillColor);
             border.setStyle(Paint.Style.STROKE);
             border.setStrokeWidth(this.strokeWidth);
+            if (rainbow) {
+                colors = new int[] { 0xFFFF0000, 0xFFFFFF00, 0xFF00FF00, 0xFF00FFFF,
+                        0xFF0000FF, 0xFFFF00FF, 0xFFFF0000 };
+                positions = new float[] { 0f, .166f, .333f, .5f, .666f, .833f, 1f };
+            } else {
+                colors = new int[] { first, second, first };
+                positions = new float[] { 0f, .5f, 1f };
+            }
             long duration = Math.max(250L, 5000L / Math.max(1, Math.abs(speed)));
             // Two shader periods make the repeat seam land on an identical gradient phase.
             // REPEAT keeps the color order stable at the loop boundary; MIRROR would reverse
@@ -114,16 +125,6 @@ final class UniversalOverlayViews {
             float radius = rounded ? Math.max(0f, 24f - inset) : 0f;
             fill.setShader(null);
             canvas.drawRoundRect(bounds, radius, radius, fill);
-            int[] colors;
-            float[] positions;
-            if (rainbow) {
-                colors = new int[] { 0xFFFF0000, 0xFFFFFF00, 0xFF00FF00, 0xFF00FFFF,
-                        0xFF0000FF, 0xFFFF00FF, 0xFFFF0000 };
-                positions = new float[] { 0f, .166f, .333f, .5f, .666f, .833f, 1f };
-            } else {
-                colors = new int[] { first, second, first };
-                positions = new float[] { 0f, .5f, 1f };
-            }
             float width = Math.max(1f, bounds.width());
             float height = Math.max(1f, bounds.height());
             float shift = phase * (vertical ? height : width) * direction;
@@ -198,14 +199,16 @@ final class UniversalOverlayViews {
         private final int background1, background2, outline1, outline2, shapeColor1, shapeColor2;
         private final float backgroundAngle, outlineAngle, shapeAngle, shapeStrokeWidth, shapeScale;
         private final boolean backgroundGradient, outlineGradient, circle, shapeGradient, highlight, shadow;
-        private final String style, shape;
+        private final String style, shape, backgroundStyle;
+        private final int backgroundColor3, backgroundColor4;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         IconDrawable(int background1, int background2, float backgroundAngle, boolean backgroundGradient,
                      int outline1, int outline2, float outlineAngle, boolean outlineGradient,
                      int outlineWidth, boolean circle, String style, String shape,
                      int shapeColor1, int shapeColor2, boolean shapeGradient, float shapeAngle,
-                     float shapeStrokeWidth, float shapeScale, boolean highlight, boolean shadow) {
+                     float shapeStrokeWidth, float shapeScale, boolean highlight, boolean shadow,
+                     String backgroundStyle, int backgroundColor3, int backgroundColor4) {
             this.background1 = background1;
             this.background2 = background2;
             this.backgroundAngle = backgroundAngle;
@@ -222,6 +225,9 @@ final class UniversalOverlayViews {
             this.shapeScale = Math.max(.2f, Math.min(1f, shapeScale));
             this.highlight = highlight;
             this.shadow = shadow;
+            this.backgroundStyle = backgroundStyle == null ? "flat" : backgroundStyle;
+            this.backgroundColor3 = backgroundColor3;
+            this.backgroundColor4 = backgroundColor4;
             this.outlineWidth = Math.max(0, outlineWidth);
             this.circle = circle;
             this.style = style == null ? "shape" : style;
@@ -240,6 +246,7 @@ final class UniversalOverlayViews {
             paint.setShader(backgroundGradient ? linear(background1, background2, backgroundAngle, body) : null);
             paint.setColor(background1);
             canvas.drawRoundRect(body, radius, radius, paint);
+            if ("faceted".equals(backgroundStyle)) drawFacets(canvas, body, radius);
 
             if (outlineWidth > 0) {
                 paint.setStyle(Paint.Style.STROKE);
@@ -258,6 +265,55 @@ final class UniversalOverlayViews {
                         body.left + body.width() * .62f, body.top + body.height() * .33f);
                 canvas.drawOval(shine, paint);
             }
+        }
+
+        private void drawFacets(Canvas canvas, RectF body, float radius) {
+            Path clip = new Path();
+            clip.addRoundRect(body, radius, radius, Path.Direction.CW);
+            int save = canvas.save();
+            canvas.clipPath(clip);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setShader(null);
+            float cx = body.centerX();
+            float cy = body.centerY();
+            Path facet = new Path();
+            paint.setColor(backgroundColor3);
+            facet.moveTo(body.left, body.top);
+            facet.lineTo(cx, body.top);
+            facet.lineTo(body.left, cy);
+            facet.close();
+            canvas.drawPath(facet, paint);
+            facet.reset();
+            paint.setColor(backgroundColor4);
+            facet.moveTo(cx, body.top);
+            facet.lineTo(body.right, body.top);
+            facet.lineTo(body.right, cy * .72f + body.top * .28f);
+            facet.lineTo(cx, cy);
+            facet.close();
+            canvas.drawPath(facet, paint);
+            facet.reset();
+            paint.setColor(background2);
+            facet.moveTo(body.left, cy);
+            facet.lineTo(cx, cy);
+            facet.lineTo(body.left, body.bottom);
+            facet.close();
+            canvas.drawPath(facet, paint);
+            facet.reset();
+            paint.setColor(backgroundColor3);
+            facet.moveTo(cx, cy);
+            facet.lineTo(body.right, cy * .72f + body.top * .28f);
+            facet.lineTo(body.right, body.bottom);
+            facet.lineTo(cx, body.bottom);
+            facet.close();
+            canvas.drawPath(facet, paint);
+            facet.reset();
+            paint.setColor(backgroundColor4);
+            facet.moveTo(cx, cy);
+            facet.lineTo(cx, body.bottom);
+            facet.lineTo(body.left + body.width() * .42f, body.bottom);
+            facet.close();
+            canvas.drawPath(facet, paint);
+            canvas.restoreToCount(save);
         }
 
         private void drawShape(Canvas canvas, RectF body) {
@@ -299,6 +355,23 @@ final class UniversalOverlayViews {
                 paint.setStrokeWidth(shapeStrokeWidth);
                 canvas.drawOval(new RectF(area.left + shapeStrokeWidth, area.top + shapeStrokeWidth,
                         area.right - shapeStrokeWidth, area.bottom - shapeStrokeWidth), paint);
+                return;
+            }
+
+            if ("z".equals(shape)) {
+                paint.setStyle(Paint.Style.FILL);
+                Path z = new Path();
+                float stroke = size * .18f;
+                z.moveTo(area.left + size * .14f, area.top + size * .16f);
+                z.lineTo(area.right - size * .14f, area.top + size * .16f);
+                z.lineTo(area.left + size * .36f, area.bottom - size * .16f);
+                z.lineTo(area.right - size * .14f, area.bottom - size * .16f);
+                z.lineTo(area.right - size * .14f, area.bottom - size * .16f + stroke);
+                z.lineTo(area.left + size * .14f, area.bottom - size * .16f + stroke);
+                z.lineTo(area.right - size * .36f, area.top + size * .16f + stroke);
+                z.lineTo(area.left + size * .14f, area.top + size * .16f + stroke);
+                z.close();
+                canvas.drawPath(z, paint);
                 return;
             }
 

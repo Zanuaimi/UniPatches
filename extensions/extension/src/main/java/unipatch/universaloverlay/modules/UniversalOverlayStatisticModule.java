@@ -147,6 +147,7 @@ public abstract class UniversalOverlayStatisticModule implements UniversalOverla
     protected final void disableAfterFailure() {
         running = false;
         enabled = false;
+        setChecked(false);
         handler.removeCallbacksAndMessages(null);
         if (valueView != null) valueView.setText("Unavailable");
         if (monitorViews != null) for (TextView monitor : monitorViews) monitor.setText("Unavailable");
