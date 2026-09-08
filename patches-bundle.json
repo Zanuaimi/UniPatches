@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-08T08:02:41",
-  "description": "## [1.9.0](https://github.com/Zanuaimi/UniPatches/compare/v1.8.1...v1.9.0) (2026-09-08)\n\n### ✨ New Features\n\n* **overlay:** add configurable icons and vertical outline animation ([c4a7c6e](https://github.com/Zanuaimi/UniPatches/commit/c4a7c6ec491b3a0360cc925be50bb496ebe385f7))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.9.0/patches-1.9.0.mpp",
+  "created_at": "2026-09-08T19:57:24",
+  "description": "## [1.10.0](https://github.com/Zanuaimi/UniPatches/compare/v1.9.0...v1.10.0) (2026-09-08)\n\n### 🐛 Bug Fixes\n\n* **bypass:** harden experimental bypass strategies ([703eaeb](https://github.com/Zanuaimi/UniPatches/commit/703eaeb242190a8f1c47b64928331dcd3e618568))\n\n### ✨ New Features\n\n* **ads:** consolidate configurable ad controls ([3b3030d](https://github.com/Zanuaimi/UniPatches/commit/3b3030d599d9c9e71e77e17ed7c502f0c1fdbc65))\n* **display:** add configurable app display controls ([0dbea11](https://github.com/Zanuaimi/UniPatches/commit/0dbea11d24ed3bcad8afd0eb88d2dee722110e11))\n* **output:** add safe custom app output controls ([0dae4a4](https://github.com/Zanuaimi/UniPatches/commit/0dae4a4069dda5e0b414b9cab4c52fb068a949f8))\n* **overlay:** enhance universal overlay customization ([3ee6262](https://github.com/Zanuaimi/UniPatches/commit/3ee62629b7966656bf998ec500d8e0a6db00772f))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.10.0/patches-1.10.0.mpp",
   "signature_download_url": "",
-  "version": "1.9.0"
+  "version": "1.10.0"
 }

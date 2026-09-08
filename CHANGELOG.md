@@ -1,3 +1,16 @@
+## [1.10.0](https://github.com/Zanuaimi/UniPatches/compare/v1.9.0...v1.10.0) (2026-09-08)
+
+### 🐛 Bug Fixes
+
+* **bypass:** harden experimental bypass strategies ([703eaeb](https://github.com/Zanuaimi/UniPatches/commit/703eaeb242190a8f1c47b64928331dcd3e618568))
+
+### ✨ New Features
+
+* **ads:** consolidate configurable ad controls ([3b3030d](https://github.com/Zanuaimi/UniPatches/commit/3b3030d599d9c9e71e77e17ed7c502f0c1fdbc65))
+* **display:** add configurable app display controls ([0dbea11](https://github.com/Zanuaimi/UniPatches/commit/0dbea11d24ed3bcad8afd0eb88d2dee722110e11))
+* **output:** add safe custom app output controls ([0dae4a4](https://github.com/Zanuaimi/UniPatches/commit/0dae4a4069dda5e0b414b9cab4c52fb068a949f8))
+* **overlay:** enhance universal overlay customization ([3ee6262](https://github.com/Zanuaimi/UniPatches/commit/3ee62629b7966656bf998ec500d8e0a6db00772f))
+
 ## [1.9.0](https://github.com/Zanuaimi/UniPatches/compare/v1.8.1...v1.9.0) (2026-09-08)
 
 ### ✨ New Features
