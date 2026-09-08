@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.10.1",
+  "version": "1.10.2",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -343,7 +343,7 @@
     },
     {
       "name": "Custom App Display Patch (Experimental, Enhanced)",
-      "description": "Configure display compatibility for an APK: aspect-ratio scaling, a Unity window-resolution\noverride, preferred refresh rate, Unity renderer preference, ANGLE preference, and game\ncategory hints. Android and the app remain in control and can ignore any request.\n\nResolution and renderer overrides currently target Unity activities. Scaling removes Android\naspect-ratio restrictions where present; it cannot universally rescale every game engine.\n\nCustom App Resolution inspiration: Nai64Patches from Nai64. Frame-rate, graphics-driver,\nANGLE, aspect-ratio, and game-optimization controls are UniPatches work.",
+      "description": "Configure display compatibility for an APK: aspect-ratio scaling, a Unity window-resolution\noverride, preferred refresh rate, Unity renderer preference, ANGLE preference, and game\ncategory hints. Android and the app remain in control and can ignore any request.\n\nResolution and renderer overrides currently target Unity activities. Scaling removes Android\naspect-ratio restrictions where present; it cannot universally rescale every game engine.\n\nCustom App Resolution and game-optimization inspiration: Nai64Patches from Nai64.\nFrame-rate, graphics-driver, ANGLE, and aspect-ratio controls are UniPatches work.",
       "default": false,
       "dependencies": [
         "ResourcePatch"

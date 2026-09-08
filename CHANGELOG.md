@@ -1,3 +1,9 @@
+## [1.10.2](https://github.com/Zanuaimi/UniPatches/compare/v1.10.1...v1.10.2) (2026-09-08)
+
+### 🐛 Bug Fixes
+
+* correct credits ([29d8759](https://github.com/Zanuaimi/UniPatches/commit/29d87595b9209e7d6ac63fa91330a5e8f0529d42))
+
 ## [1.10.1](https://github.com/Zanuaimi/UniPatches/compare/v1.10.0...v1.10.1) (2026-09-08)
 
 ### 🐛 Bug Fixes
