@@ -180,3 +180,28 @@ fun Method.cloneMutableAndPreserveParameters(mutableClass: MutableClass): Mutabl
 
     return clonedMethod
 }
+
+/** A cloned method plus registers that are guaranteed not to overlap its parameters. */
+data class MutableMethodScratchAllocation(
+    val method: MutableMethod,
+    val firstScratchRegister: Int,
+)
+
+/**
+ * Clone this method while preserving its original parameter registers and reserving local scratch
+ * registers. Use [firstScratchRegister] for injected code placed before the parameter-copy prologue.
+ */
+fun Method.cloneMutableAndAllocateScratchRegisters(
+    mutableClass: MutableClass,
+    scratchRegisterCount: Int,
+): MutableMethodScratchAllocation {
+    require(scratchRegisterCount > 0) { "Scratch register count must be positive" }
+    val originalRegisterCount = implementation?.registerCount
+        ?: error("Method has no implementation: $this")
+    val cloned = cloneMutable(additionalRegisters = numberOfParameterRegisters + scratchRegisterCount)
+    mutableClass.methods.apply {
+        remove(this@cloneMutableAndAllocateScratchRegisters)
+        add(cloned)
+    }
+    return MutableMethodScratchAllocation(cloned, originalRegisterCount)
+}

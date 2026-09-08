@@ -26,7 +26,7 @@ private val frameRateBits = mapOf(
 )
 
 @Suppress("unused")
-val frameRatePreferencePatch = bytecodePatch(
+private val legacyFrameRatePreferencePatch = bytecodePatch(
     name = "Frame Rate Preference (Experimental)",
     description = """
         Requests a preferred refresh rate like 60 or 90 Hz for the app window. The system may ignore it.

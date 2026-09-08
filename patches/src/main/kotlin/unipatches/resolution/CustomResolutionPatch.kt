@@ -18,7 +18,7 @@ private val unityPlayerActivityOnCreateFingerprint = Fingerprint(
 )
 
 @Suppress("unused")
-val customResolutionPatch = bytecodePatch(
+private val legacyCustomResolutionPatch = bytecodePatch(
     name = "Custom App Resolution (Experimental)",
     description = """
         Set a custom resolution for the game

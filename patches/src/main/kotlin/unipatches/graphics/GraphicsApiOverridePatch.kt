@@ -8,7 +8,7 @@ import helpers.bytecode.*
 import helpers.graphics.*
 
 @Suppress("unused")
-val graphicsApiOverridePatch = bytecodePatch(
+private val legacyGraphicsApiOverridePatch = bytecodePatch(
     name = "Graphics API Override (Experimental)",
     description = """
         Forces a Unity game to use Vulkan or OpenGL via launch argument. Only for supported Unity games.
