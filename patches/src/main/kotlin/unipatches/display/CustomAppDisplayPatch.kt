@@ -51,8 +51,8 @@ val customAppDisplayPatch = bytecodePatch(
         Resolution and renderer overrides currently target Unity activities. Scaling removes Android
         aspect-ratio restrictions where present; it cannot universally rescale every game engine.
 
-        Custom App Resolution inspiration: Nai64Patches from Nai64. Frame-rate, graphics-driver,
-        ANGLE, aspect-ratio, and game-optimization controls are UniPatches work.
+        Custom App Resolution and game-optimization inspiration: Nai64Patches from Nai64.
+        Frame-rate, graphics-driver, ANGLE, and aspect-ratio controls are UniPatches work.
     """.trimIndent(),
     default = false,
 ) {
