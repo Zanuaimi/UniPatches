@@ -21,9 +21,13 @@ These patches may be merged, refined, or enhanced where practical to improve com
 
 ### Enhanced patches
 
-The following patch is an enhanced merge of community work rather than a direct copy:
+The following patches are enhanced merges of community work rather than direct copies:
 
-- **PairIP Bypass Enhanced (Experimental)** — merges PairIP bypass approaches from [Nai64Patches](https://github.com/Nai64/Nai64Patches), [Entree](https://github.com/Entree3k/Morning-Entree-Patches), [kondratjev](https://github.com/kondratjev/morphe-patches), and [rushiranpise (Doom)](https://github.com/rushiranpise/morphe-patches). It combines coverage for common legacy, V2, and V3 protection layouts, organizes every strategy by risk level, and provides automatic selection that defaults to low- and medium-risk strategies. Users can disable automatic mode and test each strategy independently, including the high-risk strategies, with clearer configuration and failure reporting.
+- **PairIP Bypass Patch (Experimental, Enhanced)** — merges PairIP bypass approaches from [Nai64Patches](https://github.com/Nai64/Nai64Patches), [Entree](https://github.com/Entree3k/Morning-Entree-Patches), [kondratjev](https://github.com/kondratjev/morphe-patches), and [rushiranpise (Doom)](https://github.com/rushiranpise/morphe-patches). It combines coverage for common legacy, V2, and V3 protection layouts, organizes every strategy by risk level, and provides automatic selection that defaults to low- and medium-risk strategies. Users can disable automatic mode and test each strategy independently, including high-risk strategies, with diagnostics and compatibility guidance.
+
+- **Custom App Output Patch (Experimental, Enhanced)** — merges the Clone, Custom App Icon, Hide App Icon, and target-SDK ideas from [Nai64Patches](https://github.com/Nai64/Nai64Patches) into one output-customization patch. It adds safer clone validation, relative-component and common authority/permission rewriting, launcher-name/icon controls, target-SDK safeguards, and clear warnings for package- or certificate-bound services such as OAuth, Firebase, Play Games, billing, and server licensing.
+
+- **Custom App Display Patch (Experimental, Enhanced)** — evolves Nai64’s Custom App Resolution work into one display-compatibility patch. It combines aspect-ratio handling, Unity window-resolution requests, FPS preference, OpenGL ES/Vulkan/ANGLE preferences, and Android game-category hints. Frame-rate, graphics-driver, ANGLE, aspect-ratio, and game-optimization controls are UniPatches work; Android and individual games can still ignore display requests.
 
 The Universal Overlay Patch has also been submitted as a pull request to [Nai64Patches](https://github.com/Nai64/Nai64Patches), one of the largest collections of universal Morphe patches. The version in Nai64Patches is intended for stable and major releases, while the version here is kept more up to date with ongoing improvements and changes. See the [Universal Overlay pull request](https://github.com/Nai64/Nai64Patches/pull/73).
 
@@ -32,10 +36,8 @@ The Universal Overlay Patch has also been submitted as a pull request to [Nai64P
 The repository also includes my own patches. The patches without separate community credits are:
 
 - Universal Overlay
-- Graphics API Override
 - Bypass Forced Online Checks
 - Bypass Forced Updates
-- Frame Rate Preference
 
 Community contributions are credited in each patch description, and merged or enhanced patches retain attribution to the developers whose work influenced them.
 
