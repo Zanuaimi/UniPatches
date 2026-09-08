@@ -14,7 +14,6 @@ import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import com.android.tools.smali.dexlib2.iface.reference.StringReference
 import java.util.Locale
 import java.util.logging.Logger
-import helpers.ads.AppUpdateManagerImplStartUpdateFlowFingerprint
 
 private val updateTerms = listOf(
     "update required",
@@ -96,7 +95,7 @@ private fun falseBooleanGate(
     method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod,
     evidence: Evidence,
 ): Boolean {
-    if (method.returnType != "Z" || evidence.score < 4) return false
+    if (method.returnType != "Z" || evidence.score < 6 || !evidence.hasUpdateString) return false
     if ((method.implementation?.registerCount ?: 0) < 1) return false
 
     method.addInstructions(
@@ -153,35 +152,19 @@ val bypassForcedUpdatesPatch = bytecodePatch(
         title = "Prevent forced exit",
         description = "Remove detected finish or exit calls from update-related methods",
     )
-    val patchPlayCore by booleanOption(
-        key = "patchPlayCore",
-        default = true,
-        title = "Patch Play Core updates",
-        description = "Disable Google Play's in-app update flow when it is present",
-    )
-
     execute {
         val logger = Logger.getLogger(this::class.java.name)
         var gates = 0
         var dialogs = 0
         var redirects = 0
         var exits = 0
-        var playCore = 0
-
-        if (patchPlayCore == true) {
-            val method = AppUpdateManagerImplStartUpdateFlowFingerprint.methodOrNull
-            if (method != null && (method.implementation?.registerCount ?: 0) >= 1) {
-                method.addInstructions(0, "const/4 v0, 0x0\nreturn-object v0")
-                playCore++
-            }
-        }
 
         classDefForEach { classDef ->
             val mutableClass = mutableClassDefBy(classDef)
             for (method in mutableClass.methods) {
                 val implementation = method.implementation ?: continue
                 val evidence = methodEvidence(method)
-                if (evidence.score < 4) continue
+                if (evidence.score < 6 || (!evidence.hasUpdateString && !evidence.hasUpdateUrl)) continue
 
                 if (bypassUpdateGate == true && falseBooleanGate(method, evidence)) {
                     gates++
@@ -206,7 +189,7 @@ val bypassForcedUpdatesPatch = bytecodePatch(
                         }
                     }
 
-                    if (preventForcedExit == true &&
+                    if (preventForcedExit == true && evidence.hasUpdateString &&
                         ((reference.definingClass == "Landroid/app/Activity;" &&
                             (reference.isVoidCall("finish") ||
                                 reference.isVoidCall("finishAffinity") ||
@@ -218,7 +201,7 @@ val bypassForcedUpdatesPatch = bytecodePatch(
                     }
 
                     if (blockUpdateRedirects == true &&
-                        evidence.hasUpdateUrl &&
+                        evidence.hasUpdateUrl && evidence.hasUpdateString &&
                         reference.name in setOf("startActivity", "startActivityForResult") &&
                         reference.returnType == "V"
                     ) {
@@ -229,7 +212,7 @@ val bypassForcedUpdatesPatch = bytecodePatch(
             }
         }
 
-        val total = gates + dialogs + redirects + exits + playCore
+        val total = gates + dialogs + redirects + exits
         if (total == 0) {
             logger.warning(
                 "No high-confidence forced-update patterns found. This experimental patch " +
@@ -238,7 +221,7 @@ val bypassForcedUpdatesPatch = bytecodePatch(
         } else {
             logger.info(
                 "Bypass Forced Updates: $gates gate(s), $dialogs dialog(s), " +
-                    "$redirects redirect(s), $exits exit(s), $playCore Play Core flow(s) patched",
+                    "$redirects redirect(s), $exits exit(s) patched",
             )
         }
     }

@@ -68,7 +68,8 @@ private fun engineFlags(types: List<String>): EngineFlags = EngineFlags(
 val disableForcedOnlineChecksPatch = bytecodePatch(
     name = "Disable Forced Online Checks (Experimental)",
     description = """
-        Lets the app start without internet.
+        Try to bypass high-confidence client-side offline gates. It cannot bypass server-side login,
+        entitlement, or game-state checks.
     """.trimIndent(),
     default = false,
 ) {
@@ -106,7 +107,7 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
         key = "genericBytecodeStrategy",
         title = "Generic bytecode strategy",
         description = "Scan app bytecode for high-confidence online gate methods without engine detection",
-        default = true,
+        default = false,
     )
 
     execute {
@@ -116,10 +117,11 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
         val engines = engineFlags(types)
         val auto = autoMode == true
         val useCommon = auto || commonAndroidNetwork == true
-        val useUnity = auto || (unityStrategy == true && engines.unity)
-        val useUnreal = auto || (unrealStrategy == true && engines.unreal)
-        val useGodot = auto || (godotStrategy == true && engines.godot)
-        val useGeneric = auto || genericBytecodeStrategy == true
+        val useUnity = engines.unity && (auto || unityStrategy == true)
+        val useUnreal = engines.unreal && (auto || unrealStrategy == true)
+        val useGodot = engines.godot && (auto || godotStrategy == true)
+        val anyEngineDetected = engines.unity || engines.unreal || engines.godot
+        val useGeneric = if (auto) !anyEngineDetected else genericBytecodeStrategy == true
 
         var patched = 0
         if (useCommon) {
@@ -140,15 +142,8 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
             if (useUnreal) add("unreal")
             if (useGodot) add("godot")
         }
-        val detectedSelectedEngine =
-            (engines.unity && "unity" in enabledEngineStrategies) ||
-                (engines.unreal && "unreal" in enabledEngineStrategies) ||
-                (engines.godot && "godot" in enabledEngineStrategies)
-
         if (useGeneric || enabledEngineStrategies.isNotEmpty()) {
             classDefForEach { classDef ->
-                if (!useGeneric && !detectedSelectedEngine) return@classDefForEach
-
                 val mutableClass = mutableClassDefBy(classDef)
                 for (method in mutableClass.methods) {
                     if (method.returnType != "Z") continue

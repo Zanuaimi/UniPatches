@@ -17,6 +17,7 @@ import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import java.util.logging.Logger
 import org.w3c.dom.Element
 import helpers.ads.*
+import helpers.bytecode.cloneMutableAndPreserveParameters
 import helpers.manifest.NS_ANDROID
 import helpers.manifest.applicationOrNull
 
@@ -46,14 +47,34 @@ private fun ResourcePatchContext.discoverPairipAppClass(logger: Logger): String?
     return null
 }
 
+/** Reports bundled PairIP native cores without ever altering native libraries. */
+private fun ResourcePatchContext.discoverPairipNativeAbis(logger: Logger): List<String> {
+    val dir = try {
+        get("AndroidManifest.xml", false).parentFile
+    } catch (_: Exception) {
+        null
+    } ?: return emptyList()
+    val abis = java.io.File(dir, "lib").listFiles()
+        ?.filter { abiDir -> java.io.File(abiDir, "libpairipcore.so").isFile }
+        ?.map { it.name }
+        ?.sorted()
+        .orEmpty()
+    if (abis.isEmpty()) {
+        logger.info("PairIP native core: not found in the APK resources")
+    } else {
+        logger.info("PairIP native core ABI(s): ${abis.joinToString()}. Native libraries are never replaced or removed.")
+    }
+    return abis
+}
+
 @Suppress("unused")
 val pairipBypassPatch = bytecodePatch(
-    name = "PairIP Bypass Enhanced (Experimental)",
+    name = "PairIP Bypass Patch (Experimental, Enhanced)",
     description = """
         A merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.
 
         Automatic mode applies compatible strategies up to the selected risk level. It defaults to
-        Low Risk Strategies; Low and Med Risk Strategies enable medium-risk strategies, while Low, Med, and
+        Low and Med Risk Strategies; Low and Med Risk Strategies enable medium-risk strategies, while Low, Med, and
         High Risk Strategies also enables the invasive high-risk strategies.
 
         Turn off automatic mode to test the individual manual strategies. Manual selections are
@@ -77,7 +98,7 @@ val pairipBypassPatch = bytecodePatch(
     )
     val automaticRiskLevel by stringOption(
         key = "automaticRiskLevel",
-        default = "low",
+        default = "lowMedium",
         title = "PairIP > Automatic > Risk level",
         description = "Choose the highest risk level that automatic mode may apply. Manual strategy selections are unaffected.",
         values = linkedMapOf(
@@ -85,6 +106,32 @@ val pairipBypassPatch = bytecodePatch(
             "Low and Med Risk Strategies" to "lowMedium",
             "Low, Med, and High Risk Strategies" to "all",
         ),
+    )
+    val diagnosticOnly by booleanOption(
+        key = "pairipDiagnosticOnly",
+        default = false,
+        title = "PairIP > Automatic > Diagnostic-only mode",
+        description = "Do not modify the APK. The patch log reports detected PairIP generations, native-core ABIs, compatible strategy groups, and unavailable groups. Use this before trying manual strategies on an unsupported app.",
+    )
+    val manifestOnlyMode by booleanOption(
+        key = "pairipManifestOnlyMode",
+        default = false,
+        title = "PairIP > Automatic > Manifest-only first attempt",
+        description = "Apply only selected or automatic PairIP manifest strategies, then skip all bytecode changes. This is a conservative first test and does not automatically enable Firebase cleanup.",
+    )
+    // Optional compatibility-sensitive controls deliberately remain directly below
+    // automatic mode, before the normal manual strategy sections.
+    val disableFirebase by booleanOption(
+        key = "disableFirebase",
+        default = false,
+        title = "PairIP > Opt-in > Disable Firebase auto-init metadata",
+        description = "Add Firebase metadata switches that stop Analytics, Messaging, Crashlytics, and Performance from auto-initializing. Enable only for a Firebase startup crash; it can affect analytics and notifications.",
+    )
+    val removeFirebaseMeasurementComponents by booleanOption(
+        key = "pairipRemoveFirebaseMeasurementComponents",
+        default = false,
+        title = "PairIP > Opt-in > Remove Firebase measurement components",
+        description = "Remove Firebase measurement providers, receivers, and services from the manifest. Higher compatibility risk: leave disabled for Google Play Games, Firebase Auth, billing, or sign-in issues.",
     )
     val applicationRedirectStrategy by booleanOption(
         key = "applicationRedirectStrategy",
@@ -98,18 +145,12 @@ val pairipBypassPatch = bytecodePatch(
         title = "PairIP > Manifest > Remove PairIP entries (Low Risk)",
         description = "Remove PairIP license activities, provider, and CHECK_LICENSE permission from AndroidManifest.xml.",
     )
-    // Nai64 Firebase cleanup strategy, integrated with the enhanced patch.
-    val disableFirebase by booleanOption(
-        key = "disableFirebase",
-        default = false,
-        title = "PairIP > Manifest > Disable Firebase auto-init (Opt-in)",
-        description = "Optional Firebase startup cleanup. Enable only for apps that crash during Firebase measurement initialization; it may affect Firebase Auth or Play Games integrations.",
-    )
     var applicationRedirectApplied = false
     var manifestCleanupApplied = false
     var firebaseCleanupApplied = false
     var installerSpoofApplied: String? = null
     var vmCallSitesApplied = 0
+    var fullCheckOkApplied = false
 
     // -- Resource Strategy 1: PairIP Application redirect --
     // Replace the PairIP wrapper with a discovered real Application superclass.
@@ -119,8 +160,14 @@ val pairipBypassPatch = bytecodePatch(
     ) {
         execute {
             val logger = Logger.getLogger(this::class.java.name)
-            val applyManifestChanges = applicationRedirectStrategy == true ||
-                    (automaticStrategySelection == true && automaticRiskLevel != "high")
+            applicationRedirectApplied = false
+            manifestCleanupApplied = false
+            firebaseCleanupApplied = false
+            installerSpoofApplied = null
+            vmCallSitesApplied = 0
+            fullCheckOkApplied = false
+            val applyManifestChanges = diagnosticOnly != true && (applicationRedirectStrategy == true ||
+                    automaticStrategySelection == true)
             if (!applyManifestChanges) {
                 logger.info("Pairip Application redirect disabled by strategy selection")
                 return@execute
@@ -160,8 +207,8 @@ val pairipBypassPatch = bytecodePatch(
 
         execute {
             val logger = Logger.getLogger(this::class.java.name)
-            val applyManifestCleanup = manifestCleanupStrategy == true ||
-                    (automaticStrategySelection == true && automaticRiskLevel != "high")
+            val applyManifestCleanup = diagnosticOnly != true && (manifestCleanupStrategy == true ||
+                    (automaticStrategySelection == true && automaticRiskLevel != "low"))
             if (!applyManifestCleanup) {
                 logger.info("Pairip XML manifest cleanup disabled by strategy selection")
                 return@execute
@@ -217,7 +264,7 @@ val pairipBypassPatch = bytecodePatch(
             val logger = Logger.getLogger(this::class.java.name)
             // Credit: Nai64Patches / Nai64. Keep this opt-in because removing
             // Firebase initialization can affect Firebase Auth and Play Games.
-            if (disableFirebase != true) {
+            if (diagnosticOnly == true || (disableFirebase != true && removeFirebaseMeasurementComponents != true)) {
                 logger.info("Firebase cleanup disabled by strategy selection")
                 return@execute
             }
@@ -230,7 +277,7 @@ val pairipBypassPatch = bytecodePatch(
             )
             var added = 0
             var updated = 0
-            document("AndroidManifest.xml").use { manifest ->
+            if (disableFirebase == true) document("AndroidManifest.xml").use { manifest ->
                 val application = manifest.documentElement.applicationOrNull()
                     ?: return@use
                 val metadata = application.getElementsByTagName("meta-data")
@@ -270,7 +317,7 @@ val pairipBypassPatch = bytecodePatch(
                 "com.google.android.gms.measurement.AppMeasurementContentProvider",
             )
             var removed = 0
-            document("AndroidManifest.xml").use { manifest ->
+            if (removeFirebaseMeasurementComponents == true) document("AndroidManifest.xml").use { manifest ->
                 for (tag in listOf("provider", "receiver", "service")) {
                     val nodes = manifest.getElementsByTagName(tag)
                     for (index in nodes.length - 1 downTo 0) {
@@ -293,7 +340,32 @@ val pairipBypassPatch = bytecodePatch(
         }
     }
 
-    dependsOn(firebaseCleanupPatch)
+    val pairipDiagnosticsPatch = resourcePatch(
+        name = "PairIP Compatibility Diagnostics (internal)",
+        default = false,
+    ) {
+        dependsOn(firebaseCleanupPatch)
+
+        execute {
+            val logger = Logger.getLogger(this::class.java.name)
+            discoverPairipNativeAbis(logger)
+            val pairipClassCount = try {
+                val dir = get("AndroidManifest.xml", false).parentFile
+                (0..99).sumOf { index ->
+                    val dex = java.io.File(dir, if (index == 0) "classes.dex" else "classes${index + 1}.dex")
+                    if (!dex.isFile) 0 else DexFileFactory.loadDexFile(dex, Opcodes.getDefault()).classes.count {
+                        it.type.startsWith("Lcom/pairip/")
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warning("Could not count PairIP classes: ${e.message}")
+                0
+            }
+            logger.info("PairIP compatibility scan: $pairipClassCount com.pairip class(es) detected")
+        }
+    }
+
+    dependsOn(pairipDiagnosticsPatch)
 
     // Every concrete strategy has its own option. The title prefixes organize
     // the manual settings in the same way as the Universal Overlay settings.
@@ -397,6 +469,12 @@ val pairipBypassPatch = bytecodePatch(
         default = false,
         title = "PairIP > Installer > Spoof local installer check (Medium Risk)",
         description = "Make PairIP performLocalInstallerCheck() report success."
+    )
+    val pairipLicenseClientForceFullCheckOk by booleanOption(
+        key = "pairipLicenseClientForceFullCheckOk",
+        default = false,
+        title = "PairIP > License Client > Force FULL_CHECK_OK state (Manual, Medium Risk)",
+        description = "Manual-only compatibility strategy inspired by PairIPFix. When the exact LicenseClient state field and FULL_CHECK_OK enum constant exist, set the client state to successful before a license check. Do not combine with bypassing checkLicense or initializeLicenseCheck, because those methods may then never run.",
     )
     val pairipLicenseClientCheckLicense by booleanOption(
         key = "pairipLicenseClientCheckLicense",
@@ -566,6 +644,51 @@ val pairipBypassPatch = bytecodePatch(
                 else -> risk == "low" || risk == "medium"
             })
 
+        fun isDetected(vararg matches: Any?) = matches.any { it != null }
+        val detectedGroups = linkedMapOf(
+            "installer checks" to isDetected(
+                PerformLocalInstallerCheckFingerprint.methodOrNull,
+                GenericBooleanInstallerCheckFingerprint.methodOrNull,
+                GenericStringInstallerCheckFingerprint.methodOrNull,
+            ),
+            "signature checks" to isDetected(
+                PairipSignatureCheckVerifyIntegrityFingerprint.methodOrNull,
+                PairipSignatureCheckVerifySignatureMatchesFingerprint.methodOrNull,
+            ),
+            "legacy LicenseClient" to isDetected(
+                PairipLicenseClientCheckLicenseFingerprint.methodOrNull,
+                PairipLicenseClientInitializeLicenseCheckFingerprint.methodOrNull,
+                PairipLicenseClientProcessResponseFingerprint.methodOrNull,
+            ),
+            "V2 licensing" to isDetected(
+                PairipV2CheckLicenseInternalFingerprint.methodOrNull,
+                PairipV2ScheduleRepeatedLicenseCheckFingerprint.methodOrNull,
+                PairipV2LicenseResponseHelperVerifySignatureFingerprint.methodOrNull,
+            ),
+            "V3 licensing" to isDetected(
+                PairipLicenseClientV3OnActivityCreateFingerprint.methodOrNull,
+                PairipResponseValidatorV3ValidateResponseFingerprint.methodOrNull,
+            ),
+            "PairIP runtime" to isDetected(
+                PairipApplicationClinitFingerprint.methodOrNull,
+                PairipVMRunnerInvokeFingerprint.methodOrNull,
+                PairipStartupLauncherLaunchFingerprint.methodOrNull,
+                PairipStartupLauncherPairipFingerprint.methodOrNull,
+            ),
+        )
+        val detected = detectedGroups.filterValues { it }.keys
+        val unavailable = detectedGroups.filterValues { !it }.keys
+        logger.info("PairIP strategy detection: compatible=${detected.ifEmpty { listOf("none") }.joinToString()}; unavailable=${unavailable.ifEmpty { listOf("none") }.joinToString()}")
+
+        if (diagnosticOnly == true) {
+            logger.info("PairIP diagnostic-only mode completed. No manifest, bytecode, or native-library changes were made.")
+            return@execute
+        }
+        if (manifestOnlyMode == true) {
+            logger.info("PairIP manifest-only first attempt completed. All bytecode strategies were skipped.")
+            return@execute
+        }
+
         // Internal group gates keep the execution readable, but each concrete
         // operation below is guarded by its own manual option.
         val applyLocalInstallerChecks =
@@ -630,7 +753,7 @@ val pairipBypassPatch = bytecodePatch(
 
             // -- Strategy 2: Generic Play Store installer spoof --
             // Credit: Nai64Patches / Nai64. Try the boolean and string forms,
-            // then the fallback fingerprints, stopping after the first match.
+            // stopping after the first match.
             if (isSelected(pairipGenericInstallerSource, risk = "high")) {
                 if (installerSpoofApplied == null) GenericBooleanInstallerCheckFingerprint.methodOrNull?.let {
                     it.addInstructions(0, listOf(
@@ -647,22 +770,6 @@ val pairipBypassPatch = bytecodePatch(
                     """.trimIndent())
                     installerSpoofApplied = "generic string installer spoof"
                     logger.info("Applied Play Store installer source spoof")
-                }
-                if (installerSpoofApplied == null) FallbackBooleanInstallerCheckFingerprint.methodOrNull?.let {
-                    it.addInstructions(0, listOf(
-                        BuilderInstruction11n(Opcode.CONST_4, 0, 1),
-                        BuilderInstruction11x(Opcode.RETURN, 0),
-                    ))
-                    installerSpoofApplied = "fallback boolean installer spoof"
-                    logger.info("Applied fallback boolean Play Store spoof")
-                }
-                if (installerSpoofApplied == null) FallbackStringInstallerCheckFingerprint.methodOrNull?.let {
-                    it.addInstructions(0, """
-                        const-string v0, "com.android.vending"
-                        return-object v0
-                    """.trimIndent())
-                    installerSpoofApplied = "fallback string installer spoof"
-                    logger.info("Applied fallback installer source spoof")
                 }
             }
 
@@ -856,6 +963,52 @@ val pairipBypassPatch = bytecodePatch(
             if (isSelected(pairipLicenseClientV3OnActivityCreate)) PairipLicenseClientV3OnActivityCreateFingerprint.methodOrNull?.let {
                 it.addInstructions(0, "return-void")
                 logger.info("Applied Pairip LicenseClientV3.onActivityCreate bypass")
+            }
+        }
+
+        // PairIPFix performs this dynamically through LSPosed. For a static APK patch, only add
+        // it when the legacy PairIP classes expose the exact field/enum layout it relies on.
+        // This remains manual-only: automatic selection must not alter a state machine whose
+        // behavior differs between PairIP versions.
+        if (pairipLicenseClientForceFullCheckOk == true &&
+            (isSelected(pairipLicenseClientCheckLicense) || isSelected(pairipLicenseClientInitializeLicenseCheck))
+        ) {
+            logger.warning("Skipped FULL_CHECK_OK strategy: checkLicense or initializeLicenseCheck is also selected and would make the state assignment unreachable.")
+        } else if (pairipLicenseClientForceFullCheckOk == true) {
+            val stateType = "Lcom/pairip/licensecheck/LicenseClient${'$'}LicenseCheckState;"
+            val clientType = "Lcom/pairip/licensecheck/LicenseClient;"
+            val anchor = PairipLicenseClientCheckLicenseFingerprint.methodOrNull
+                ?: PairipLicenseClientInitializeLicenseCheckFingerprint.methodOrNull
+            val clientClass = PairipLicenseClientCheckLicenseFingerprint.classDefOrNull
+                ?: PairipLicenseClientInitializeLicenseCheckFingerprint.classDefOrNull
+            var hasFullCheckOk = false
+            classDefForEach { classDef ->
+                if (classDef.type == stateType && classDef.fields.any { it.name == "FULL_CHECK_OK" && it.type == stateType }) {
+                    hasFullCheckOk = true
+                }
+            }
+            val hasStateField = clientClass?.fields?.any {
+                it.name == "licenseCheckState" && it.type == stateType
+            } == true
+            when {
+                anchor == null || clientClass == null ->
+                    logger.warning("Skipped FULL_CHECK_OK strategy: no supported legacy LicenseClient method was found.")
+                !hasStateField || !hasFullCheckOk ->
+                    logger.warning("Skipped FULL_CHECK_OK strategy: expected LicenseClient state field or enum constant was not found.")
+                else -> {
+                    val mutableClass = mutableClassDefBy(clientClass)
+                    val method = anchor.cloneMutableAndPreserveParameters(mutableClass)
+                    if ((method.implementation?.registerCount ?: 0) < 1) {
+                        logger.warning("Skipped FULL_CHECK_OK strategy: LicenseClient method has no temporary register.")
+                    } else {
+                        method.addInstructions(0, """
+                            sget-object v0, $stateType->FULL_CHECK_OK:$stateType
+                            sput-object v0, $clientType->licenseCheckState:$stateType
+                        """.trimIndent())
+                        fullCheckOkApplied = true
+                        logger.info("Applied PairIP LicenseClient FULL_CHECK_OK state strategy")
+                    }
+                }
             }
         }
 
@@ -1104,6 +1257,7 @@ val pairipBypassPatch = bytecodePatch(
             if (applicationRedirectApplied) add("manifest Application redirect")
             if (manifestCleanupApplied) add("manifest license cleanup")
             if (firebaseCleanupApplied) add("Firebase cleanup")
+            if (fullCheckOkApplied) add("LicenseClient FULL_CHECK_OK state")
             if (isSelected(vmCallSiteChecks, risk = "high") && vmCallSitesApplied > 0) {
                 add("external VMRunner call sites")
             }
@@ -1305,6 +1459,25 @@ val pairipBypassPatch = bytecodePatch(
                 repeatedCheckReadApplied
             )
         }
+        val selectedGroups = linkedMapOf(
+            "installer checks" to applyLocalInstallerChecks,
+            "signature checks" to applySignatureChecks,
+            "legacy LicenseClient" to applyLicenseClientChecks,
+            "V2 licensing" to applyPairipV2Checks,
+            "V3 licensing" to (applyLicenseClientV3Activity || isSelected(pairipResponseValidatorV3ValidateResponse)),
+            "PairIP runtime" to (applyPairipVmRunnerChecks || applyStartupLauncherChecks),
+        )
+        val detectedButNotSelected = detectedGroups
+            .filter { (group, wasDetected) -> wasDetected && selectedGroups[group] != true }
+            .keys
+        val selectedButUnmatched = selectedGroups
+            .filter { (group, selected) -> selected && detectedGroups[group] != true }
+            .keys
+        logger.info(
+            "PairIP strategy summary: applied=${applied.size}; " +
+                "detected-groups-not-selected=${detectedButNotSelected.ifEmpty { listOf("none") }.joinToString()}; " +
+                "selected-groups-with-no-match=${selectedButUnmatched.ifEmpty { listOf("none") }.joinToString()}"
+        )
         if (applied.isEmpty()) {
             val reason = if (automaticStrategySelection == true) {
                 "No Pairip license methods found. No changes applied."
@@ -1313,10 +1486,8 @@ val pairipBypassPatch = bytecodePatch(
             }
             logger.warning(reason)
         } else {
-            logger.info("PairIP Bypass Enhanced (Experimental) patch succeeded (${applied.size} strategy(s) applied)")
-            logger.warning("IF THE PATCHED APP STILL DOES NOT WORK AFTER ALL AVAILABLE STRATEGIES HAVE BEEN TRIED, STOP TRYING.")
-            logger.warning("DO NOT ASK FOR A FIX; THIS PATCH CANNOT MAKE THAT APP WORK.")
-            logger.warning("THE APP IS NOT SUPPORTED BY THIS PATCH AND WILL NOT WORK.")
+            logger.info("PairIP Bypass Patch (Experimental, Enhanced) succeeded (${applied.size} strategy(s) applied)")
+            logger.warning("If the app still fails, retry with diagnostic-only mode, then test fewer manual strategies. Server-side integrity or licensing cannot be bypassed by this patch.")
         }
     }
 }
