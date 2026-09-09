@@ -1,3 +1,9 @@
+## [1.10.3](https://github.com/Zanuaimi/UniPatches/compare/v1.10.2...v1.10.3) (2026-09-09)
+
+### 🐛 Bug Fixes
+
+* **overlay:** finalize shared core release ([6b525ec](https://github.com/Zanuaimi/UniPatches/commit/6b525ecd8317177cdafa7c8ebaab90f7b9ad6226))
+
 ## [1.10.2](https://github.com/Zanuaimi/UniPatches/compare/v1.10.1...v1.10.2) (2026-09-08)
 
 ### 🐛 Bug Fixes

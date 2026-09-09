@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.10.2",
+  "version": "1.10.3",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -1920,6 +1920,18 @@
           "type": "kotlin.String",
           "default": "",
           "values": null
+        },
+        {
+          "key": "runtimeOverlayActivityInjectionMode",
+          "title": "Advanced > Activity > Injection strategy",
+          "description": "Universal automatic discovery uses the Application entry point first and a universal Activity fallback. Explicit target Activity first is intended for app-specific overlay patches; it uses the configured Activity name, then falls back to the universal strategy if that target is unavailable.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "universal",
+          "values": {
+            "Universal automatic discovery (default)": "universal",
+            "Explicit target Activity, then universal fallback": "explicitActivity"
+          }
         },
         {
           "key": "runtimeOverlayActivityInstallBanlist",
