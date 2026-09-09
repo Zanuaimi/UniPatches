@@ -161,7 +161,8 @@ final class OverlayConfig {
         c.menuTextColor6 = color(field(v, offset, 63), c.menuTextColor2);
         c.separatorBackgroundColor = color(field(v, offset, 64), c.background);
         c.activityInstallBanlist = empty(field(v, offset, 65), DEFAULT_ACTIVITY_INSTALL_BANLIST);
-        c.iconStyle = choice(field(v, offset, 66), "text", "text", "shape", "multi", "parts");
+        // v2.1 keeps only Text and Multi-parts. Older shape/multi values safely become Text.
+        c.iconStyle = "parts".equals(field(v, offset, 66)) ? "parts" : "text";
         c.iconShape = choice(field(v, offset, 67), "triangle", "triangle", "chevron", "smile", "circle", "z", "revanced");
         c.iconShapeColor1 = color(field(v, offset, 68), 0xFFFFFFFF);
         c.iconShapeColor2 = color(field(v, offset, 69), c.iconShapeColor1);

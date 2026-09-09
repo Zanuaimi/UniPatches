@@ -33,6 +33,15 @@ final class OverlayViews {
         return drawable;
     }
 
+    /** Compact controls use the menu fill/outline while their geometry follows the selected theme. */
+    static GradientDrawable themedControlBackground(int color, int stroke, int strokeWidth, String theme) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius("legacy".equals(theme) ? 0f : ("monet".equals(theme) ? 1000f : 18f));
+        drawable.setStroke(Math.max(1, strokeWidth), stroke);
+        return drawable;
+    }
+
     /** Builds the legacy icon background while keeping its gradient and outline independent. */
     static Drawable gradientBackground(int first, int second, float angle, int stroke, int strokeWidth, boolean circle) {
         return new GradientBackground(first, second, angle, stroke, strokeWidth, circle, true);
@@ -278,10 +287,8 @@ final class OverlayViews {
                 canvas.drawRoundRect(body, radius, radius, paint);
             }
 
-            if (iconParts.length > 0) {
-                if (!drawParts(canvas, body) && !"text".equals(style)) drawShape(canvas, body);
-            } else if (!"text".equals(style)) drawShape(canvas, body);
-            if (highlight && !"text".equals(style)) {
+            if ("parts".equals(style) && iconParts.length > 0) drawParts(canvas, body);
+            if (highlight && "parts".equals(style)) {
                 paint.setStyle(Paint.Style.FILL);
                 paint.setShader(null);
                 paint.setColor(0x55FFFFFF);
@@ -398,7 +405,7 @@ final class OverlayViews {
                 paint.setStyle(Paint.Style.FILL);
                 canvas.drawRoundRect(area, "roundedRect".equals(shape) ? Math.min(width, height) * .18f : 0f,
                         "roundedRect".equals(shape) ? Math.min(width, height) * .18f : 0f, paint);
-            } else if ("chevron".equals(shape) || "v".equals(shape)) {
+            } else if ("chevron".equals(shape)) {
                 path.moveTo(area.left + width * .12f, area.top + height * .18f);
                 path.lineTo(area.centerX(), area.bottom - height * .12f);
                 path.lineTo(area.right - width * .12f, area.top + height * .18f);
@@ -413,6 +420,15 @@ final class OverlayViews {
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(stroke);
                 canvas.drawArc(area, 20f, 140f, false, paint);
+            } else if ("text".equals(shape)) {
+                paint.setStyle(Paint.Style.FILL);
+                paint.setTextAlign(Paint.Align.CENTER);
+                paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                paint.setTextSize(Math.max(1f, Math.min(width / Math.max(1, part.text.length()), height) * .82f));
+                Paint.FontMetrics metrics = paint.getFontMetrics();
+                float baseline = area.centerY() - (metrics.ascent + metrics.descent) / 2f;
+                canvas.drawText(part.text, area.centerX(), baseline, paint);
+                paint.setTextAlign(Paint.Align.LEFT);
             } else if ("diamond".equals(shape)) {
                 path.moveTo(area.centerX(), area.top);
                 path.lineTo(area.right, area.centerY());
@@ -476,22 +492,25 @@ final class OverlayViews {
         }
 
         private static final class IconPart {
-            final String shape, fill;
+            final String shape, fill, text;
             final float x, y, width, height, rotation, strokeWidth, opacity, gradientAngle;
             final int color1, color2, layer;
 
             private IconPart(String shape, float x, float y, float width, float height, float rotation,
-                             String fill, int color1, int color2, float strokeWidth, float opacity, int layer) {
+                             String fill, int color1, int color2, float strokeWidth, float opacity, int layer, String text) {
                 this.shape = shape; this.x = x; this.y = y; this.width = width; this.height = height;
                 this.rotation = rotation; this.fill = fill; this.color1 = color1; this.color2 = color2;
                 this.strokeWidth = strokeWidth; this.opacity = opacity; this.layer = layer;
-                this.gradientAngle = rotation;
+                this.text = text;
+                // Rotation belongs to the geometry. The canvas transform rotates the fill with
+                // the part, so reusing this value as a separate gradient direction is redundant.
+                this.gradientAngle = 0f;
             }
 
             static IconPart parse(String encoded) {
                 try {
                     String[] fields = encoded.split("\\|", -1);
-                    if (fields.length != 12) return null;
+                    if (fields.length < 12 || fields.length > 13) return null;
                     String shape = fields[0].trim();
                     String fill = "gradient".equals(fields[6].trim()) ? "gradient" : "solid";
                     if (!isSupportedShape(shape)) return null;
@@ -505,7 +524,10 @@ final class OverlayViews {
                     float stroke = bounded(fields[9], 3f, 0f, 32f);
                     float opacity = bounded(fields[10], 100f, 0f, 100f);
                     int layer = Math.round(bounded(fields[11], 0f, -32f, 32f));
-                    return new IconPart(shape, x, y, width, height, rotation, fill, color1, color2, stroke, opacity, layer);
+                    String text = fields.length == 13 ? fields[12].trim().replace('|', ' ') : "";
+                    if ("text".equals(shape)) text = text.substring(0, Math.min(3, text.length()));
+                    if ("text".equals(shape) && text.isEmpty()) text = "?";
+                    return new IconPart(shape, x, y, width, height, rotation, fill, color1, color2, stroke, opacity, layer, text);
                 } catch (RuntimeException ignored) {
                     return null;
                 }
@@ -513,12 +535,12 @@ final class OverlayViews {
 
             private static boolean isSupportedShape(String shape) {
                 return "triangle".equals(shape) || "invertedTriangle".equals(shape)
-                        || "circle".equals(shape) || "ring".equals(shape)
+                        || "circle".equals(shape)
                         || "square".equals(shape) || "roundedRect".equals(shape)
-                        || "chevron".equals(shape) || "v".equals(shape)
+                        || "chevron".equals(shape)
                         || "z".equals(shape) || "line".equals(shape)
                         || "arc".equals(shape) || "diamond".equals(shape)
-                        || "star".equals(shape) || "heart".equals(shape);
+                        || "star".equals(shape) || "heart".equals(shape) || "text".equals(shape);
             }
 
             private static float bounded(String value, float fallback, float min, float max) {

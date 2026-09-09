@@ -26,6 +26,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.SeekBar;
@@ -81,6 +82,7 @@ public final class OverlayRuntime {
     private static Application installedApplication;
     private static OverlayLifecycle lifecycleCallbacks;
     private static OverlayConfig configuration;
+    private static String installedConfigurationPayload;
     private static Boolean keepAwakeState;
     private static Boolean fullscreenState;
     private static Boolean screenshotsState;
@@ -94,7 +96,6 @@ public final class OverlayRuntime {
     private static int sharedButtonY;
     private static Float appBrightnessState;
     private static Integer rotationModeState;
-    private static boolean customIconFallbackNotified;
     private static boolean fullyClosedToastShown;
     private static final List<OverlayAppSpecificModuleProvider> APP_SPECIFIC_PROVIDERS = new ArrayList<>();
 
@@ -128,7 +129,13 @@ public final class OverlayRuntime {
     /** Primary entry point, called once from Application.onCreate(). */
     public static synchronized void install(Application application, String encodedConfig) {
         if (application == null || globallyClosed) return;
+        if (installedConfigurationPayload != null && !installedConfigurationPayload.equals(encodedConfig)) {
+            // Two overlay patches in one APK cannot safely own the same process-wide runtime.
+            // Keep the first complete configuration instead of silently replacing a live menu.
+            return;
+        }
         configuration = OverlayConfig.decode(encodedConfig);
+        installedConfigurationPayload = encodedConfig;
         if (sessionStartElapsed == 0) sessionStartElapsed = SystemClock.elapsedRealtime();
         if (!callbacksRegistered) {
             installedApplication = application;
@@ -147,10 +154,16 @@ public final class OverlayRuntime {
             if (application != null) {
                 install(application, encodedConfig);
             } else {
-                configuration = OverlayConfig.decode(encodedConfig);
+                if (installedConfigurationPayload == null || installedConfigurationPayload.equals(encodedConfig)) {
+                    configuration = OverlayConfig.decode(encodedConfig);
+                    installedConfigurationPayload = encodedConfig;
+                }
             }
         } catch (RuntimeException ignored) {
-            configuration = OverlayConfig.decode(encodedConfig);
+            if (installedConfigurationPayload == null || installedConfigurationPayload.equals(encodedConfig)) {
+                configuration = OverlayConfig.decode(encodedConfig);
+                installedConfigurationPayload = encodedConfig;
+            }
         }
         showActivity(activity);
     }
@@ -224,6 +237,7 @@ public final class OverlayRuntime {
         lifecycleCallbacks = null;
         callbacksRegistered = false;
         configuration = null;
+        installedConfigurationPayload = null;
         sessionStartElapsed = 0;
         sharedButtonPositionInitialized = false;
         appBrightnessState = null;
@@ -280,7 +294,6 @@ public final class OverlayRuntime {
         private float startX;
         private float startY;
         private boolean dragged;
-        private boolean customIconFallbackRequired;
         private String pendingInlineSectionLabel;
         private final Runnable dragVisibilityFade;
 
@@ -367,7 +380,6 @@ public final class OverlayRuntime {
                 activity.addContentView(root, contentLayoutParams());
                 attached = true;
                 root.post(this::updateMonitorLayout);
-                if (customIconFallbackRequired) root.post(this::showCustomIconFallbackToast);
             } catch (RuntimeException failure) {
                 removeRoot();
                 throw failure;
@@ -476,11 +488,18 @@ public final class OverlayRuntime {
                 image.setAntiAlias(true);
                 button.setBackground(image);
             } else {
-                customIconFallbackRequired = config.iconType.equals("image");
-                if (!"text".equals(config.iconStyle)) {
+                // A supplied image owns icon rendering completely. Do not silently draw a legacy
+                // symbol behind an invalid image payload, because that makes the selected icon
+                // mode ambiguous.
+                if (config.iconType.equals("image")) {
+                    button.setText("");
+                    button.setBackground(OverlayViews.gradientBackground(
+                            config.buttonBackground, config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
+                            config.iconGradientAngle, Color.TRANSPARENT, 0, config.shape == 1));
+                } else if ("parts".equals(config.iconStyle)) {
                     button.setText("");
                     button.setBackground(legacyIconDrawable());
-                    button.setContentDescription(config.iconShape + " overlay icon");
+                    button.setContentDescription("Multi-parts overlay icon");
                 } else {
                     button.setText(config.buttonText);
                     button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, config.iconTextSize);
@@ -524,17 +543,6 @@ public final class OverlayRuntime {
                     config.iconBackgroundColor3,
                     config.iconBackgroundColor4,
                     config.iconParts);
-        }
-
-        /** Shows the fallback notice after the overlay root is attached to the Activity. */
-        private void showCustomIconFallbackToast() {
-            if (detached || fullyClosed || !customIconFallbackRequired || customIconFallbackNotified) return;
-            customIconFallbackNotified = true;
-            try {
-                Toast.makeText(activity, "Image not found, falling back to legacy icon", Toast.LENGTH_LONG).show();
-            } catch (RuntimeException ignored) {
-                // Toast availability is host-dependent and must not affect overlay startup.
-            }
         }
 
         /** Decodes the image embedded by the patch; user-supplied paths are never needed at runtime. */
@@ -825,7 +833,12 @@ public final class OverlayRuntime {
                 image.setGravity(Gravity.CENTER);
                 icon.setBackground(image);
             } else {
-                if (!"text".equals(config.iconStyle)) {
+                if ("image".equals(config.iconType)) {
+                    icon.setText("");
+                    icon.setBackground(OverlayViews.gradientBackground(
+                            config.buttonBackground, config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
+                            config.iconGradientAngle, Color.TRANSPARENT, 0, config.shape == 1));
+                } else if ("parts".equals(config.iconStyle)) {
                     icon.setText("");
                     icon.setBackground(legacyIconDrawable());
                 } else {
@@ -1073,6 +1086,7 @@ public final class OverlayRuntime {
             LinearLayout header = new LinearLayout(overlayContext);
             header.setOrientation(LinearLayout.HORIZONTAL);
             header.setGravity(Gravity.CENTER_VERTICAL);
+            header.setBaselineAligned(false);
             TextView title = text(moduleTitleText(module.label()), 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             header.addView(title, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -1102,16 +1116,18 @@ public final class OverlayRuntime {
                 enabled = null;
             }
 
+            TextView settings = null;
             if (module.hasSettings()) {
-                TextView settings = moduleButton("Settings");
+                settings = moduleButton("Settings");
                 settings.setContentDescription(module.label() + " settings");
-                settings.setOnClickListener(v -> module.showSettings(activity, config.background,
-                        config.menuTextColor1, config.outline, config.controlForeground));
-                header.addView(settings, new LinearLayout.LayoutParams(-2, -2));
+                header.addView(settings, moduleButtonParams());
             }
-            TextView action = moduleButton(module.actionLabel());
-            action.setContentDescription(module.label() + " action");
-            header.addView(action, new LinearLayout.LayoutParams(-2, -2));
+            TextView action = null;
+            if (module.hasActionButton()) {
+                action = moduleButton(module.actionLabel());
+                action.setContentDescription(module.label() + " action");
+                header.addView(action, moduleButtonParams());
+            }
             row.addView(header, new LinearLayout.LayoutParams(-1, -2));
 
             TextView description = text(module.description(), 13, config.menuTextColor3);
@@ -1120,19 +1136,140 @@ public final class OverlayRuntime {
             TextView value = text(module.valueText(), 13, config.menuTextColor4);
             value.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             row.addView(value, new LinearLayout.LayoutParams(-1, -2));
-            action.setOnClickListener(v -> {
-                if (enabled != null && !enabled.isChecked()) {
-                    Toast.makeText(activity, "Enable " + module.label() + " first", Toast.LENGTH_SHORT).show();
+            if (settings != null) {
+                settings.setOnClickListener(v -> showModuleSettingsPopup(module, () -> {
+                    try { value.setText(module.valueText()); } catch (RuntimeException ignored) { }
+                }));
+            }
+            if (action != null) {
+                action.setOnClickListener(v -> {
+                    if (enabled != null && !enabled.isChecked()) {
+                        Toast.makeText(activity, "Enable " + module.label() + " first", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    try {
+                        if (module.performAction(activity)) {
+                            value.setText(module.valueText());
+                            Toast.makeText(activity, module.actionLabel() + " completed; refresh the scene if needed", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(activity, module.actionLabel() + " failed", Toast.LENGTH_SHORT).show();
+                        }
+                    } catch (RuntimeException ignored) {
+                        Toast.makeText(activity, module.actionLabel() + " failed", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+            parent.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        }
+
+        private LinearLayout.LayoutParams moduleButtonParams() {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, -2);
+            params.gravity = Gravity.CENTER_VERTICAL;
+            params.leftMargin = dp(4);
+            return params;
+        }
+
+        private void showModuleSettingsPopup(OverlayActionModule module, Runnable onApplied) {
+            if (root == null) return;
+            final FrameLayout layer = new FrameLayout(overlayContext);
+            layer.setBackgroundColor(0xB3000000);
+            layer.setClickable(true);
+            layer.setFocusable(true);
+            layer.setOnClickListener(v -> root.removeView(layer));
+
+            LinearLayout card = new LinearLayout(overlayContext);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(20), dp(18), dp(20), dp(12));
+            card.setBackground(OverlayViews.background(config.background, config.outline, false,
+                    config.outlineWidth, !"square".equals(config.menuCorners)));
+            card.setClickable(true);
+            card.setOnClickListener(v -> { });
+            TextView title = text(module.settingsTitle(), 20, config.menuTextColor1);
+            title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            card.addView(title, new LinearLayout.LayoutParams(-1, -2));
+
+            final String textValue = module.settingsTextValue();
+            final EditText input;
+            if (textValue != null) {
+                TextView hint = text(module.settingsTextHint(), 13, config.menuTextColor3);
+                LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
+                hintParams.topMargin = dp(8);
+                card.addView(hint, hintParams);
+                input = new EditText(overlayContext);
+                input.setSingleLine(true);
+                input.setInputType(module.settingsInputType());
+                input.setText(textValue);
+                input.setTextColor(config.menuTextColor1);
+                input.setHintTextColor(config.menuTextColor3);
+                input.setSelectAllOnFocus(false);
+                input.setBackground(OverlayViews.background(config.background, config.outline, false,
+                        Math.max(1, config.outlineWidth), !"square".equals(config.menuCorners)));
+                LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(-1, -2);
+                inputParams.topMargin = dp(10);
+                card.addView(input, inputParams);
+            } else {
+                input = null;
+                String[] choices = module.settingsChoices();
+                if (choices == null) choices = new String[0];
+                boolean[] values = module.settingsValues();
+                if (values == null) values = new boolean[0];
+                ScrollView scroll = new ScrollView(overlayContext);
+                LinearLayout choicesLayout = new LinearLayout(overlayContext);
+                choicesLayout.setOrientation(LinearLayout.VERTICAL);
+                for (int i = 0; i < choices.length; i++) {
+                    CheckBox check = new CheckBox(overlayContext);
+                    check.setText(choices[i]);
+                    check.setTextColor(config.menuTextColor2);
+                    check.setChecked(i < values.length && values[i]);
+                    check.setTag(Integer.valueOf(i));
+                    styleCheckBox(check);
+                    choicesLayout.addView(check, new LinearLayout.LayoutParams(-1, -2));
+                }
+                scroll.addView(choicesLayout, new ScrollView.LayoutParams(-1, -2));
+                // The card is wrap-content, so a weighted zero-height child can measure as zero
+                // on some OEM layouts. A bounded explicit height keeps long lists scrollable.
+                LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(-1, dp(260));
+                scrollParams.topMargin = dp(8);
+                card.addView(scroll, scrollParams);
+                card.setTag(choicesLayout);
+            }
+
+            LinearLayout actions = new LinearLayout(overlayContext);
+            actions.setOrientation(LinearLayout.HORIZONTAL);
+            actions.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(-1, -2);
+            actionsParams.topMargin = dp(8);
+            card.addView(actions, actionsParams);
+            addAction(actions, "Cancel", v -> root.removeView(layer));
+            addAction(actions, module.settingsConfirmationLabel(), v -> {
+                boolean applied;
+                try {
+                    if (input != null) {
+                        applied = module.applySettingsText(input.getText().toString());
+                    } else {
+                        LinearLayout choicesLayout = (LinearLayout) card.getTag();
+                        boolean[] values = new boolean[choicesLayout.getChildCount()];
+                        for (int i = 0; i < values.length; i++) values[i] = ((CheckBox) choicesLayout.getChildAt(i)).isChecked();
+                        module.applySettings(values);
+                        applied = true;
+                    }
+                    if (applied && module.appliesSettingsOnConfirm()) {
+                        applied = module.applySavedSettings(activity);
+                    }
+                } catch (RuntimeException ignored) {
+                    applied = false;
+                }
+                if (!applied) {
+                    Toast.makeText(activity, "Enter a valid value", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                if (module.performAction(activity)) {
-                    value.setText(module.valueText());
-                    Toast.makeText(activity, module.label() + " preview completed; refresh the scene if needed", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(activity, module.label() + " preview failed", Toast.LENGTH_SHORT).show();
-                }
+                if (onApplied != null) onApplied.run();
+                root.removeView(layer);
             });
-            parent.addView(row, new LinearLayout.LayoutParams(-1, -2));
+            FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER);
+            cardParams.setMargins(dp(20), dp(20), dp(20), dp(20));
+            layer.addView(card, cardParams);
+            root.addView(layer);
         }
 
         private void addIntegratedModules(LinearLayout parent) {
@@ -1150,11 +1287,11 @@ public final class OverlayRuntime {
         }
 
         private TextView moduleButton(String label) {
-            TextView button = text(label, 12, config.controlForeground);
+            TextView button = text(label, 12, config.outline);
             button.setGravity(Gravity.CENTER);
             button.setPadding(dp(8), dp(4), dp(8), dp(4));
-            button.setBackground(OverlayViews.background(config.controlBackground, config.outline, false,
-                    config.outlineWidth, !"square".equals(config.menuCorners)));
+            button.setBackground(OverlayViews.themedControlBackground(
+                    config.background, config.outline, config.outlineWidth, config.controlTheme));
             button.setClickable(true);
             return button;
         }
@@ -1309,14 +1446,14 @@ public final class OverlayRuntime {
             ArrayAdapter<String> adapter = new ArrayAdapter<String>(overlayContext, android.R.layout.simple_spinner_item, labels) {
                 @Override public View getView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getView(position, convertView, parentView);
-                    view.setTextColor(config.menuTextColor1);
+                    view.setTextColor(config.outline);
                     view.setBackgroundColor(config.background);
                     view.setPadding(dp(12), dp(8), dp(12), dp(8));
                     return view;
                 }
                 @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getDropDownView(position, convertView, parentView);
-                    view.setTextColor(config.menuTextColor1);
+                    view.setTextColor(config.outline);
                     view.setBackgroundColor(config.background);
                     view.setPadding(dp(12), dp(10), dp(12), dp(10));
                     return view;
@@ -1327,14 +1464,11 @@ public final class OverlayRuntime {
             // Keep the collapsed control and popup visually attached to the same menu surface.
             // The platform Spinner outline can otherwise become a large black rectangle outside
             // the panel, especially when a preset uses a dark control background.
-            spinner.setBackground(OverlayViews.background(
-                    config.background, config.outline, false, config.outlineWidth, !"square".equals(config.menuCorners)));
+            spinner.setBackground(OverlayViews.themedControlBackground(
+                    config.background, config.outline, config.outlineWidth, config.controlTheme));
             if (android.os.Build.VERSION.SDK_INT >= 16) {
-                GradientDrawable popupBackground = new GradientDrawable();
-                popupBackground.setColor(config.background);
-                popupBackground.setCornerRadius("square".equals(config.menuCorners) ? 0f : dp(24));
-                popupBackground.setStroke(Math.max(1, config.outlineWidth), config.outline);
-                spinner.setPopupBackgroundDrawable(popupBackground);
+                spinner.setPopupBackgroundDrawable(OverlayViews.themedControlBackground(
+                        config.background, config.outline, config.outlineWidth, config.controlTheme));
             }
             int current = remembered == null ? module.current(activity) : remembered;
             spinner.setSelection(current == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT ? 1

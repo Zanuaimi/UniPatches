@@ -1,15 +1,13 @@
 package unipatch.overlaycore.modules.example;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.text.InputType;
-import android.widget.EditText;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import unipatch.overlaycore.modules.OverlayActionModule;
 import unipatch.overlaycore.modules.OverlayAppSpecificModule;
 import unipatch.overlaycore.modules.OverlayAppSpecificModuleProvider;
+import unipatch.overlaycore.modules.OverlaySessionState;
 
 /**
  * Safe app-specific overlay example. It only previews session-local values and never reads or
@@ -40,15 +38,9 @@ public final class HillClimbRacingExampleProvider implements OverlayAppSpecificM
         private final String key, label, description;
         private final Kind kind;
         private final String[] choices;
-        private int number;
-        private boolean[] selected;
-        private String lastAction = "Not previewed this session";
-
         DemoModule(String key, String label, String description, Kind kind, String[] choices) {
             this.key = key; this.label = label; this.description = description;
             this.kind = kind; this.choices = choices;
-            this.selected = new boolean[choices.length];
-            if (kind == Kind.VEHICLES && selected.length > 0) selected[0] = true;
         }
 
         @Override public String key() { return key; }
@@ -62,78 +54,36 @@ public final class HillClimbRacingExampleProvider implements OverlayAppSpecificM
         @Override public boolean hasSettings() { return true; }
         @Override public String actionLabel() { return "Preview"; }
         @Override public String valueText() {
-            if (kind == Kind.NUMBER) return "Preview amount: " + number + " | " + lastAction;
-            if (kind == Kind.GARAGE) return "Preview state: " + (selected[0] ? "Unlocked" : "Locked") + " | " + lastAction;
-            return "Preview selection: " + selectionText() + " | " + lastAction;
+            if (kind == Kind.NUMBER) return "Preview amount: " + number() + " | " + lastAction();
+            if (kind == Kind.GARAGE) return "Preview state: " + (selected()[0] ? "Unlocked" : "Locked") + " | " + lastAction();
+            return "Preview selection: " + selectionText() + " | " + lastAction();
         }
 
         @Override protected boolean readEnabled(Activity activity, int flags, int systemUi) { return false; }
         @Override protected void applyEnabled(Activity activity, int flags, int systemUi) { }
         @Override protected void restoreOriginal(Activity activity, int flags, int systemUi) { }
 
-        @Override public void showSettings(Activity activity, int background, int textColor, int outline, int accent) {
-            if (kind == Kind.NUMBER) showNumberSettings(activity, background, textColor, accent);
-            else showChoiceSettings(activity, background, textColor, accent);
-        }
-
-        private void showNumberSettings(Activity activity, int background, int textColor, int accent) {
-            EditText input = new EditText(activity);
-            input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED);
-            input.setText(Integer.toString(number));
-            input.setTextColor(textColor);
-            AlertDialog dialog = new AlertDialog.Builder(activity)
-                    .setTitle(label + " settings (mock)")
-                    .setMessage("Signed 32-bit preview range: -2147483648 to 2147483647")
-                    .setView(input)
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Set", null)
-                    .create();
-            dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                try { number = Integer.parseInt(input.getText().toString().trim()); }
-                catch (NumberFormatException ignoredNumber) { return; }
-                styleDialog(dialog, background, textColor, accent);
-                dialog.dismiss();
-            }));
-            dialog.show();
-            styleDialog(dialog, background, textColor, accent);
-        }
-
-        private void showChoiceSettings(Activity activity, int background, int textColor, int accent) {
-            boolean[] draft = selected.clone();
-            AlertDialog dialog = new AlertDialog.Builder(activity)
-                    .setTitle(label + " settings (mock)")
-                    .setMultiChoiceItems(choices, draft, (ignored, which, checked) -> draft[which] = checked)
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Set", (ignored, which) -> selected = draft)
-                    .create();
-            dialog.show();
-            styleDialog(dialog, background, textColor, accent);
-        }
-
-        private void styleDialog(AlertDialog dialog, int background, int textColor, int accent) {
-            if (dialog.getWindow() != null) {
-                dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(background));
-            }
-            int titleId = activityResourceId(dialog, "alertTitle");
-            android.view.View title = titleId == 0 ? null : dialog.findViewById(titleId);
-            if (title instanceof android.widget.TextView) ((android.widget.TextView) title).setTextColor(textColor);
-            android.widget.Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            android.widget.Button negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-            if (positive != null) positive.setTextColor(accent);
-            if (negative != null) negative.setTextColor(accent);
-        }
-
-        private int activityResourceId(AlertDialog dialog, String name) {
-            return dialog.getContext().getResources().getIdentifier(name, "id", "android");
+        @Override public String settingsTitle() { return label + " settings (mock)"; }
+        @Override public String[] settingsChoices() { return kind == Kind.NUMBER ? new String[0] : choices.clone(); }
+        @Override public boolean[] settingsValues() { return selected(); }
+        @Override public void applySettings(boolean[] values) { if (kind != Kind.NUMBER) OverlaySessionState.putBooleans(key, "selected", values); }
+        @Override public String settingsTextValue() { return kind == Kind.NUMBER ? Integer.toString(number()) : null; }
+        @Override public String settingsTextHint() { return "Signed 32-bit preview range: -2147483648 to 2147483647"; }
+        @Override public String settingsConfirmationLabel() { return kind == Kind.NUMBER ? "Set" : "Save"; }
+        @Override public boolean applySettingsText(String value) {
+            if (kind != Kind.NUMBER) return false;
+            try { OverlaySessionState.putInteger(key, "number", Integer.parseInt(value.trim())); return true; }
+            catch (NumberFormatException ignored) { return false; }
         }
 
         @Override public boolean performAction(Activity activity) {
-            lastAction = "Preview applied at " + System.currentTimeMillis();
+            OverlaySessionState.putString(key, "lastAction", "Preview applied at " + System.currentTimeMillis());
             return true;
         }
 
         private String selectionText() {
             List<String> enabled = new ArrayList<>();
+            boolean[] selected = selected();
             for (int i = 0; i < choices.length; i++) if (selected[i]) enabled.add(choices[i]);
             return enabled.isEmpty() ? "none enabled" : join(enabled);
         }
@@ -145,6 +95,14 @@ public final class HillClimbRacingExampleProvider implements OverlayAppSpecificM
                 result.append(value);
             }
             return result.toString();
+        }
+
+        private int number() { return OverlaySessionState.integer(key, "number", 0); }
+        private String lastAction() { return OverlaySessionState.string(key, "lastAction", "Not previewed this session"); }
+        private boolean[] selected() {
+            boolean[] defaults = new boolean[choices.length];
+            if (kind == Kind.VEHICLES && defaults.length > 0) defaults[0] = true;
+            return OverlaySessionState.booleans(key, "selected", defaults);
         }
     }
 }
