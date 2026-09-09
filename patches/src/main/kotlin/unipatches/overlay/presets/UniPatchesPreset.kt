@@ -7,7 +7,7 @@ internal val uniPatchesPreset = OverlayPresetDefinition(
         overlayTextColor = "#FF5656", buttonTextColor = "#FFFFFF", gradientBackground = true,
         buttonBackground = "#500000", iconBackground2 = "#AA0000", iconGradientAngle = 0,
         iconOutlineColor = "#FFFFFF", controlBackground = "#300000", controlForeground = "#FF5656",
-        bottomButtonStyle = "solid", bottomButtonTextColor = "#300000",
+        bottomButtonStyle = "text", bottomButtonTextColor = "#FF5656",
         bottomButtonBackground1 = "#FF5656", bottomButtonBackground2 = "#FF5656",
     ),
 )

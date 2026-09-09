@@ -75,6 +75,7 @@ internal data class OverlayUiPreset(
     val iconBackgroundStyle: String = "flat",
     val iconBackgroundColor3: String = iconBackground2,
     val iconBackgroundColor4: String = buttonBackground,
+    val iconParts: List<String> = emptyList(),
 )
 
 internal data class OverlayPresetDefinition(
@@ -146,6 +147,7 @@ internal fun explicitOverlayPreset(
     iconBackgroundStyle: String = "flat",
     iconBackgroundColor3: String = iconBackground2,
     iconBackgroundColor4: String = background,
+    iconParts: List<String> = emptyList(),
 ): OverlayUiPreset = OverlayUiPreset(
     title = "UniPatches Universal Overlay Patch",
     description = "Welcome! This is the UniPatches Universal Overlay Patch Menu.\n" +
@@ -222,4 +224,5 @@ internal fun explicitOverlayPreset(
     iconBackgroundStyle = iconBackgroundStyle,
     iconBackgroundColor3 = iconBackgroundColor3,
     iconBackgroundColor4 = iconBackgroundColor4,
+    iconParts = iconParts,
 )

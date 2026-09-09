@@ -7,7 +7,7 @@ internal val lightPreset = OverlayPresetDefinition(
         overlayTextColor = "#202020", buttonTextColor = "#000000", gradientBackground = true,
         buttonBackground = "#FFFFFF", iconBackground2 = "#DADADA", iconGradientAngle = 0,
         iconOutlineColor = "#000000", controlBackground = "#F5F5F5", controlForeground = "#202020",
-        bottomButtonStyle = "solid", bottomButtonTextColor = "#F5F5F5",
+        bottomButtonStyle = "text", bottomButtonTextColor = "#202020",
         bottomButtonBackground1 = "#202020", bottomButtonBackground2 = "#202020",
     ),
 )

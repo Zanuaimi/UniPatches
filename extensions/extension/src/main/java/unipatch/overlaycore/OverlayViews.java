@@ -2,12 +2,18 @@ package unipatch.overlaycore;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.LinearGradient;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 import android.graphics.RectF;
 
 /** Shared view construction and styling primitives for the overlay controller. */
@@ -37,11 +43,13 @@ final class OverlayViews {
                          int outlineWidth, boolean circle, String style, String shape,
                          int shapeColor1, int shapeColor2, boolean shapeGradient, float shapeAngle,
                          float shapeStrokeWidth, float shapeScale, boolean highlight, boolean shadow,
-                         String backgroundStyle, int backgroundColor3, int backgroundColor4) {
+                         String backgroundStyle, int backgroundColor3, int backgroundColor4,
+                         String[] iconParts) {
         return new IconDrawable(background1, background2, backgroundAngle, backgroundGradient,
                 outline1, outline2, outlineAngle, outlineGradient, outlineWidth, circle,
                 style, shape, shapeColor1, shapeColor2, shapeGradient, shapeAngle,
-                shapeStrokeWidth, shapeScale, highlight, shadow, backgroundStyle, backgroundColor3, backgroundColor4);
+                shapeStrokeWidth, shapeScale, highlight, shadow, backgroundStyle, backgroundColor3, backgroundColor4,
+                iconParts);
     }
 
     /** Uses the overlay theme context so host-app selectable colors do not leak into our controls. */
@@ -78,6 +86,10 @@ final class OverlayViews {
         private final int[] colors;
         private final float[] positions;
         private final android.animation.ValueAnimator animator;
+        private final Matrix shaderMatrix = new Matrix();
+        private Shader outlineShader;
+        private float shaderWidth = -1f;
+        private float shaderHeight = -1f;
         private float phase;
 
         AnimatedOutline(int fillColor, int first, int second, boolean vertical, boolean rainbow, int strokeWidth,
@@ -128,11 +140,18 @@ final class OverlayViews {
             float width = Math.max(1f, bounds.width());
             float height = Math.max(1f, bounds.height());
             float shift = phase * (vertical ? height : width) * direction;
-            border.setShader(vertical
-                    ? new LinearGradient(0f, -height + shift, 0f, height + shift,
-                    colors, positions, Shader.TileMode.REPEAT)
-                    : new LinearGradient(-width + shift, 0f, width + shift, 0f,
-                    colors, positions, Shader.TileMode.REPEAT));
+            if (outlineShader == null || shaderWidth != width || shaderHeight != height) {
+                outlineShader = vertical
+                        ? new LinearGradient(0f, -height, 0f, height,
+                        colors, positions, Shader.TileMode.REPEAT)
+                        : new LinearGradient(-width, 0f, width, 0f,
+                        colors, positions, Shader.TileMode.REPEAT);
+                shaderWidth = width;
+                shaderHeight = height;
+            }
+            shaderMatrix.setTranslate(vertical ? 0f : shift, vertical ? shift : 0f);
+            outlineShader.setLocalMatrix(shaderMatrix);
+            border.setShader(outlineShader);
             canvas.drawRoundRect(bounds, radius, radius, border);
         }
         @Override public void setAlpha(int alpha) { fill.setAlpha(alpha); border.setAlpha(alpha); invalidateSelf(); }
@@ -201,6 +220,7 @@ final class OverlayViews {
         private final boolean backgroundGradient, outlineGradient, circle, shapeGradient, highlight, shadow;
         private final String style, shape, backgroundStyle;
         private final int backgroundColor3, backgroundColor4;
+        private final String[] iconParts;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         IconDrawable(int background1, int background2, float backgroundAngle, boolean backgroundGradient,
@@ -208,7 +228,8 @@ final class OverlayViews {
                      int outlineWidth, boolean circle, String style, String shape,
                      int shapeColor1, int shapeColor2, boolean shapeGradient, float shapeAngle,
                      float shapeStrokeWidth, float shapeScale, boolean highlight, boolean shadow,
-                     String backgroundStyle, int backgroundColor3, int backgroundColor4) {
+                     String backgroundStyle, int backgroundColor3, int backgroundColor4,
+                     String[] iconParts) {
             this.background1 = background1;
             this.background2 = background2;
             this.backgroundAngle = backgroundAngle;
@@ -228,6 +249,7 @@ final class OverlayViews {
             this.backgroundStyle = backgroundStyle == null ? "flat" : backgroundStyle;
             this.backgroundColor3 = backgroundColor3;
             this.backgroundColor4 = backgroundColor4;
+            this.iconParts = iconParts == null ? new String[0] : iconParts.clone();
             this.outlineWidth = Math.max(0, outlineWidth);
             this.circle = circle;
             this.style = style == null ? "shape" : style;
@@ -256,7 +278,9 @@ final class OverlayViews {
                 canvas.drawRoundRect(body, radius, radius, paint);
             }
 
-            if (!"text".equals(style)) drawShape(canvas, body);
+            if (iconParts.length > 0) {
+                if (!drawParts(canvas, body) && !"text".equals(style)) drawShape(canvas, body);
+            } else if (!"text".equals(style)) drawShape(canvas, body);
             if (highlight && !"text".equals(style)) {
                 paint.setStyle(Paint.Style.FILL);
                 paint.setShader(null);
@@ -316,6 +340,198 @@ final class OverlayViews {
             canvas.restoreToCount(save);
         }
 
+        private boolean drawParts(Canvas canvas, RectF body) {
+            List<IconPart> parts = new ArrayList<>();
+            for (String encoded : iconParts) {
+                IconPart part = IconPart.parse(encoded);
+                if (part != null) parts.add(part);
+            }
+            if (parts.isEmpty()) {
+                paint.setAlpha(255);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setStrokeWidth(1f);
+                paint.setStrokeCap(Paint.Cap.BUTT);
+                paint.setStrokeJoin(Paint.Join.MITER);
+                paint.setShader(null);
+                return false;
+            }
+            Collections.sort(parts, Comparator.comparingInt(part -> part.layer));
+            for (IconPart part : parts) {
+                float width = body.width() * part.width / 100f;
+                float height = body.height() * part.height / 100f;
+                RectF area = new RectF(
+                        body.left + body.width() * part.x / 100f - width / 2f,
+                        body.top + body.height() * part.y / 100f - height / 2f,
+                        body.left + body.width() * part.x / 100f + width / 2f,
+                        body.top + body.height() * part.y / 100f + height / 2f);
+                int save = canvas.save();
+                canvas.rotate(part.rotation, area.centerX(), area.centerY());
+                paint.setAlpha(Math.round(255f * part.opacity / 100f));
+                paint.setColor(part.color1);
+                paint.setShader("gradient".equals(part.fill)
+                        ? linear(part.color1, part.color2, part.gradientAngle, area) : null);
+                drawPartShape(canvas, area, part);
+                canvas.restoreToCount(save);
+            }
+            paint.setAlpha(255);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setStrokeWidth(1f);
+            paint.setStrokeCap(Paint.Cap.BUTT);
+            paint.setStrokeJoin(Paint.Join.MITER);
+            paint.setShader(null);
+            return true;
+        }
+
+        private void drawPartShape(Canvas canvas, RectF area, IconPart part) {
+            String shape = part.shape;
+            float width = area.width();
+            float height = area.height();
+            float stroke = Math.max(1f, part.strokeWidth);
+            Path path = new Path();
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            if ("circle".equals(shape) || "ring".equals(shape)) {
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(stroke);
+                canvas.drawOval(area, paint);
+            } else if ("square".equals(shape) || "roundedRect".equals(shape)) {
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawRoundRect(area, "roundedRect".equals(shape) ? Math.min(width, height) * .18f : 0f,
+                        "roundedRect".equals(shape) ? Math.min(width, height) * .18f : 0f, paint);
+            } else if ("chevron".equals(shape) || "v".equals(shape)) {
+                path.moveTo(area.left + width * .12f, area.top + height * .18f);
+                path.lineTo(area.centerX(), area.bottom - height * .12f);
+                path.lineTo(area.right - width * .12f, area.top + height * .18f);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(stroke);
+                canvas.drawPath(path, paint);
+            } else if ("line".equals(shape)) {
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(stroke);
+                canvas.drawLine(area.left, area.centerY(), area.right, area.centerY(), paint);
+            } else if ("arc".equals(shape)) {
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(stroke);
+                canvas.drawArc(area, 20f, 140f, false, paint);
+            } else if ("diamond".equals(shape)) {
+                path.moveTo(area.centerX(), area.top);
+                path.lineTo(area.right, area.centerY());
+                path.lineTo(area.centerX(), area.bottom);
+                path.lineTo(area.left, area.centerY());
+                path.close();
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawPath(path, paint);
+            } else if ("star".equals(shape)) {
+                path.moveTo(area.centerX(), area.top);
+                for (int i = 1; i < 10; i++) {
+                    double angle = -Math.PI / 2d + i * Math.PI / 5d;
+                    float radius = i % 2 == 0 ? Math.min(width, height) / 2f : Math.min(width, height) * .2f;
+                    path.lineTo(area.centerX() + (float) Math.cos(angle) * radius,
+                            area.centerY() + (float) Math.sin(angle) * radius);
+                }
+                path.close();
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawPath(path, paint);
+            } else if ("heart".equals(shape)) {
+                path.moveTo(area.centerX(), area.bottom);
+                path.cubicTo(area.left - width * .05f, area.top + height * .48f,
+                        area.left + width * .16f, area.top, area.centerX(), area.top + height * .28f);
+                path.cubicTo(area.right - width * .16f, area.top,
+                        area.right + width * .05f, area.top + height * .48f, area.centerX(), area.bottom);
+                path.close();
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawPath(path, paint);
+            } else if ("z".equals(shape)) {
+                drawFilledZ(canvas, area, paint);
+            } else {
+                if ("invertedTriangle".equals(shape)) {
+                    path.moveTo(area.centerX(), area.bottom);
+                    path.lineTo(area.left, area.top);
+                    path.lineTo(area.right, area.top);
+                } else {
+                    path.moveTo(area.centerX(), area.top);
+                    path.lineTo(area.right, area.bottom);
+                    path.lineTo(area.left, area.bottom);
+                }
+                path.close();
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawPath(path, paint);
+            }
+            paint.setStyle(Paint.Style.FILL);
+        }
+
+        private void drawFilledZ(Canvas canvas, RectF area, Paint target) {
+            float margin = Math.min(area.width(), area.height()) * .14f;
+            float thickness = Math.min(area.width(), area.height()) * .18f;
+            float left = area.left + margin, right = area.right - margin;
+            float top = area.top + margin, bottom = area.bottom - margin;
+            Path path = new Path();
+            path.moveTo(left, top); path.lineTo(right, top); path.lineTo(right, top + thickness);
+            path.lineTo(left + thickness, bottom - thickness); path.lineTo(right, bottom - thickness);
+            path.lineTo(right, bottom); path.lineTo(left, bottom); path.lineTo(left, bottom - thickness);
+            path.lineTo(right - thickness, top + thickness); path.lineTo(left, top + thickness);
+            path.close();
+            target.setStyle(Paint.Style.FILL);
+            canvas.drawPath(path, target);
+        }
+
+        private static final class IconPart {
+            final String shape, fill;
+            final float x, y, width, height, rotation, strokeWidth, opacity, gradientAngle;
+            final int color1, color2, layer;
+
+            private IconPart(String shape, float x, float y, float width, float height, float rotation,
+                             String fill, int color1, int color2, float strokeWidth, float opacity, int layer) {
+                this.shape = shape; this.x = x; this.y = y; this.width = width; this.height = height;
+                this.rotation = rotation; this.fill = fill; this.color1 = color1; this.color2 = color2;
+                this.strokeWidth = strokeWidth; this.opacity = opacity; this.layer = layer;
+                this.gradientAngle = rotation;
+            }
+
+            static IconPart parse(String encoded) {
+                try {
+                    String[] fields = encoded.split("\\|", -1);
+                    if (fields.length != 12) return null;
+                    String shape = fields[0].trim();
+                    String fill = "gradient".equals(fields[6].trim()) ? "gradient" : "solid";
+                    if (!isSupportedShape(shape)) return null;
+                    float x = bounded(fields[1], 50f, 0f, 100f);
+                    float y = bounded(fields[2], 50f, 0f, 100f);
+                    float width = bounded(fields[3], 50f, 1f, 100f);
+                    float height = bounded(fields[4], 50f, 1f, 100f);
+                    float rotation = bounded(fields[5], 0f, -360f, 360f);
+                    int color1 = parseColor(fields[7], Color.WHITE);
+                    int color2 = parseColor(fields[8], color1);
+                    float stroke = bounded(fields[9], 3f, 0f, 32f);
+                    float opacity = bounded(fields[10], 100f, 0f, 100f);
+                    int layer = Math.round(bounded(fields[11], 0f, -32f, 32f));
+                    return new IconPart(shape, x, y, width, height, rotation, fill, color1, color2, stroke, opacity, layer);
+                } catch (RuntimeException ignored) {
+                    return null;
+                }
+            }
+
+            private static boolean isSupportedShape(String shape) {
+                return "triangle".equals(shape) || "invertedTriangle".equals(shape)
+                        || "circle".equals(shape) || "ring".equals(shape)
+                        || "square".equals(shape) || "roundedRect".equals(shape)
+                        || "chevron".equals(shape) || "v".equals(shape)
+                        || "z".equals(shape) || "line".equals(shape)
+                        || "arc".equals(shape) || "diamond".equals(shape)
+                        || "star".equals(shape) || "heart".equals(shape);
+            }
+
+            private static float bounded(String value, float fallback, float min, float max) {
+                try { return Math.max(min, Math.min(max, Float.parseFloat(value.trim()))); }
+                catch (RuntimeException ignored) { return fallback; }
+            }
+
+            private static int parseColor(String value, int fallback) {
+                try { return Color.parseColor(value.trim()); }
+                catch (RuntimeException ignored) { return fallback; }
+            }
+        }
+
         private void drawShape(Canvas canvas, RectF body) {
             float size = Math.min(body.width(), body.height()) * shapeScale;
             float left = body.centerX() - size / 2f;
@@ -325,6 +541,32 @@ final class OverlayViews {
             paint.setColor(shapeColor1);
             paint.setStrokeCap(Paint.Cap.ROUND);
             paint.setStrokeJoin(Paint.Join.ROUND);
+
+            if ("revanced".equals(shape)) {
+                // ReVanced-inspired composite mark: a thick white V framing a small
+                // downward gradient triangle. Draw the V first so the triangle remains
+                // visually centered inside it.
+                paint.setShader(null);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(Math.max(shapeStrokeWidth, size * .085f));
+                paint.setColor(0xFFFFFFFF);
+                Path v = new Path();
+                v.moveTo(area.left + size * .18f, area.top + size * .18f);
+                v.lineTo(area.centerX(), area.top + size * .82f);
+                v.lineTo(area.right - size * .18f, area.top + size * .18f);
+                canvas.drawPath(v, paint);
+
+                paint.setStyle(Paint.Style.FILL);
+                paint.setShader(shapeGradient ? linear(shapeColor1, shapeColor2, shapeAngle, area) : null);
+                paint.setColor(shapeColor1);
+                Path triangle = new Path();
+                triangle.moveTo(area.centerX(), area.top + size * .28f);
+                triangle.lineTo(area.left + size * .35f, area.top + size * .62f);
+                triangle.lineTo(area.right - size * .35f, area.top + size * .62f);
+                triangle.close();
+                canvas.drawPath(triangle, paint);
+                return;
+            }
 
             if ("smile".equals(shape)) {
                 paint.setStyle(Paint.Style.FILL);
@@ -361,15 +603,24 @@ final class OverlayViews {
             if ("z".equals(shape)) {
                 paint.setStyle(Paint.Style.FILL);
                 Path z = new Path();
-                float stroke = size * .18f;
-                z.moveTo(area.left + size * .14f, area.top + size * .16f);
-                z.lineTo(area.right - size * .14f, area.top + size * .16f);
-                z.lineTo(area.left + size * .36f, area.bottom - size * .16f);
-                z.lineTo(area.right - size * .14f, area.bottom - size * .16f);
-                z.lineTo(area.right - size * .14f, area.bottom - size * .16f + stroke);
-                z.lineTo(area.left + size * .14f, area.bottom - size * .16f + stroke);
-                z.lineTo(area.right - size * .36f, area.top + size * .16f + stroke);
-                z.lineTo(area.left + size * .14f, area.top + size * .16f + stroke);
+                float margin = size * .14f;
+                float zTop = area.top + margin;
+                float zBottom = area.bottom - margin;
+                float thickness = size * .18f;
+                float leftEdge = area.left + margin;
+                float rightEdge = area.right - margin;
+                // A centered, filled Z: both horizontal bars have equal thickness and
+                // the diagonal keeps the same visual weight between them.
+                z.moveTo(leftEdge, zTop);
+                z.lineTo(rightEdge, zTop);
+                z.lineTo(rightEdge, zTop + thickness);
+                z.lineTo(leftEdge + thickness, zBottom - thickness);
+                z.lineTo(rightEdge, zBottom - thickness);
+                z.lineTo(rightEdge, zBottom);
+                z.lineTo(leftEdge, zBottom);
+                z.lineTo(leftEdge, zBottom - thickness);
+                z.lineTo(rightEdge - thickness, zTop + thickness);
+                z.lineTo(leftEdge, zTop + thickness);
                 z.close();
                 canvas.drawPath(z, paint);
                 return;

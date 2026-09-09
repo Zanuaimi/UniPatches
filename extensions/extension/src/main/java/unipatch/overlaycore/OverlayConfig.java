@@ -27,7 +27,7 @@ final class OverlayConfig {
             "Welcome! This is the UniPatches Universal Overlay Patch Menu. " +
             "The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.";
     String title, description, appendDescription, descriptionAlignment, repositoryText, repositoryUrl, buttonText;
-    String appSpecificProfile, injectionMode;
+    String appSpecificProfile, injectionMode, appSpecificModules;
     String activityInstallBanlist;
     int background, outline, overlayTextColor, buttonTextColor, buttonBackground, buttonSize, gravity;
     int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle, iconOutlineWidth, iconTextSize;
@@ -37,6 +37,7 @@ final class OverlayConfig {
     boolean iconOutline, iconBold;
     boolean gradientBackground;
     String iconType, customIconImage;
+    String[] iconParts;
     int dragVisibilityDurationSeconds;
     boolean keepAwake, fullscreen, screenshots;
     boolean systemTime, fps, sessionTime;
@@ -63,7 +64,7 @@ final class OverlayConfig {
         String[] values = encoded == null ? new String[0] : encoded.split("\\|", -1);
         // Version 1 through 16 prepends a version field. Keep accepting the original 14-field format so an
         // older generated patch remains safe when paired with this newer extension.
-        String[] v = new String[85];
+        String[] v = new String[100];
         for (int i = 0; i < v.length; i++) v[i] = i < values.length ? decodePart(values[i]) : "";
         int offset = ("1".equals(v[0]) || "2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0])) ? 1 : 0;
         c.title = limit(field(v, offset, 0), 80, "UniPatches Universal Overlay Patch");
@@ -160,8 +161,8 @@ final class OverlayConfig {
         c.menuTextColor6 = color(field(v, offset, 63), c.menuTextColor2);
         c.separatorBackgroundColor = color(field(v, offset, 64), c.background);
         c.activityInstallBanlist = empty(field(v, offset, 65), DEFAULT_ACTIVITY_INSTALL_BANLIST);
-        c.iconStyle = choice(field(v, offset, 66), "text", "text", "shape", "multi");
-        c.iconShape = choice(field(v, offset, 67), "triangle", "triangle", "chevron", "smile", "circle", "z");
+        c.iconStyle = choice(field(v, offset, 66), "text", "text", "shape", "multi", "parts");
+        c.iconShape = choice(field(v, offset, 67), "triangle", "triangle", "chevron", "smile", "circle", "z", "revanced");
         c.iconShapeColor1 = color(field(v, offset, 68), 0xFFFFFFFF);
         c.iconShapeColor2 = color(field(v, offset, 69), c.iconShapeColor1);
         c.iconShapeGradient = "1".equals(field(v, offset, 70));
@@ -176,8 +177,12 @@ final class OverlayConfig {
         c.iconBackgroundStyle = choice(field(v, offset, 79), "flat", "flat", "faceted");
         c.iconBackgroundColor3 = color(field(v, offset, 80), c.iconBackground2);
         c.iconBackgroundColor4 = color(field(v, offset, 81), c.background);
+        c.iconParts = field(v, offset, 84).isEmpty()
+                ? new String[0]
+                : field(v, offset, 84).split("[\\r\\n]+", 13);
         c.appSpecificProfile = field(v, offset, 82);
         c.injectionMode = choice(field(v, offset, 83), "universal", "universal", "explicitActivity");
+        c.appSpecificModules = field(v, offset, 85);
         c.appendDescriptionColor = color(field(v, offset, 60), c.menuTextColor3);
         c.showNoModulesWarning = !"0".equals(field(v, offset, 61));
         c.separatorStyle = choice(field(v, offset, 48), "ascii", "ascii", "doubleLine", "background", "singleLine", "inline");

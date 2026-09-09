@@ -56,6 +56,10 @@ import unipatch.overlaycore.modules.OverlayModule;
 import unipatch.overlaycore.modules.OverlayStatisticModule;
 import unipatch.overlaycore.modules.OverlayAppSpecificModule;
 import unipatch.overlaycore.modules.OverlayAppSpecificModuleProvider;
+import unipatch.overlaycore.modules.OverlayActionModule;
+import unipatch.overlaycore.modules.example.HillClimbRacingExampleProvider;
+import unipatch.overlaycore.modules.ads.AdsControlRuntimeProvider;
+import unipatch.overlaycore.AdsRuntimePolicy;
 
 import java.util.Map;
 import java.util.ArrayList;
@@ -93,6 +97,11 @@ public final class OverlayRuntime {
     private static boolean customIconFallbackNotified;
     private static boolean fullyClosedToastShown;
     private static final List<OverlayAppSpecificModuleProvider> APP_SPECIFIC_PROVIDERS = new ArrayList<>();
+
+    static {
+        registerAppSpecificProvider(new HillClimbRacingExampleProvider());
+        registerAppSpecificProvider(new AdsControlRuntimeProvider());
+    }
 
     private OverlayRuntime() { }
 
@@ -330,8 +339,8 @@ public final class OverlayRuntime {
             menuOutline = "static".equals(config.menuOutlineAnimation) || config.outlineAnimationSpeed == 0 ? null
                     : OverlayViews.animatedOutline(
                             config.background,
-                            config.buttonBackground,
-                            config.iconBackground2,
+                            config.outline,
+                            config.menuTextColor1,
                             "vertical".equals(config.menuOutlineAnimation),
                             "rainbow".equals(config.menuOutlineAnimation),
                             config.outlineWidth,
@@ -513,7 +522,8 @@ public final class OverlayRuntime {
                     config.iconShadow,
                     config.iconBackgroundStyle,
                     config.iconBackgroundColor3,
-                    config.iconBackgroundColor4);
+                    config.iconBackgroundColor4,
+                    config.iconParts);
         }
 
         /** Shows the fallback notice after the overlay root is attached to the Activity. */
@@ -764,6 +774,7 @@ public final class OverlayRuntime {
                     (int) (activity.getResources().getDisplayMetrics().heightPixels * .45f)) - dp(8));
             ScrollView scroll = new BoundedScrollView(overlayContext, maxControlHeight);
             scroll.setFillViewport(true);
+            styleModuleScrollBar(scroll);
             LinearLayout modules = new LinearLayout(overlayContext);
             modules.setOrientation(LinearLayout.VERTICAL);
             addModules(modules);
@@ -780,6 +791,18 @@ public final class OverlayRuntime {
             addAction(actions, "Close menu", v -> closeMenu());
             addAction(actions, "Fully close", v -> showCloseConfirmation());
             return menu;
+        }
+
+        private void styleModuleScrollBar(ScrollView scroll) {
+            scroll.setVerticalScrollBarEnabled(true);
+            scroll.setScrollBarStyle(View.SCROLLBARS_INSIDE_INSET);
+            scroll.setScrollbarFadingEnabled(true);
+            scroll.setScrollBarFadeDuration(220);
+            scroll.setScrollBarDefaultDelayBeforeFade(350);
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                scroll.setVerticalScrollbarThumbDrawable(new android.graphics.drawable.ColorDrawable(config.menuTextColor1));
+                scroll.setVerticalScrollbarTrackDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+            }
         }
 
         private LinearLayout.LayoutParams titleIconParams() {
@@ -883,7 +906,7 @@ public final class OverlayRuntime {
             boolean hasActivity = config.keepAwake || config.fullscreen || config.screenshots
                     || config.appBrightness || config.rotationMode || config.appAudioMute;
             boolean hasHooks = config.disableHaptics || config.disableAnimations;
-            boolean hasAppSpecific = hasRegisteredAppSpecificProvider();
+            boolean hasAppSpecific = hasRegisteredAppSpecificProvider() || hasIntegratedModules();
             if (!hasStatistics && !hasActivity && !hasHooks && !hasAppSpecific && config.showNoModulesWarning) {
                 TextView warning = text(
                         "\n No Runtime Modules Selected. Select modules in patch settings before patching APK if you want to have runtime modules in this app. \n",
@@ -920,10 +943,12 @@ public final class OverlayRuntime {
                 if (config.disableAnimations) addHookModuleSafely(modules, DisableAnimationsModule::new);
             }
             addAppSpecificModules(modules);
+            addIntegratedModules(modules);
         }
 
         private boolean hasRegisteredAppSpecificProvider() {
             if (config.appSpecificProfile == null || config.appSpecificProfile.isEmpty()) return false;
+            if (config.appSpecificModules == null || config.appSpecificModules.trim().isEmpty()) return false;
             for (OverlayAppSpecificModuleProvider provider : APP_SPECIFIC_PROVIDERS) {
                 try {
                     if (config.appSpecificProfile.equals(provider.profileId())) return true;
@@ -932,6 +957,10 @@ public final class OverlayRuntime {
                 }
             }
             return false;
+        }
+
+        private boolean hasIntegratedModules() {
+            return AdsRuntimePolicy.hasAnyModule();
         }
 
         private void addAppSpecificModules(LinearLayout parent) {
@@ -950,9 +979,13 @@ public final class OverlayRuntime {
                             // One target mismatch must not hide other app-specific modules.
                         }
                     }
-                    if (supportedModules.isEmpty()) return;
-                    addSectionLabel(parent, "App-specific modules");
+                    List<OverlayAppSpecificModule> selectedModules = new ArrayList<>();
                     for (OverlayAppSpecificModule module : supportedModules) {
+                        if (isAppSpecificModuleSelected(module.key())) selectedModules.add(module);
+                    }
+                    if (selectedModules.isEmpty()) return;
+                    addSectionLabel(parent, "App-specific modules");
+                    for (OverlayAppSpecificModule module : selectedModules) {
                         addAppSpecificModuleSafely(parent, () -> module);
                     }
                 } catch (RuntimeException ignored) {
@@ -1008,6 +1041,10 @@ public final class OverlayRuntime {
                 return;
             }
             appSpecificModules.add(module);
+            if (module instanceof OverlayActionModule) {
+                addAppSpecificActionModule(controls, (OverlayActionModule) module, initial);
+                return;
+            }
             addControlRow(controls, module, initial, checked -> {
                 try {
                     boolean applied = module.setEnabled(activity, checked, originalWindowFlags, originalSystemUi);
@@ -1018,6 +1055,108 @@ public final class OverlayRuntime {
                     return false;
                 }
             });
+        }
+
+        private boolean isAppSpecificModuleSelected(String key) {
+            if (config.appSpecificModules == null || config.appSpecificModules.isEmpty()) return false;
+            for (String selected : config.appSpecificModules.split(",")) {
+                if (key.equals(selected.trim())) return true;
+            }
+            return false;
+        }
+
+        private void addAppSpecificActionModule(LinearLayout parent, OverlayActionModule module, boolean initial) {
+            LinearLayout row = new LinearLayout(overlayContext);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(0, dp(6), 0, dp(6));
+
+            LinearLayout header = new LinearLayout(overlayContext);
+            header.setOrientation(LinearLayout.HORIZONTAL);
+            header.setGravity(Gravity.CENTER_VERTICAL);
+            TextView title = text(moduleTitleText(module.label()), 16, config.menuTextColor2);
+            title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            header.addView(title, new LinearLayout.LayoutParams(0, -2, 1f));
+
+            final CheckBox enabled;
+            if (module.hasEnableToggle()) {
+                enabled = new CheckBox(overlayContext);
+                enabled.setChecked(initial);
+                styleCheckBox(enabled);
+                enabled.setContentDescription(module.label() + " enabled");
+                featureControls.put(module.key(), enabled);
+                enabled.setOnCheckedChangeListener((button, checked) -> {
+                    boolean applied = module.setEnabled(activity, checked, originalWindowFlags, originalSystemUi);
+                    APP_SPECIFIC_STATES.put(module.key(), applied && checked);
+                    if (!applied) {
+                        button.setOnCheckedChangeListener(null);
+                        button.setChecked(!checked);
+                        button.setOnCheckedChangeListener((b, value) -> {
+                            boolean retry = module.setEnabled(activity, value, originalWindowFlags, originalSystemUi);
+                            APP_SPECIFIC_STATES.put(module.key(), retry && value);
+                        });
+                        Toast.makeText(activity, module.label() + " could not be changed", Toast.LENGTH_SHORT).show();
+                    }
+                });
+                header.addView(enabled, new LinearLayout.LayoutParams(-2, -2));
+            } else {
+                enabled = null;
+            }
+
+            if (module.hasSettings()) {
+                TextView settings = moduleButton("Settings");
+                settings.setContentDescription(module.label() + " settings");
+                settings.setOnClickListener(v -> module.showSettings(activity, config.background,
+                        config.menuTextColor1, config.outline, config.controlForeground));
+                header.addView(settings, new LinearLayout.LayoutParams(-2, -2));
+            }
+            TextView action = moduleButton(module.actionLabel());
+            action.setContentDescription(module.label() + " action");
+            header.addView(action, new LinearLayout.LayoutParams(-2, -2));
+            row.addView(header, new LinearLayout.LayoutParams(-1, -2));
+
+            TextView description = text(module.description(), 13, config.menuTextColor3);
+            description.setAlpha(.82f);
+            row.addView(description, new LinearLayout.LayoutParams(-1, -2));
+            TextView value = text(module.valueText(), 13, config.menuTextColor4);
+            value.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            row.addView(value, new LinearLayout.LayoutParams(-1, -2));
+            action.setOnClickListener(v -> {
+                if (enabled != null && !enabled.isChecked()) {
+                    Toast.makeText(activity, "Enable " + module.label() + " first", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (module.performAction(activity)) {
+                    value.setText(module.valueText());
+                    Toast.makeText(activity, module.label() + " preview completed; refresh the scene if needed", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(activity, module.label() + " preview failed", Toast.LENGTH_SHORT).show();
+                }
+            });
+            parent.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        }
+
+        private void addIntegratedModules(LinearLayout parent) {
+            if (!hasIntegratedModules()) return;
+            for (OverlayAppSpecificModuleProvider provider : APP_SPECIFIC_PROVIDERS) {
+                try {
+                    if (!AdsControlRuntimeProvider.PROFILE_ID.equals(provider.profileId())) continue;
+                    List<OverlayAppSpecificModule> modules = provider.create(activity);
+                    if (modules == null || modules.isEmpty()) return;
+                    addSectionLabel(parent, "Ad control hook modules");
+                    for (OverlayAppSpecificModule module : modules) addAppSpecificModuleSafely(parent, () -> module);
+                } catch (RuntimeException ignored) { }
+                return;
+            }
+        }
+
+        private TextView moduleButton(String label) {
+            TextView button = text(label, 12, config.controlForeground);
+            button.setGravity(Gravity.CENTER);
+            button.setPadding(dp(8), dp(4), dp(8), dp(4));
+            button.setBackground(OverlayViews.background(config.controlBackground, config.outline, false,
+                    config.outlineWidth, !"square".equals(config.menuCorners)));
+            button.setClickable(true);
+            return button;
         }
 
         private void addSectionLabel(LinearLayout parent, String label) {
@@ -1189,12 +1328,12 @@ public final class OverlayRuntime {
             // The platform Spinner outline can otherwise become a large black rectangle outside
             // the panel, especially when a preset uses a dark control background.
             spinner.setBackground(OverlayViews.background(
-                    config.background, Color.TRANSPARENT, false, 0, !"square".equals(config.menuCorners)));
+                    config.background, config.outline, false, config.outlineWidth, !"square".equals(config.menuCorners)));
             if (android.os.Build.VERSION.SDK_INT >= 16) {
                 GradientDrawable popupBackground = new GradientDrawable();
                 popupBackground.setColor(config.background);
                 popupBackground.setCornerRadius("square".equals(config.menuCorners) ? 0f : dp(24));
-                popupBackground.setStroke(0, Color.TRANSPARENT);
+                popupBackground.setStroke(Math.max(1, config.outlineWidth), config.outline);
                 spinner.setPopupBackgroundDrawable(popupBackground);
             }
             int current = remembered == null ? module.current(activity) : remembered;

@@ -26,6 +26,9 @@ internal object StartupHooks {
      */
     var resolvedApplicationDescriptor: String? = null
 
+    /** Package name read from the manifest for narrow app-specific patch targeting. */
+    var resolvedPackageName: String? = null
+
     /**
      * Launcher activity descriptor resolved from the manifest's MAIN/LAUNCHER
      * intent filter (e.g. `Lcom/peacock/flashlight/pages/splash/SplashActivity;`).
@@ -47,6 +50,7 @@ internal object StartupHooks {
             try {
                 document("AndroidManifest.xml").use { doc ->
                     val application = doc.documentElement.applicationOrNull()
+                    resolvedPackageName = doc.documentElement.getAttribute("package").ifEmpty { null }
                     val appName = application?.getAttributeNS(NS_ANDROID, "name")
                         ?.ifEmpty { application.getAttribute("android:name") }
                         .orEmpty()
@@ -61,6 +65,7 @@ internal object StartupHooks {
                 }
             } catch (_: Exception) {
                 resolvedApplicationDescriptor = null
+                resolvedPackageName = null
                 resolvedLauncherActivityDescriptor = null
                 resolvedNoHistoryActivityDescriptors = emptySet()
             }
