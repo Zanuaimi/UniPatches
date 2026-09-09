@@ -9,7 +9,7 @@ come from the visible Morphe settings and are not preset values.
 
 The patch currently includes:
 
-- Custom: uses the visible Morphe settings and optional imported JSON.
+- Custom (UniPatches defaults): uses the visible Morphe settings and optional imported JSON.
 - UniPatches: the default UniPatches red appearance.
 - Morphe-inspired: the Morphe-style appearance based on the Nai64Patches fork.
 - Dark: dark menu with light controls.
@@ -24,9 +24,9 @@ are exceptions and always remain from the visible Morphe settings.
 
 ## Importing a preset
 
-Import is available only when `Presets - Selected preset` is set to `Custom`.
+Import is available only when `Quick setup > 1. Choose preset` is set to `Custom (UniPatches defaults)`.
 
-1. Use the Morphe file selector for `Presets - Import UI preset` and choose an existing `.json` file.
+1. Use `Advanced > Import / export > Import UI preset` to choose an existing `.json` file.
 2. Patch the APK.
 3. The imported values override the visible Morphe UI settings for that patch run.
 
@@ -35,18 +35,18 @@ the patch is running. If the path is empty, unreadable, malformed, unsupported, 
 values, the patch falls back to the visible Morphe settings. Older unversioned presets and older
 `#AARRGGBB` color values are migrated when possible.
 
-`Custom Overlay Button Icon ( Local Image )` takes priority over
-`Custom Overlay Button Icon Input ( String Handler )` when the local image is valid. The String
-Handler accepts a file URI, data URI, raw Base64, URL-safe Base64, or HTTPS image URL. If the local
-input is empty or invalid, the String Handler is tried. If both are invalid or empty, the legacy
-text icon is used.
+`Quick setup > 3. Optional icon image > Local image` takes priority over the Base64 or HTTPS input
+when valid. The Base64 or HTTPS input accepts a data URI, raw Base64, URL-safe Base64, or HTTPS image
+URL. If the local image is empty or invalid, that input is tried. When both are empty, the text or
+Multi-parts icon is used; a non-empty but invalid image leaves a plain icon background so image input
+never falls through to a different icon design.
 
 ## Exporting a preset
 
 Export is available only in Custom mode.
 
-1. Set `Presets - Export UI preset` to an existing writable folder.
-2. Optionally change `Presets - Exported UI preset output name`.
+1. Set `Advanced > Import / export > Export UI preset` to an existing writable folder.
+2. Optionally change `Advanced > Import / export > Export file name`.
 3. Patch the APK.
 4. The final effective UI settings are written after the patch work completes.
 
@@ -66,7 +66,7 @@ Exports use a versioned format:
 ```json
 {
   "format": "unipatches-universal-overlay-preset",
-  "version": 2,
+  "version": 5,
   "settings": {
     "appendDescription": "",
     "descriptionAlignment": "center",
@@ -91,6 +91,8 @@ Exports use a versioned format:
     "menuTextColor3": "#FF5656",
     "menuTextColor4": "#FF5656",
     "menuTextColor5": "#FF5656",
+    "menuTextColor6": "#FF5656",
+    "separatorBackgroundColor": "#300000",
     "separatorStyle": "ascii",
     "titleIconPlacement": "none",
     "titleAlignment": "left",
@@ -98,19 +100,44 @@ Exports use a versioned format:
     "menuCorners": "rounded",
     "menuOutlineAnimation": "static",
     "outlineAnimationSpeed": 1,
-    "menuAnimation": "fade",
+    "openingAnimation": "fade",
+    "closingAnimation": "fade",
     "animationDuration": 180,
     "animationEasing": "linear",
+    "iconStyle": "text",
+    "iconShape": "triangle",
+    "iconShapeColor1": "#FFFFFF",
+    "iconShapeColor2": "#FFFFFF",
+    "iconShapeGradient": false,
+    "iconShapeGradientAngle": 0,
+    "iconShapeStrokeWidth": 3,
+    "iconShapeScale": 70,
+    "iconHighlight": false,
+    "iconShadow": false,
+    "iconOutlineGradient": false,
+    "iconOutlineColor2": "#FFFFFF",
+    "iconOutlineGradientAngle": 0,
+    "iconBackgroundStyle": "flat",
+    "iconBackgroundColor3": "#300000",
+    "iconBackgroundColor4": "#500000",
+    "iconParts": [],
     "customIconImageLocal": "",
     "customIconImageInput": ""
   }
 }
 ```
 
-The actual export contains all supported UI and Advanced values. Title, description, repository
+The actual export uses schema version 5 and contains all supported UI and Advanced values. Title, description, repository
 button text, and repository button URL are intentionally absent, as are Modules and Settings to
 Modules values. Unknown fields are ignored, missing fields use the current manual values, and future
 schema versions are rejected safely instead of being applied partially.
+
+`iconStyle` is `text` by default or `parts` for the Multi-parts icon mode. When it is `parts`,
+`iconParts` contains one part-list string per row; the icon renderer ignores the list while text
+mode is selected. Use the multi-parts instructions in [OVERLAY.md](OVERLAY.md) for the row syntax,
+available shapes, rotation, scaling, colors, and text-part limits. A non-empty custom image input
+has priority over both text and Multi-parts rendering; invalid non-empty image input intentionally
+leaves a plain icon background rather than silently switching to a legacy icon.
 
 ## Example: adding a preset
 

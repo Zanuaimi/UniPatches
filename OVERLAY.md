@@ -88,7 +88,7 @@ Activities. The activity banlist still applies to every overlay variant.
 
 ## UI presets
 
-Version 1.3 adds build-time UI presets. `Custom` uses the visible Morphe settings, including user
+Build-time UI presets keep first-time setup simple. `Custom (UniPatches defaults)` uses the visible Morphe settings, including user
 adjustments. `UniPatches`, `Morphe-inspired`, `Dark`, `Light`, and `ZArchiver-inspired` provide predefined
 readable UI values. ZArchiver-inspired uses an opaque gray menu, white text, a green outline, and a
 non-gradient dark-green `Z` icon. `LuckyPatcher-inspired` provides a black and yellow promotional style.
@@ -101,7 +101,7 @@ Modules group or any Statistic, Activity, or Hook module toggle. Those values re
 because hook and module combinations can be app-specific and may prevent an APK from working
 correctly.
 
-The v1.3 UI settings include legacy or modern control themes, control background and foreground
+The current UI settings include legacy or modern control themes, control background and foreground
 colors, independent bottom action button styles, five menu text colors, module separator styles,
 title icon placement and alignment, square or rounded menu corners, outline width and animation,
 and fade, scale, or disabled menu opening and closing animations. Animation duration is shared by
@@ -115,11 +115,12 @@ default.
 
 ### Icon parts tutorial
 
-The icon system supports text icons, one shape, built-in multi-part icons, and custom part lists.
-Custom parts are entered as one string per row in `UI > Icon > Parts > Custom part list`:
+The icon system has two modes: the simple text icon and a Multi-parts icon built from part-list rows.
+Choose `Customize appearance > Icon > Type > Multi-parts icon`, then enter one row per part in
+`Advanced > Multi-parts icon editor > Part list`:
 
 ```text
-shape|x|y|width|height|rotation|fill|color1|color2|stroke|opacity|layer
+shape|x|y|width|height|rotation|fill|color1|color2|stroke|opacity|layer|text
 ```
 
 Coordinates and dimensions are percentages of the icon area. `x=50` and `y=50` center a part.
@@ -133,16 +134,17 @@ Single-part example:
 triangle|50|50|55|55|0|solid|#4E97F0|#4E97F0|0|100|0
 ```
 
-Multi-part ReVanced-style example:
+Multi-part chevron example:
 
 ```text
-v|50|52|64|72|0|solid|#FFFFFF|#FFFFFF|6|100|0
+chevron|50|52|64|72|0|solid|#FFFFFF|#FFFFFF|6|100|0
 invertedTriangle|50|37|36|30|0|gradient|#E651A0|#6564D3|0|100|1
 ```
 
-The V is drawn first, then the inverted triangle above it. Supported part shapes include
-`triangle`, `invertedTriangle`, `circle`, `ring`, `square`, `roundedRect`, `chevron`, `v`, `z`,
-`line`, `arc`, `diamond`, `star`, and `heart`. Built-in presets use this same format and remain
+The chevron is drawn first, then the inverted triangle above it. Supported part shapes include
+`triangle`, `invertedTriangle`, `circle`, `square`, `roundedRect`, `chevron`, `z`, `line`, `arc`,
+`diamond`, `star`, `heart`, and `text`. The final text field is required for `text` and is trimmed
+to three characters. Built-in presets use this same format and remain
 fully editable rather than relying on preset-only renderer behavior.
 
 ### App-specific action modules
@@ -164,9 +166,10 @@ Universal Overlay or an app-specific overlay patch. The complete user flow is:
 
 1. Select `Control App Ads Patch` and one overlay patch. Do not select Universal Overlay together
    with an app-specific overlay patch, because both install the same shared overlay bridge.
-2. In Control App Ads, enable `Overlay integration > Runtime policy`.
-3. Under `Overlay integration > Modules`, enable `Block Ads`, `Ads Free Rewards`, and/or
-   `Block Ads / Tracking Hosts`. These module switches are disabled by default.
+2. In Control App Ads, enable `Overlay integration > Enable runtime controls`.
+3. Under `Overlay integration > Runtime controls`, enable `Block Ads`, `Rewards without ads`,
+   and/or `Block ad/tracking hosts`. These module switches are disabled by default. The Rewards
+   without ads runtime control also requires `Rewards without ads > Enable`.
 4. Patch the APK. Control App Ads initializes the session policy from its ordinary settings during
    Application startup; the overlay reads that policy when its menu opens. The two patches do not
    depend on patch ordering.
@@ -181,6 +184,15 @@ Control App Ads can respond; native, encrypted, dynamically generated, or unsupp
 unchanged. If no overlay patch is selected, Control App Ads still applies its normal static changes,
 but no runtime menu can be displayed. The Ads Free Rewards module can change matched availability
 and policy guards, but it cannot create a missing SDK-specific reward callback.
+
+The patch-time handoff is implemented by `OverlayAdsRuntimeIntegration.kt`. Control App Ads queues
+its serialized policy, and the selected overlay consumes it at the same bridge target. If the overlay
+patch runs first, `OverlayInjection.kt` records the exact owner, method, and parameter signature;
+Control App Ads then attaches its configuration call only when the patching context is the same.
+This prevents the two patches from independently guessing different Activities. If no compatible
+handoff target exists, normal static Ads changes remain safe and runtime controls are not exposed.
+`AdsRuntimePolicy.java` is the process-local policy store; it is configured before an app-specific
+Activity overlay is shown and is not persistent.
 
 `Import UI preset` accepts a path to a JSON file and is used only in Custom mode. A valid supported
 preset overrides the visible settings during patching; an empty, unreadable, malformed, or
@@ -215,6 +227,17 @@ This is the Morphe patch entry point. It:
 It should contain patch-time discovery and configuration only. Runtime UI and feature behavior belong
 in the extension Java code.
 
+patches/src/main/kotlin/unipatches/overlay/OverlayInjection.kt
+
+This contains the shared safe-register bridge injection and Application/Activity fallback helpers.
+It also attaches a queued Ads policy to the exact overlay bridge when Control App Ads is selected.
+App-specific patch entries should call these helpers rather than implementing a second injector.
+
+patches/src/main/kotlin/unipatches/overlay/OverlayAdsRuntimeIntegration.kt
+
+This is the patch-process-only handoff between Control App Ads and an overlay patch. It stores the
+pending policy and exact bridge identity temporarily; it does not become part of the patched APK.
+
 patches/src/main/kotlin/unipatches/overlay/OverlayConfigPayload.kt
 
 This is the shared Kotlin wire-format helper. Universal and app-specific patch entries should use
@@ -245,6 +268,9 @@ UniPatches
 |
 |-- patches/src/main/kotlin/unipatches/overlay/
 |   `-- UniversalOverlayPatch.kt       Morphe settings and safe injection bridge
+|   |-- HillClimbRacingOverlayExamplePatch.kt app-specific shared-core example
+|   |-- OverlayInjection.kt             shared bridge injection and fallback helpers
+|   |-- OverlayAdsRuntimeIntegration.kt patch-process Ads policy handoff
 |   |-- presets/OverlayPreset.kt         Shared preset model and value builder
 |   |-- presets/OverlayPresetCatalog.kt Central preset registry
 |   |-- presets/UniPatchesPreset.kt     UniPatches preset
@@ -265,14 +291,17 @@ UniPatches
     |-- OverlayRuntime.java   Runtime coordinator and Activity controllers
     |-- OverlayLifecycle.java Lifecycle callback adapter
     |-- OverlayConfig.java    Configuration decoder and fallbacks
+    |-- AdsRuntimePolicy.java process-local Ads runtime policy
     |-- OverlayViews.java     Shared view and style construction
     `-- modules/
         |-- OverlayModule.java          common contract
+        |-- OverlayActionModule.java    settings and optional one-shot action contract
         |-- OverlayActivityModule.java  activity base class
         |-- OverlayStatisticModule.java statistic base class
         |-- OverlayHookModule.java      hook base class
         |-- OverlayAppSpecificModule.java target-aware module base class
         |-- OverlayAppSpecificModuleProvider.java provider contract
+        |-- OverlaySessionState.java   process-session values for action-module settings
         |-- activity/                            Activity implementations
         |-- statistic/                           statistic implementations
         `-- hook/                                hook implementations
@@ -322,6 +351,11 @@ The controller is Activity-specific. Shared state is used only for intentional c
 settings such as module toggles, monitor toggles, button position, and temporary Activity feature
 state.
 
+`OverlaySessionState.java` is the shared process-session store for app-specific action-module
+settings and values. It is cleared when the overlay is fully closed or the app process ends; it is
+not persistent Android storage. This lets a settings value survive Activity changes in a
+multi-Activity app without surviving a new app process.
+
 extensions/extension/src/main/java/unipatch/overlaycore/OverlayLifecycle.java
 
 This is the lifecycle adapter. It forwards Activity resume, pause, and destroy events to the runtime.
@@ -338,10 +372,11 @@ The current configuration uses payload version 1 and RGB-only color values in `#
 transparency is serialized separately as a percentage because Morphe's color picker does not
 edit alpha. The default background `#300000` with 80% opacity reproduces the previous `#CC300000`
 value. Menu outline and menu text are independent settings, and the icon outline width is
-independent from the menu outline width. Version 1.3 also stores the configurable legacy icon text
+independent from the menu outline width. The current schema also stores the configurable legacy icon text
 size and supports two build-time custom icon inputs: a local image file and a String Handler input.
 The local image takes priority when valid; otherwise file URI, Base64, data URI, and HTTPS inputs are
-tried before falling back to the legacy icon.
+tried. A non-empty but invalid image intentionally leaves a plain icon background rather than drawing
+text or Multi-parts behind it, so image input always has full visual precedence.
 
 The user-facing preset format is versioned JSON and is separate from the internal Base64-delimited
 runtime payload. Unknown JSON fields are ignored, missing fields use the visible settings, and
@@ -354,11 +389,22 @@ extensions/extension/src/main/java/unipatch/overlaycore/OverlayViews.java
 
 This contains reusable overlay backgrounds, gradient rendering, animated outline rendering, and
 selectable or styled button backgrounds. It keeps visual construction separate from lifecycle and
-module behavior. v1.3 uses explicit configured colors for buttons, sliders, checkboxes, and dropdowns.
+module behavior. The current runtime uses explicit configured colors for buttons, sliders,
+checkboxes, and dropdowns.
 
 Overlay views use an isolated Android theme context and then apply configured colors explicitly. This
 prevents a host app's legacy or custom theme from changing checkbox, spinner, slider, or overlay
 button appearance.
+
+### Action-module settings lifecycle
+
+`OverlayActionModule.java` is the shared contract for modules that expose a settings popup and,
+optionally, a one-shot action. `hasActionButton()` controls whether the action button is shown;
+Ads runtime modules use settings-only controls. A module can save values without applying them by
+leaving `appliesSettingsOnConfirm()` false, or apply them immediately through
+`applySavedSettings(Activity)` when it returns true. The runtime invokes this callback only after
+the user confirms the styled overlay popup and catches module failures so a bad app-specific module
+cannot crash the host app. Numeric inputs and checkbox lists use the same contract.
 
 ## Module categories
 
