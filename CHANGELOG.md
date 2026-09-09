@@ -1,3 +1,11 @@
+## [1.12.0](https://github.com/Zanuaimi/UniPatches/compare/v1.11.1...v1.12.0) (2026-09-09)
+
+### ✨ New Features
+
+* **overlay:** refine configuration and preset behavior ([2bee3b9](https://github.com/Zanuaimi/UniPatches/commit/2bee3b94cd896924e99e884b3e962d29a6470a72))
+* **overlay:** strengthen shared runtime module lifecycle ([f8b0579](https://github.com/Zanuaimi/UniPatches/commit/f8b0579dfb10133312f3e351ad28e2a2ea91ec73))
+* **patches:** improve compatibility and user-facing controls ([e0fe90e](https://github.com/Zanuaimi/UniPatches/commit/e0fe90eec468ed75b489cce9e31cb9d7fd5db8ae))
+
 ## [1.11.1](https://github.com/Zanuaimi/UniPatches/compare/v1.11.0...v1.11.1) (2026-09-09)
 
 ### 🐛 Bug Fixes
