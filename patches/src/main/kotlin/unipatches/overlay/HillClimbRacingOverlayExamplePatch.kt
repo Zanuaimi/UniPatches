@@ -1,6 +1,7 @@
 package unipatches.overlay
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
+import app.morphe.patcher.patch.Compatibility
 import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
@@ -19,9 +20,16 @@ private const val RUNTIME_CLASS = "Lunipatch/overlaycore/OverlayRuntime;"
 @Suppress("unused")
 val hillClimbRacingOverlayExamplePatch = bytecodePatch(
     name = "Hill Climb Racing Overlay Example (Experimental)",
-    description = "Contributor example for a safe app-specific overlay on Hill Climb Racing. Select one or more demo modules below, patch the matching app, then open the overlay and use each module's Settings or Preview control. The settings and values reset when the app process restarts. This example only demonstrates shared UI, explicit launcher injection, settings popups, checkbox lists, and one-shot actions using mock session state; it never alters currencies, unlocks, purchases, saves, or game bytecode. Do not combine with Universal Overlay Patch.",
+    description = "Contributor example for a safe app-specific overlay on Hill Climb Racing (package: com.fingersoft.hillclimb). Morphe shows this patch only for that app. Select one or more demo modules below, patch the matching app, then open the overlay and use each module's Settings or Preview control. The settings and values reset when the app process restarts. This example only demonstrates shared UI, explicit launcher injection, settings popups, checkbox lists, and one-shot actions using mock session state; it never alters currencies, unlocks, purchases, saves, or game bytecode. Do not combine with Universal Overlay Patch.",
     default = false,
 ) {
+    compatibleWith(
+        Compatibility(
+            packageName = "com.fingersoft.hillclimb",
+            name = "Hill Climb Racing",
+            description = "Safe shared-overlay example for the Hill Climb Racing APK.",
+        ),
+    )
     dependsOn(StartupHooks.resolveRealApplicationPatch)
 
     val addCoins by booleanOption(
