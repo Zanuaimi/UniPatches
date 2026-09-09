@@ -1,8 +1,10 @@
-# UniPatches Universal Overlay
+# UniPatches Overlay Architecture
 
 ## Purpose
 
-Universal Overlay Patch is a runtime overlay for supported Android APKs. It is designed to work
+The shared Overlay Core is the runtime foundation for supported Android APKs. The Universal Overlay
+Patch is its general-purpose patch; app-specific overlay patches can reuse the same core while adding
+target-specific modules and injection rules. The core is designed to work
 without knowing the target app's package, engine, Activity names, or internal game logic. The same
 architecture can run in ordinary Android apps, Unity games, Godot games, and apps that move between
 multiple Activities.
@@ -10,6 +12,79 @@ multiple Activities.
 The patch adds an in-app floating button and an optional menu. The menu is configured before
 patching, while selected modules can be enabled, disabled, and customized at runtime. The overlay
 belongs to the patched app's Activity content; it is not an Android system-level window.
+
+## Overlay variants
+
+Every overlay variant uses the same Overlay Core. A variant supplies identity, configuration defaults,
+module selection, and patch-time injection strategy:
+
+```text
+Overlay Core
+├── UI, animations, themes, presets, configuration, and lifecycle
+├── Universal Activity, statistic, and hook modules
+├── OverlayAppSpecificModule contract and provider registry
+└── failure isolation and Activity state restoration
+
+Universal Overlay Patch
+├── universal automatic Application/Activity discovery by default
+└── exposes selected universal modules
+
+App-Specific Overlay Patch
+├── explicit target-Activity injection by default
+├── controlled universal injection fallback when the target is unavailable
+├── selected universal modules
+└── app-specific modules for one known application
+```
+
+The current runtime package is `unipatch.overlaycore`. Universal module implementations live beside
+the core because they are reusable by both variants. App-specific modules extend
+`OverlayAppSpecificModule`; they are displayed in their own menu section and are isolated so a target
+fingerprint or hook failure cannot prevent universal modules from loading.
+
+App-specific patches should use a unique profile ID, patch name, description, and default overlay
+title. They must not copy the core UI or runtime. A future app-specific patch can register a provider:
+
+```java
+OverlayRuntime.registerAppSpecificProvider(new OverlayAppSpecificModuleProvider() {
+    @Override public String profileId() { return "example-game"; }
+    @Override public List<OverlayAppSpecificModule> create(Activity activity) {
+        return Arrays.asList(new ExampleGameToolsModule(activity));
+    }
+});
+```
+
+Its patch-time configuration selects `example-game`, injects into the known target Activity, and uses
+the universal discovery strategy only as a controlled fallback.
+
+### App-specific patch template
+
+The following is a design template, not a copy-and-paste patch. A contributor should preserve the
+shared configuration field contract when adding the first concrete app-specific patch. The shared
+Kotlin serializer is `OverlayConfigPayload.kt`; it owns the wire-format version, Base64 field
+encoding, profile metadata, and injection-mode validation. A concrete app-specific patch still owns
+its settings and defaults, but must pass its common fields through this serializer:
+
+```kotlin
+@Suppress("unused")
+val exampleGameOverlayPatch = bytecodePatch(
+    name = "Example Game Overlay (Experimental)",
+    description = "App-specific overlay built on the shared Overlay Core.",
+    default = false,
+) {
+    extendWith("extensions/extension.mpe")
+
+    // 1. Fingerprint the app's intended Activity.
+    // 2. Build the common overlay fields and serialize them with OverlayConfigPayload:
+    //      profileId = "example-game"
+    //      injectionMode = "explicitActivity"
+    //      title/description = app-specific defaults
+    // 3. Register the app-specific provider and inject the bridge into the target Activity.
+    // 4. If the target is unavailable, invoke the shared universal fallback strategy.
+}
+```
+
+The target fingerprint must be narrow enough to avoid sign-in, billing, store, and embedded SDK
+Activities. The activity banlist still applies to every overlay variant.
 
 ## UI presets
 
@@ -71,6 +146,12 @@ This is the Morphe patch entry point. It:
 It should contain patch-time discovery and configuration only. Runtime UI and feature behavior belong
 in the extension Java code.
 
+patches/src/main/kotlin/unipatches/overlay/OverlayConfigPayload.kt
+
+This is the shared Kotlin wire-format helper. Universal and app-specific patch entries should use
+it to append profile ID and injection mode metadata without duplicating Base64 encoding or schema
+version handling.
+
 patches/src/main/kotlin/unipatches/overlay/presets/
 
 This contains the shared preset model, one definition file per built-in preset, and the centralized
@@ -111,16 +192,18 @@ UniPatches
 |-- patches/src/main/kotlin/helpers/bytecode/
 |   `-- BytecodeUtils.kt                Safe register-preserving method cloning
 |
-`-- extensions/extension/src/main/java/unipatch/universaloverlay/
-    |-- UniversalOverlayRuntime.java   Runtime coordinator and Activity controllers
-    |-- UniversalOverlayLifecycle.java Lifecycle callback adapter
-    |-- UniversalOverlayConfig.java    Configuration decoder and fallbacks
-    |-- UniversalOverlayViews.java     Shared view and style construction
+`-- extensions/extension/src/main/java/unipatch/overlaycore/
+    |-- OverlayRuntime.java   Runtime coordinator and Activity controllers
+    |-- OverlayLifecycle.java Lifecycle callback adapter
+    |-- OverlayConfig.java    Configuration decoder and fallbacks
+    |-- OverlayViews.java     Shared view and style construction
     `-- modules/
-        |-- UniversalOverlayModule.java          common contract
-        |-- UniversalOverlayActivityModule.java  activity base class
-        |-- UniversalOverlayStatisticModule.java statistic base class
-        |-- UniversalOverlayHookModule.java      hook base class
+        |-- OverlayModule.java          common contract
+        |-- OverlayActivityModule.java  activity base class
+        |-- OverlayStatisticModule.java statistic base class
+        |-- OverlayHookModule.java      hook base class
+        |-- OverlayAppSpecificModule.java target-aware module base class
+        |-- OverlayAppSpecificModuleProvider.java provider contract
         |-- activity/                            Activity implementations
         |-- statistic/                           statistic implementations
         `-- hook/                                hook implementations
@@ -129,25 +212,30 @@ UniPatches
 Module inheritance is intentionally separated by responsibility:
 
 ```text
-UniversalOverlayModule
+OverlayModule
 |                         common identity and metadata
-|-- UniversalOverlayActivityModule
+|-- OverlayActivityModule
 |   `-- Activity modules    Activity state, apply, restore, isolation
 |
-|-- UniversalOverlayStatisticModule
+|-- OverlayStatisticModule
 |   `-- Statistic modules  values, monitors, scheduling, isolation
 |
-`-- UniversalOverlayHookModule
-    `-- Hook modules       best-effort hooks and hook isolation
+|-- OverlayHookModule
+|   `-- Hook modules       best-effort hooks and hook isolation
+|
+`-- OverlayAppSpecificModule
+    `-- App-specific modules  target-aware behavior and target isolation
 ```
 
-The runtime coordinates all three branches. Activity, statistic, and hook base classes do not
-inherit from one another, so adding a module to one category does not couple it to another
-category's lifecycle or failure behavior.
+The runtime coordinates all four categories. App-specific modules have their own guarded lifecycle,
+state namespace, and menu section, even when their implementation happens to modify target behavior.
+Activity, statistic, general hook, and app-specific base classes do not inherit from one another, so
+adding a module to one category does not couple it to another category's lifecycle or failure
+behavior.
 
 ### Runtime entry and configuration
 
-extensions/extension/src/main/java/unipatch/universaloverlay/UniversalOverlayRuntime.java
+extensions/extension/src/main/java/unipatch/overlaycore/OverlayRuntime.java
 
 This is the runtime coordinator. It:
 
@@ -165,13 +253,13 @@ The controller is Activity-specific. Shared state is used only for intentional c
 settings such as module toggles, monitor toggles, button position, and temporary Activity feature
 state.
 
-extensions/extension/src/main/java/unipatch/universaloverlay/UniversalOverlayLifecycle.java
+extensions/extension/src/main/java/unipatch/overlaycore/OverlayLifecycle.java
 
 This is the lifecycle adapter. It forwards Activity resume, pause, and destroy events to the runtime.
 The runtime creates a controller on resume, pauses work when an Activity is not visible, and removes
 the controller when the Activity is destroyed.
 
-extensions/extension/src/main/java/unipatch/universaloverlay/UniversalOverlayConfig.java
+extensions/extension/src/main/java/unipatch/overlaycore/OverlayConfig.java
 
 This decodes and sanitizes the payload produced by the Kotlin patch. Configuration fields are
 positional, so new fields are appended and version-aware defaults preserve older payloads.
@@ -193,7 +281,7 @@ invalidating older presets.
 
 ### Shared view construction
 
-extensions/extension/src/main/java/unipatch/universaloverlay/UniversalOverlayViews.java
+extensions/extension/src/main/java/unipatch/overlaycore/OverlayViews.java
 
 This contains reusable overlay backgrounds, gradient rendering, animated outline rendering, and
 selectable or styled button backgrounds. It keeps visual construction separate from lifecycle and
@@ -207,16 +295,16 @@ button appearance.
 
 The module base classes are placed in:
 
-extensions/extension/src/main/java/unipatch/universaloverlay/modules/
+extensions/extension/src/main/java/unipatch/overlaycore/modules/
 
 Concrete implementations are placed in the matching activity/, statistic/, or hook/ subdirectory.
 
-UniversalOverlayModule.java is the common module contract. It provides the stable identity and
+OverlayModule.java is the common module contract. It provides the stable identity and
 user-facing metadata shared by all categories.
 
 ### Activity modules
 
-UniversalOverlayActivityModule.java is the base class for temporary behavior tied to the current
+OverlayActivityModule.java is the base class for temporary behavior tied to the current
 Activity or its Window. Examples include fullscreen, screenshots, brightness, rotation, and audio
 state.
 
@@ -226,7 +314,7 @@ Activity module must not stop other modules from being toggled or restored.
 
 ### Statistic modules
 
-UniversalOverlayStatisticModule.java is the base class for values displayed in the menu and/or
+OverlayStatisticModule.java is the base class for values displayed in the menu and/or
 floating monitors. It manages enabled state, Monitor state, menu visibility, monitor binding, and
 safe update scheduling.
 
@@ -242,7 +330,7 @@ The runtime owns monitor placement, columns, dimensions, alpha, and click-throug
 
 ### Hook modules
 
-UniversalOverlayHookModule.java is the base class for best-effort runtime hooks that affect views or
+OverlayHookModule.java is the base class for best-effort runtime hooks that affect views or
 host behavior without changing a specific app's internal business logic.
 
 The base class owns hook isolation. Hooks must tolerate unsupported APIs, unexpected view types, and
@@ -253,7 +341,7 @@ other module categories from operating.
 
 1. Morphe builds the patch with the selected settings and, in Custom mode, optionally imports a UI preset.
 2. The patch injects a bridge into Application.onCreate, or uses an Activity fallback.
-3. UniversalOverlayRuntime decodes the configuration and registers lifecycle callbacks.
+3. OverlayRuntime decodes the configuration and registers lifecycle callbacks.
 4. Each resumed Activity receives its own controller and overlay content.
 5. The controller creates only the selected module categories.
 6. Users control module state from the menu; state can be remembered across Activities for the
@@ -269,13 +357,13 @@ app continues without the overlay. The implementation does not create a system-l
 
 ## Adding future modules
 
-For the practical module checklist, read UNIVERSAL_OVERLAY_MODULES.md. In short, a new module needs:
+For the practical module checklist, read OVERLAY_MODULES.md. In short, a new module needs:
 
 1. A class extending the correct category base class.
 2. A disabled-by-default Morphe option.
-3. A configuration token serialized by UniversalOverlayPatch.kt.
-4. A decoder field in UniversalOverlayConfig.java.
-5. Registration in UniversalOverlayRuntime.java in the intended category/order.
+3. A configuration token serialized by the overlay patch through OverlayConfigPayload.kt.
+4. A decoder field in OverlayConfig.java.
+5. Registration in OverlayRuntime.java in the intended category/order.
 6. Independent failure handling and restoration where state is changed.
 7. A description update only when the user-facing patch overview needs a new representative example.
 

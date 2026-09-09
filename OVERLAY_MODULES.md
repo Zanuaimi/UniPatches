@@ -1,49 +1,80 @@
-# Universal Overlay module guide
+# Overlay module guide
 
-This guide explains how to add a module to the UniPatches Universal Overlay.
+This guide explains how to add universal or app-specific modules to the shared UniPatches Overlay Core.
 
 ## Architecture
 
-The patch file at patches/src/main/kotlin/unipatches/overlay/UniversalOverlayPatch.kt
-exposes Morphe settings and serializes them into the runtime configuration. It should not contain
-app-specific logic.
+The Universal Overlay patch at patches/src/main/kotlin/unipatches/overlay/UniversalOverlayPatch.kt
+exposes general Morphe settings and serializes them into the runtime configuration. An app-specific
+patch uses the same core but keeps target fingerprints and app-specific settings in its own patch.
 
 Built-in UI presets are defined separately in
 patches/src/main/kotlin/unipatches/overlay/presets/OverlayPresetCatalog.kt. The patch entry point
 only selects a catalog value, applies Custom/import precedence, and serializes the final result.
 Preset definitions are build-time data and do not belong in the extension runtime.
 
-The extension runtime starts from UniversalOverlayRuntime and owns lifecycle registration,
+The extension runtime starts from OverlayRuntime and owns lifecycle registration,
 Activity controllers, view attachment, state restoration, update scheduling, and failure isolation.
 It is shared by ordinary Android apps, Unity games, Godot games, and apps with multiple Activities.
 
 Use the matching base class:
 
-- UniversalOverlayActivityModule for temporary Activity/window behavior.
-- UniversalOverlayStatisticModule for menu values and floating monitors.
-- UniversalOverlayHookModule for best-effort view or runtime behavior changes.
-- UniversalOverlayModule for common labels, keys, descriptions, and contracts.
+- OverlayActivityModule for temporary Activity/window behavior.
+- OverlayStatisticModule for menu values and floating monitors.
+- OverlayHookModule for best-effort view or runtime behavior changes.
+- OverlayAppSpecificModule for target-aware modules belonging to one known application.
+- OverlayModule for common labels, keys, descriptions, and contracts.
 
 Do not make one module inherit from another module category. Each category owns its own lifecycle and
 isolation behavior.
 
+## App-specific modules
+
+App-specific modules are a separate category because they may depend on known target classes, method
+fingerprints, or app state. Extend `OverlayAppSpecificModule`, implement stable metadata, and register
+the module through an `OverlayAppSpecificModuleProvider` with a unique profile ID.
+
+An app-specific patch should inject into its known target Activity explicitly, use a controlled
+universal Application/Activity fallback only when explicit injection fails, and expose universal and
+app-specific modules in separate menu sections. A target mismatch disables that module rather than
+the whole overlay. App-specific modules have their own guarded enable, restore, and remembered-state
+lifecycle; they do not share the universal hook state namespace.
+
+Example provider shape:
+
+```java
+public final class ExampleGameProvider implements OverlayAppSpecificModuleProvider {
+    @Override public String profileId() { return "example-game"; }
+    @Override public List<OverlayAppSpecificModule> create(Activity activity) {
+        return Arrays.asList(new ExampleGameToolsModule(activity));
+    }
+}
+```
+
 ## Adding a module
 
 1. Add a Java class under the matching category directory:
-   extensions/extension/src/main/java/unipatch/universaloverlay/modules/activity/,
-   .../statistic/, or .../hook/.
+   extensions/extension/src/main/java/unipatch/overlaycore/modules/activity/,
+   .../statistic/, or .../hook/. App-specific implementations should use a target-specific
+   package under `unipatch.overlaycore.modules` (for example `modules.appspecific`).
 2. Extend the correct base class and provide a stable, unique key(), user-facing label(), and
    short description().
 3. Add a disabled-by-default booleanOption in the Kotlin patch settings, grouped under
    Statistic modules, Activity modules, or Hook modules.
 4. Add the option token to the serialized controls list in the Kotlin patch.
-5. Decode the token in UniversalOverlayConfig.
-6. Add the module in UniversalOverlayRuntime.addModules() in the intended display order.
+5. Decode the token in OverlayConfig.
+6. Add universal modules in `OverlayRuntime.addModules()`, or register app-specific modules through
+   the provider registry.
 7. Use the category-specific runtime helper: statistic modules use
    addStatisticSafely() and createStatisticMonitors(); activity modules use
-   addActivitySafely(); hook modules use addHookSafely().
+   addActivityModuleSafely(); hook modules use addHookModuleSafely(); app-specific modules use
+   addAppSpecificModuleSafely().
 8. Restore mutable state independently and tolerate incompatible Activities.
 9. Update the Morphe patch description when the user-visible module list changes.
+
+For an app-specific patch, set the shared configuration profile ID and use the
+`explicitActivity` injection mode. The explicit target is attempted first; the universal strategy
+is a fallback only when the target Activity or its `onCreate` method cannot be found.
 
 ## Statistic modules
 
@@ -72,9 +103,9 @@ current app content and uses Activity-content fallbacks.
 
 Configuration fields are positional and Base64 encoded. When adding fields:
 
-- increment CONFIG_VERSION in the Kotlin patch;
+- increment `OverlayConfigPayload.VERSION` in the shared Kotlin payload helper;
 - append new fields rather than inserting them in the middle;
-- add version-aware defaults in UniversalOverlayConfig;
+- add version-aware defaults in OverlayConfig;
 - preserve decoding for older versions;
 - validate bounded numeric values and enum strings before serialization.
 
@@ -103,4 +134,5 @@ to valid bounds, and patch-time warnings identify values that were clamped.
 - Lifecycle, recreation, fully-close, and multi-Activity behavior remain isolated.
 - Use a semantic commit such as feat: add ..., fix: handle ..., or chore: ....
 
-The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.
+The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite. The shared core
+allows future overlay variants to inherit the same tested UI and lifecycle behavior.

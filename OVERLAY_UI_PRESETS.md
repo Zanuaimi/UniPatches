@@ -1,6 +1,6 @@
-# Universal Overlay UI presets
+# Overlay UI presets
 
-Universal Overlay UI presets are build-time configurations for the overlay’s UI and Advanced
+Overlay UI presets are build-time configurations for the shared overlay UI and Advanced
 settings. They do not run inside the patched APK and do not contain statistic, Activity, or Hook
 modules. The overlay title, description, repository button text, and repository button URL always
 come from the visible Morphe settings and are not preset values.

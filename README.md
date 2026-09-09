@@ -93,7 +93,10 @@ See the [Morphe documentation](https://github.com/MorpheApp/morphe-documentation
 
 Suggestions, fixes, compatibility improvements, and carefully selected community patches are welcome. Contributions should preserve the repository’s quality-over-quantity goal, include appropriate credits, and use clear semantic commit messages such as `feat:`, `fix:`, or `chore:`.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance, including the Universal Overlay guide.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance, including the shared overlay guide.
+The generalized overlay architecture, shared core, universal modules, and app-specific overlay
+template are documented in [OVERLAY.md](OVERLAY.md), [OVERLAY_MODULES.md](OVERLAY_MODULES.md), and
+[OVERLAY_UI_PRESETS.md](OVERLAY_UI_PRESETS.md).
 
 ## License
 
