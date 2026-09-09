@@ -1,3 +1,9 @@
+## [1.11.1](https://github.com/Zanuaimi/UniPatches/compare/v1.11.0...v1.11.1) (2026-09-09)
+
+### 🐛 Bug Fixes
+
+* **overlay:** restrict Hill Climb example to target package ([3452b53](https://github.com/Zanuaimi/UniPatches/commit/3452b534024110b707d2d196c4e4c292a76c67ae))
+
 ## [1.11.0](https://github.com/Zanuaimi/UniPatches/compare/v1.10.3...v1.11.0) (2026-09-09)
 
 ### ✨ New Features

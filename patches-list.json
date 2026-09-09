@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.11.0",
+  "version": "1.11.1",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -747,12 +747,30 @@
     },
     {
       "name": "Hill Climb Racing Overlay Example (Experimental)",
-      "description": "Contributor example for a safe app-specific overlay on Hill Climb Racing. Select one or more demo modules below, patch the matching app, then open the overlay and use each module's Settings or Preview control. The settings and values reset when the app process restarts. This example only demonstrates shared UI, explicit launcher injection, settings popups, checkbox lists, and one-shot actions using mock session state; it never alters currencies, unlocks, purchases, saves, or game bytecode. Do not combine with Universal Overlay Patch.",
+      "description": "Contributor example for a safe app-specific overlay on Hill Climb Racing (package: com.fingersoft.hillclimb). Morphe shows this patch only for that app. Select one or more demo modules below, patch the matching app, then open the overlay and use each module's Settings or Preview control. The settings and values reset when the app process restarts. This example only demonstrates shared UI, explicit launcher injection, settings popups, checkbox lists, and one-shot actions using mock session state; it never alters currencies, unlocks, purchases, saves, or game bytecode. Do not combine with Universal Overlay Patch.",
       "default": false,
       "dependencies": [
         "ResourcePatch"
       ],
-      "compatiblePackages": null,
+      "compatiblePackages": [
+        {
+          "packageName": "com.fingersoft.hillclimb",
+          "name": "Hill Climb Racing",
+          "description": "Safe shared-overlay example for the Hill Climb Racing APK.",
+          "apkFileType": null,
+          "appIconColor": null,
+          "signatures": null,
+          "targets": [
+            {
+              "version": null,
+              "versionCodes": null,
+              "isExperimental": false,
+              "minSdk": null,
+              "description": null
+            }
+          ]
+        }
+      ],
       "options": [
         {
           "key": "hcrDemoAddCoins",
