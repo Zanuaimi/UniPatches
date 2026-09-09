@@ -89,6 +89,7 @@ private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
         addProperty("iconBackgroundStyle", iconBackgroundStyle)
         addProperty("iconBackgroundColor3", iconBackgroundColor3)
         addProperty("iconBackgroundColor4", iconBackgroundColor4)
+        add("iconParts", GsonBuilder().create().toJsonTree(iconParts))
         addProperty("customIconImageLocal", customIconImageLocal)
         addProperty("customIconImageInput", customIconImageInput)
         addProperty("buttonShape", buttonShape)
@@ -169,6 +170,19 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
         }
         fun choice(name: String, current: String, allowed: Set<String>): String =
             text(name, current) { it in allowed }
+        fun stringList(name: String, current: List<String>, maxItems: Int = 12): List<String> {
+            val element = values.get(name) ?: return current
+            val values = if (element.isJsonArray) {
+                element.asJsonArray.mapNotNull { item ->
+                    item.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+                }
+            } else if (element.isJsonPrimitive && element.asJsonPrimitive.isString) {
+                element.asString.lines()
+            } else {
+                return current
+            }
+            return values.map { it.trim() }.filter { it.isNotEmpty() }.take(maxItems)
+        }
         val backgroundSource = values.get("backgroundColor")?.takeIf {
             it.isJsonPrimitive && it.asJsonPrimitive.isString
         }?.asString
@@ -200,8 +214,8 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             iconOutline = flag("iconOutline", fallback.iconOutline),
             iconOutlineWidth = number("iconOutlineWidth", fallback.iconOutlineWidth, 1..8),
             iconOutlineColor = rgbColor("iconOutlineColor", fallback.iconOutlineColor),
-            iconStyle = choice("iconStyle", fallback.iconStyle, setOf("text", "shape", "multi")),
-            iconShape = choice("iconShape", fallback.iconShape, setOf("triangle", "chevron", "smile", "circle", "z")),
+            iconStyle = choice("iconStyle", fallback.iconStyle, setOf("text", "shape", "multi", "parts")),
+            iconShape = choice("iconShape", fallback.iconShape, setOf("triangle", "chevron", "smile", "circle", "z", "revanced")),
             iconShapeColor1 = rgbColor("iconShapeColor1", fallback.iconShapeColor1),
             iconShapeColor2 = rgbColor("iconShapeColor2", fallback.iconShapeColor2),
             iconShapeGradient = flag("iconShapeGradient", fallback.iconShapeGradient),
@@ -216,6 +230,7 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             iconBackgroundStyle = choice("iconBackgroundStyle", fallback.iconBackgroundStyle, setOf("flat", "faceted")),
             iconBackgroundColor3 = rgbColor("iconBackgroundColor3", fallback.iconBackgroundColor3),
             iconBackgroundColor4 = rgbColor("iconBackgroundColor4", fallback.iconBackgroundColor4),
+            iconParts = stringList("iconParts", fallback.iconParts),
             customIconImageLocal = text(
                 "customIconImageLocal",
                 text("customIconImage", fallback.customIconImageLocal),
@@ -506,7 +521,7 @@ private fun injectMethod(owner: MutableClass, method: MutableMethod, config: Str
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v1.4.1 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v2.0 (Experimental)",
     description = """
         Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,
         fullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;
@@ -519,7 +534,9 @@ val universalOverlayPatch = bytecodePatch(
         and may not work on all apps. UI presets can save and reuse supported UI and Advanced
         settings. The title, description, repository button text, and repository button URL remain
         controlled by the visible Morphe settings. Modules and Settings to Modules are excluded
-        because hook and module combinations can be app-specific.
+        because hook and module combinations can be app-specific. If Control App Ads is patched
+        with its optional runtime policy enabled, its selected ad-control modules appear here
+        automatically; Universal Overlay does not patch ad SDKs by itself.
 
         The idea and initial works of this Universal Overlay Patch are from Zanuaimi / Noobite.
     """.trimIndent(),
@@ -580,7 +597,7 @@ val universalOverlayPatch = bytecodePatch(
     )
     val bottomButtonStyle by stringOption(
         title = "UI > Controls > Bottom action button style",
-        default = "solid",
+        default = "text",
         key = "runtimeOverlayBottomButtonStyle",
         description = "Style of the repository, close-menu, and fully-close buttons.",
         values = linkedMapOf("Text only (default)" to "text", "Solid background" to "solid", "Gradient background" to "gradient"),
@@ -600,7 +617,7 @@ val universalOverlayPatch = bytecodePatch(
     )
     val bottomButtonTextColor by stringOption(
         title = "UI > Controls > Bottom action button text color",
-        default = "#300000",
+        default = "#FFFFFF",
         key = "runtimeOverlayBottomButtonTextColor",
         description = "Text color of the three bottom action buttons.",
     )
@@ -616,7 +633,7 @@ val universalOverlayPatch = bytecodePatch(
         key = "runtimeOverlayBottomButtonBackground2",
         description = "Second background color for gradient bottom action buttons.",
     )
-    val menuTextColor1 by stringOption(title = "UI > Menu > Text color 1 (title and lines)", default = "#FF5656", key = "runtimeOverlayMenuTextColor1", description = "Title and title/separator line color.")
+    val menuTextColor1 by stringOption(title = "UI > Menu > Text color 1 (title, lines, and scrollbar)", default = "#FF5656", key = "runtimeOverlayMenuTextColor1", description = "Color for the menu title, title/separator lines, and the module list scrollbar thumb. This keeps the scrollbar visible without forcing a black thumb on dark presets.")
     val menuTextColor2 by stringOption(title = "UI > Menu > Text color 2 (module names)", default = "#FF5656", key = "runtimeOverlayMenuTextColor2", description = "Module name color.")
     val menuTextColor3 by stringOption(title = "UI > Menu > Text color 3 (descriptions)", default = "#FF5656", key = "runtimeOverlayMenuTextColor3", description = "Overlay and module description color.")
     val menuTextColor4 by stringOption(title = "UI > Menu > Text color 4 (monitor)", default = "#FF5656", key = "runtimeOverlayMenuTextColor4", description = "Monitor label color.")
@@ -760,15 +777,15 @@ val universalOverlayPatch = bytecodePatch(
         title = "UI > Icon > Icon part type",
         default = "text",
         key = "runtimeOverlayIconStyle",
-        description = "Choose how the legacy icon is built. Text icon is one text part, for example U or RV. Shape icon is one geometric part, for example a Triangle. Multi-part icon uses a built-in combination of parts, currently the Smile example made from two eyes and a mouth; choose Shape = Smile, then adjust size, stroke, highlight, and shadow. Arbitrary custom part lists are not hidden in this setting and are not supported yet.",
-        values = linkedMapOf("Text icon (default)" to "text", "Shape icon" to "shape", "Multi-part icon" to "multi"),
+        description = "Choose how the legacy icon is built. Text icon is one text part, for example U or RV. Single shape is one geometric part. Multi-part uses a built-in combination such as Smile. Custom part list uses the Parts list below, where every row controls one shape's position, size, rotation, colors, stroke, opacity, and layer.",
+        values = linkedMapOf("Text icon (default)" to "text", "Single shape" to "shape", "Multi-part icon" to "multi", "Custom part list" to "parts"),
     )
     val iconShape by stringOption(
         title = "UI > Icon > Shape",
         default = "triangle",
         key = "runtimeOverlayIconShape",
-        description = "Shape used by Shape and Multi-part icon styles. For a single-part icon, choose Triangle, Chevron, Circle, or Z mark. For the built-in multi-part example, choose Smile: it draws two eyes and a curved mouth as one icon. Colors, size, stroke, highlight, and shadow apply to the selected parts.",
-        values = linkedMapOf("Triangle" to "triangle", "Chevron" to "chevron", "Smile" to "smile", "Circle" to "circle", "Z mark" to "z"),
+        description = "Shape used by Shape and Multi-part icon styles. For a single-part icon, choose Triangle, Chevron, Circle, or Z mark. ReVanced-inspired combines a gradient downward triangle with a white V. For the built-in multi-part example, choose Smile: it draws two eyes and a curved mouth as one icon. Colors, size, stroke, highlight, and shadow apply to the selected parts.",
+        values = linkedMapOf("Triangle" to "triangle", "Chevron" to "chevron", "Smile" to "smile", "Circle" to "circle", "Z mark" to "z", "ReVanced-inspired" to "revanced"),
     )
     val iconShapeColor1 by stringOption(
         title = "UI > Icon > Shape color 1",
@@ -805,6 +822,12 @@ val universalOverlayPatch = bytecodePatch(
         default = 70,
         key = "runtimeOverlayIconShapeScalePercent",
         description = "Size of the drawn symbol inside the button, from 20% to 100%. Leave room for the outline and background to stay visible.",
+    )
+    val iconParts by stringsOption(
+        title = "UI > Icon > Parts > Custom part list",
+        default = emptyList(),
+        key = "runtimeOverlayIconParts",
+        description = "Optional composable icon parts, one per row. Format: shape|x|y|width|height|rotation|fill|color1|color2|stroke|opacity|layer. Positions and sizes are percentages of the icon. Example single part: triangle|50|50|55|55|0|solid|#4E97F0|#4E97F0|0|100|0. Example multi-part: v|50|52|64|72|0|solid|#FFFFFF|#FFFFFF|6|100|0 plus invertedTriangle|50|37|36|30|0|gradient|#E651A0|#6564D3|0|100|1. Supported shapes include triangle, invertedTriangle, circle, ring, square, roundedRect, chevron, v, z, line, arc, diamond, star, and heart. Leave empty to use the legacy Shape settings. Maximum 12 parts.",
     )
     val iconHighlight by booleanOption(
         title = "UI > Icon > Shape highlight",
@@ -957,7 +980,7 @@ val universalOverlayPatch = bytecodePatch(
         title = "Advanced > Activity > Injection strategy",
         default = OverlayConfigPayload.UNIVERSAL_INJECTION_MODE,
         key = "runtimeOverlayActivityInjectionMode",
-        description = "Universal automatic discovery uses the Application entry point first and a universal Activity fallback. Explicit target Activity first is intended for app-specific overlay patches; it uses the configured Activity name, then falls back to the universal strategy if that target is unavailable.",
+        description = "Universal automatic discovery uses the Application entry point first and a universal Activity fallback. Explicit target Activity first is intended for app-specific overlay patches; it uses the configured Activity name, then falls back to the universal strategy if that target is unavailable. This setting does not select app-specific modules or enable Control App Ads runtime modules.",
         values = linkedMapOf(
             "Universal automatic discovery (default)" to OverlayConfigPayload.UNIVERSAL_INJECTION_MODE,
             "Explicit target Activity, then universal fallback" to OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE,
@@ -979,7 +1002,7 @@ val universalOverlayPatch = bytecodePatch(
         title = "Modules > Settings > Show no runtime modules warning",
         default = true,
         key = "runtimeOverlayShowNoModulesWarning",
-        description = "Show a message in the overlay when no Statistic, Activity, or Hook modules are selected.",
+        description = "Show a message in the overlay when no Statistic, Activity, Hook, app-specific, or integrated module is selected. Control App Ads modules count only when that patch was also configured and patched successfully.",
     )
     val enableMonitorsOnLaunch by booleanOption(
         title = "Modules > Settings > Enable monitors for statistic modules on launch",
@@ -1169,6 +1192,7 @@ val universalOverlayPatch = bytecodePatch(
             iconBackgroundStyle = iconBackgroundStyle.orEmpty().ifBlank { "flat" },
             iconBackgroundColor3 = iconBackgroundColor3.orEmpty().ifBlank { "#3D7806" },
             iconBackgroundColor4 = iconBackgroundColor4.orEmpty().ifBlank { "#4F9905" },
+            iconParts = iconParts.orEmpty().map { it.trim() }.filter { it.isNotEmpty() }.take(12),
             customIconImageLocal = customIconImage.orEmpty().trim(),
             customIconImageInput = customIconImageInput.orEmpty().trim(),
             buttonShape = buttonShape.orEmpty().ifBlank { "circle" },
@@ -1181,10 +1205,12 @@ val universalOverlayPatch = bytecodePatch(
             controlTheme = controlTheme.orEmpty().ifBlank { "modern" },
             controlBackground = controlBackground.orEmpty().ifBlank { "#300000" },
             controlForeground = controlForeground.orEmpty().ifBlank { "#FF5656" },
-            bottomButtonStyle = bottomButtonStyle.orEmpty().ifBlank { "solid" },
+            bottomButtonStyle = bottomButtonStyle.orEmpty().ifBlank { "text" },
             bottomButtonShape = bottomButtonShape.orEmpty().ifBlank { "square" },
             bottomButtonPadding = bottomButtonPadding == true,
-            bottomButtonTextColor = bottomButtonTextColor.orEmpty().ifBlank { "#300000" },
+            bottomButtonTextColor = bottomButtonTextColor.orEmpty().ifBlank {
+                menuTextColor1.orEmpty().ifBlank { "#FFFFFF" }
+            },
             bottomButtonBackground1 = bottomButtonBackground1.orEmpty().ifBlank { "#FF5656" },
             bottomButtonBackground2 = bottomButtonBackground2.orEmpty().ifBlank { "#FF5656" },
             menuTextColor1 = menuTextColor1.orEmpty().ifBlank { "#FF5656" },
@@ -1258,6 +1284,7 @@ val universalOverlayPatch = bytecodePatch(
         val iconBackgroundStyleValue = selectedUiPreset.iconBackgroundStyle
         val iconBackgroundColor3Value = selectedUiPreset.iconBackgroundColor3
         val iconBackgroundColor4Value = selectedUiPreset.iconBackgroundColor4
+        val iconPartsValue = selectedUiPreset.iconParts
         val customIconLocalSourceValue = selectedUiPreset.customIconImageLocal
         val customIconStringSourceValue = selectedUiPreset.customIconImageInput
         val iconTextSizeValue = selectedUiPreset.iconTextSize
@@ -1325,8 +1352,8 @@ val universalOverlayPatch = bytecodePatch(
             iconGradientAngleValue, backgroundTransparencyValue, iconOutlineWidthValue,
             shapeValue, positionValue, sizeValue, opacityValue,
         )
-        check(iconStyleValue in setOf("text", "shape", "multi"))
-        check(iconShapeValue in setOf("triangle", "chevron", "smile", "circle", "z"))
+        check(iconStyleValue in setOf("text", "shape", "multi", "parts"))
+        check(iconShapeValue in setOf("triangle", "chevron", "smile", "circle", "z", "revanced"))
         check(iconShapeColor1Value.matches(Regex("#[0-9a-fA-F]{6}")))
         check(iconShapeColor2Value.matches(Regex("#[0-9a-fA-F]{6}")))
         check(iconOutlineColor2Value.matches(Regex("#[0-9a-fA-F]{6}")))
@@ -1337,6 +1364,8 @@ val universalOverlayPatch = bytecodePatch(
         check(iconOutlineGradientAngleValue in 0..360)
         check(iconShapeStrokeWidthValue in 1..12)
         check(iconShapeScaleValue in 20..100)
+        check(iconPartsValue.size <= 12)
+        check(iconPartsValue.all { it.length <= 240 && it.split('|').size == 12 })
         check(monitorPositionValue in setOf("none", "top", "bottom"))
         check(monitorScaleValue.toFloatOrNull() in listOf(.75f, 1f, 1.25f, 1.5f, 2f))
         check(monitorColumnsValue in setOf("1", "2", "3"))
@@ -1458,6 +1487,7 @@ val universalOverlayPatch = bytecodePatch(
             injectionMode = activityInjectionMode.orEmpty().ifBlank {
                 OverlayConfigPayload.UNIVERSAL_INJECTION_MODE
             },
+            trailingFields = listOf(iconPartsValue.joinToString("\n")),
         )
 
         // Prefer the process Application entry point. The Activity path is a compatibility fallback

@@ -113,6 +113,75 @@ credits or attribution in a UI preset.
 Main and appended description text support left, center, and right alignment, with center as the
 default.
 
+### Icon parts tutorial
+
+The icon system supports text icons, one shape, built-in multi-part icons, and custom part lists.
+Custom parts are entered as one string per row in `UI > Icon > Parts > Custom part list`:
+
+```text
+shape|x|y|width|height|rotation|fill|color1|color2|stroke|opacity|layer
+```
+
+Coordinates and dimensions are percentages of the icon area. `x=50` and `y=50` center a part.
+`fill` is `solid` or `gradient`; colors use `#RRGGBB`; stroke, opacity, and layer are numeric.
+Parts are drawn from the lowest layer to the highest. Invalid rows are ignored safely, and the
+list is limited to twelve parts.
+
+Single-part example:
+
+```text
+triangle|50|50|55|55|0|solid|#4E97F0|#4E97F0|0|100|0
+```
+
+Multi-part ReVanced-style example:
+
+```text
+v|50|52|64|72|0|solid|#FFFFFF|#FFFFFF|6|100|0
+invertedTriangle|50|37|36|30|0|gradient|#E651A0|#6564D3|0|100|1
+```
+
+The V is drawn first, then the inverted triangle above it. Supported part shapes include
+`triangle`, `invertedTriangle`, `circle`, `ring`, `square`, `roundedRect`, `chevron`, `v`, `z`,
+`line`, `arc`, `diamond`, `star`, and `heart`. Built-in presets use this same format and remain
+fully editable rather than relying on preset-only renderer behavior.
+
+### App-specific action modules
+
+The shared core also supports `OverlayActionModule`, which adds an optional settings button, a
+one-shot action button, and a session value below the module description. Its settings dialog uses
+the overlay surface and accent colors. A module provider must identify its profile and reject
+Activities that are not its target app.
+
+`Hill Climb Racing Overlay Example (Experimental)` demonstrates this API with mock-only currency
+number fields and vehicle, stage, and garage checkbox lists. The example is deliberately limited to
+session-local preview state: it does not inspect or modify game data, purchases, save files, or
+bytecode. App-specific patches must not be selected together with `UniPatches Universal Overlay
+Patch`, because both patches install the shared overlay bridge.
+
+`Control App Ads Patch` can optionally expose the same policy through the shared core. Enable its
+overlay integration and choose the runtime modules in the Ads Control settings, then select either
+Universal Overlay or an app-specific overlay patch. The complete user flow is:
+
+1. Select `Control App Ads Patch` and one overlay patch. Do not select Universal Overlay together
+   with an app-specific overlay patch, because both install the same shared overlay bridge.
+2. In Control App Ads, enable `Overlay integration > Runtime policy`.
+3. Under `Overlay integration > Modules`, enable `Block Ads`, `Ads Free Rewards`, and/or
+   `Block Ads / Tracking Hosts`. These module switches are disabled by default.
+4. Patch the APK. Control App Ads initializes the session policy from its ordinary settings during
+   Application startup; the overlay reads that policy when its menu opens. The two patches do not
+   depend on patch ordering.
+5. Open the overlay. A section named `Ad control hook modules` appears only when the policy was
+   initialized and at least one runtime module was selected. Use its Settings popup or checkbox to
+   change the policy for the current app process.
+
+The runtime module is an optional bridge, not a second ad patch. Its initial format, reward, and
+host values copy Control App Ads, while later changes are session-local and reset when the process
+restarts. Only SDK methods, availability checks, and literal hosts successfully instrumented by
+Control App Ads can respond; native, encrypted, dynamically generated, or unsupported paths remain
+unchanged. If no overlay patch is selected, Control App Ads still applies its normal static changes,
+but no runtime menu can be displayed. The Ads Free Rewards module can change matched availability
+and policy guards, but it cannot create a missing SDK-specific reward callback.
+
 `Import UI preset` accepts a path to a JSON file and is used only in Custom mode. A valid supported
 preset overrides the visible settings during patching; an empty, unreadable, malformed, or
 unsupported file falls back to the visible Morphe settings. Morphe Manager's visible controls do
