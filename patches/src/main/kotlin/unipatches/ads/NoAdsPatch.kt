@@ -2,6 +2,7 @@ package unipatches.ads
 
 import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.BytecodePatchContext
@@ -14,8 +15,32 @@ import com.android.tools.smali.dexlib2.iface.reference.StringReference
 import java.util.logging.Logger
 import helpers.ads.*
 import helpers.bytecode.*
+import helpers.startup.StartupHooks
 
 private val logger = Logger.getLogger("unipatches.ads.NoAdsPatch")
+private const val ADS_POLICY_CLASS = "Lunipatch/overlaycore/AdsRuntimePolicy;"
+private var runtimeHooksEnabled = false
+private var runtimeCategoryByFingerprint: Map<Fingerprint, String> = emptyMap()
+
+private fun runtimeGuard(category: String): String? {
+    if (!runtimeHooksEnabled) return null
+    val method = when (category) {
+        "interstitials" -> "shouldBlockInterstitials"
+        "banners" -> "shouldBlockBanners"
+        "appOpen" -> "shouldBlockAppOpen"
+        "mrec" -> "shouldBlockMrec"
+        "rewarded" -> "shouldBlockRewarded"
+        "native" -> "shouldBlockNative"
+        else -> return null
+    }
+    return """
+        invoke-static {}, $ADS_POLICY_CLASS->$method()Z
+        move-result v0
+        if-eqz v0, :unipatch_ads_runtime_continue
+        return-void
+        :unipatch_ads_runtime_continue
+    """.trimIndent()
+}
 
 private fun BytecodePatchContext.injectOrSkip(
     fingerprint: Fingerprint,
@@ -28,13 +53,14 @@ private fun BytecodePatchContext.injectOrSkip(
         )
         return 0
     }
-    if (instructions.contains("v0") &&
+    val effectiveInstructions = runtimeCategoryByFingerprint[fingerprint]?.let { runtimeGuard(it) } ?: instructions
+    if (effectiveInstructions.contains("v0") &&
         (method.implementation!!.registerCount - method.numberOfParameterRegisters) < 1
     ) {
         logger.warning("No Ads: skipping ${fingerprint.name}: the injected strategy needs a local register.")
         return 0
     }
-    method.addInstructions(0, instructions)
+    method.addInstructions(0, effectiveInstructions)
     return 1
 }
 
@@ -50,6 +76,9 @@ private fun BytecodePatchContext.patchVoid(fingerprint: Fingerprint): Int {
     // Fast path: exact match has implementation
     val exact = fingerprint.methodOrNull
     if (exact != null && exact.implementation != null) {
+        runtimeCategoryByFingerprint[fingerprint]?.let { category ->
+            return injectOrSkip(fingerprint, runtimeGuard(category) ?: return@let 0)
+        }
         exact.addInstructions(0, "return-void")
         logger.info("No Ads: blocked $name (exact 1 impl)")
         return 1
@@ -84,6 +113,14 @@ private fun BytecodePatchContext.patchVoid(fingerprint: Fingerprint): Int {
             val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
             val mutableMethod = mutableClass.methods.find { it.name == name && it.returnType == ret && it.parameterTypes.map { p -> p.toString() } == params } ?: return@classDefForEach
             if (mutableMethod.implementation == null) return@classDefForEach
+            val runtimeCategory = runtimeCategoryByFingerprint[fingerprint]
+            if (runtimeCategory != null) {
+                val guard = runtimeGuard(runtimeCategory) ?: continue
+                if (mutableMethod.implementation!!.registerCount - mutableMethod.numberOfParameterRegisters < 1) continue
+                mutableMethod.addInstructions(0, guard)
+                patched++
+                continue
+            }
             mutableMethod.addInstructions(0, "return-void")
             patched++
         }
@@ -100,6 +137,11 @@ private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int
 
     val exact = fingerprint.methodOrNull
     if (exact != null && exact.implementation != null) {
+        runtimeCategoryByFingerprint[fingerprint]?.let { category ->
+            val guard = runtimeGuard(category) ?: return@let 0
+            val dynamic = guard.replace("return-void", "const/4 v0, 0x0\nreturn v0")
+            return injectOrSkip(fingerprint, dynamic)
+        }
         if (exact.returnType != "Z" || (exact.implementation?.registerCount ?: 0) < 1) {
             logger.warning("No Ads: skipping $name: boolean method has no usable register")
             return 0
@@ -128,6 +170,15 @@ private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int
             val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
             val mutableMethod = mutableClass.methods.find { it.name == name && it.returnType == ret && it.parameterTypes.map { p -> p.toString() } == params } ?: return@classDefForEach
             if (mutableMethod.implementation == null) return@classDefForEach
+            val runtimeCategory = runtimeCategoryByFingerprint[fingerprint]
+            if (runtimeCategory != null) {
+                val guard = runtimeGuard(runtimeCategory) ?: continue
+                val dynamic = guard.replace("return-void", "const/4 v0, 0x0\nreturn v0")
+                if (mutableMethod.implementation!!.registerCount - mutableMethod.numberOfParameterRegisters < 1) continue
+                mutableMethod.addInstructions(0, dynamic)
+                patched++
+                continue
+            }
             if (mutableMethod.returnType != "Z" || (mutableMethod.implementation?.registerCount ?: 0) < 1) {
                 logger.warning("No Ads: skipping $name in ${mutableMethod.definingClass}: boolean method has no usable register")
                 return@classDefForEach
@@ -143,6 +194,9 @@ private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int
 private fun BytecodePatchContext.patchWith(fingerprint: Fingerprint, smali: String): Int {
     val exact = fingerprint.methodOrNull
     if (exact != null && exact.implementation != null) {
+        runtimeCategoryByFingerprint[fingerprint]?.let { category ->
+            return injectOrSkip(fingerprint, runtimeGuard(category) ?: return@let 0)
+        }
         val localRegisters = (exact.implementation?.registerCount ?: 0) - exact.numberOfParameterRegisters
         if ((fingerprint === MaxInterstitialAdShowAdFingerprint || fingerprint === MaxAppOpenAdShowAdFingerprint || fingerprint === MaxRewardedAdShowAdFingerprint) && localRegisters < 7) {
             logger.warning("No Ads: skipping ${fingerprint.name} in ${exact.definingClass}: fewer than 7 local registers are available for its callback patch.")
@@ -160,6 +214,12 @@ private val easyListHosts = setOf(
     "doubleclick.net", "googlesyndication.com", "googleadservices.com", "admob.com",
     "amazon-adsystem.com", "adsrvr.org", "criteo.com", "taboola.com", "outbrain.com",
 )
+// Small embedded subsets; these are not complete upstream subscriptions. Keep authentication,
+// billing, Play Games, and social-login domains out of every default set.
+private val uBlockHosts = setOf(
+    "adnxs.com", "advertising.com", "adform.net", "adsafeprotected.com",
+    "moatads.com", "rubiconproject.com", "pubmatic.com", "33across.com",
+)
 private val adGuardMobileHosts = setOf(
     "applovin.com", "unityads.unity3d.com", "ironsrc.com", "supersonicads.com",
     "vungle.com", "chartboost.com", "mopub.com", "inmobi.com", "adcolony.com",
@@ -168,6 +228,22 @@ private val adGuardMobileHosts = setOf(
 private val oisdPrivacyHosts = setOf(
     "google-analytics.com", "app-measurement.com", "adjust.com", "appsflyer.com",
     "amplitude.com", "mixpanel.com", "segment.io", "sentry.io",
+)
+private val hageziProMiniHosts = setOf(
+    "adnxs.com", "adsrvr.org", "criteo.com", "doubleclick.net", "googlesyndication.com",
+    "scorecardresearch.com", "quantserve.com", "zedo.com",
+)
+private val privacyEssentialsHosts = setOf(
+    "app-measurement.com", "google-analytics.com",
+    "branch.io", "kochava.com", "singular.net",
+)
+private val easyPrivacyHosts = setOf(
+    "demdex.net", "everesttech.net", "omtrdc.net", "krxd.net", "rlcdn.com",
+    "mathtag.com", "bluekai.com", "exelator.com",
+)
+private val peterLoweHosts = setOf(
+    "banners.adfox.ru", "ads.mopub.com", "ads.reddit.com", "adserver.adtech.de",
+    "spylog.com", "hitbox.com", "counter.hitslink.com", "stats.wp.com",
 )
 
 private fun extractHost(value: String): String? {
@@ -200,8 +276,17 @@ private fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildca
                 val host = extractHost(value) ?: return@forEachIndexed
                 if (hosts.none { blocked -> host == blocked || (wildcard && host.endsWith(".$blocked")) }) return@forEachIndexed
                 val register = (instruction as? OneRegisterInstruction)?.registerA ?: return@forEachIndexed
-                val replacement = value.replace(host, "0.0.0.0", ignoreCase = true)
-                method.replaceInstruction(index, "const-string v$register, \"${escapeSmaliString(replacement)}\"")
+                val replacement = if (runtimeHooksEnabled) {
+                    """
+                    const-string v$register, "${escapeSmaliString(value)}"
+                    invoke-static {v$register}, $ADS_POLICY_CLASS->rewriteHost(Ljava/lang/String;)Ljava/lang/String;
+                    move-result-object v$register
+                    """.trimIndent()
+                } else {
+                    val blocked = value.replace(host, "0.0.0.0", ignoreCase = true)
+                    "const-string v$register, \"${escapeSmaliString(blocked)}\""
+                }
+                method.replaceInstruction(index, replacement)
                 replacements++
             }
         }
@@ -219,19 +304,33 @@ val controlAppAdsPatch = bytecodePatch(
         SDKs to target, optionally grant ad rewards without an ad, and redirect matching literal
         ad/tracker hosts embedded in the APK.
 
-        Host filters are built-in domain sets, not downloaded subscriptions. They only affect
-        hosts stored as literal strings by the app; they cannot block dynamically generated hosts,
-        encrypted traffic, or requests made entirely inside Google Play services.
+        Host filters are small embedded subsets inspired by uBlock Origin, EasyList, AdGuard,
+        OISD, HaGeZi Pro mini, Privacy Essentials, EasyPrivacy, and Peter Lowe's list; they are
+        not downloaded full subscriptions. Each filter is independently toggleable. They only
+        affect hosts stored as literal strings by the app; they cannot block dynamically generated
+        hosts, encrypted traffic, or requests made entirely inside Google Play services.
 
         Compatibility: when combined with Disable Forced Online Checks, keep that patch's “Exclude
         ad SDK and networking code” option enabled; otherwise blocked ad hosts may be treated as
         online and retried. PairIP Firebase cleanup/removal can disable Firebase-backed reward,
         sign-in, billing, and attribution flows, which this patch cannot restore.
 
+        Optional overlay integration is opt-in. To use it, patch Control App Ads together with
+        Universal Overlay or an app-specific overlay, enable “Overlay integration > Runtime policy”,
+        and enable one or more modules below it. The selected modules then appear under “Ad control
+        hook modules” in the overlay; their initial values copy this patch's settings. If no overlay
+        patch is selected, the normal static ad controls still work but there is no runtime menu.
+        Runtime changes last for the current app process and affect only methods and literal hosts
+        successfully instrumented by this patch. Native, dynamically generated, unsupported, or
+        unrecognized SDK paths remain unchanged.
+
         Credits: Nai64Patches from Nai64; host-blocking approach inspired by Entree and Adobo.
     """.trimIndent(),
     default = false,
 ) {
+    extendWith("extensions/extension.mpe")
+    dependsOn(StartupHooks.resolveRealApplicationPatch)
+
     val preset by stringOption(
         key = "preset",
         default = "recommended",
@@ -315,9 +414,18 @@ val controlAppAdsPatch = bytecodePatch(
     val sdkHuawei by booleanOption(title = "Ad SDKs > Huawei Ads", default = true, key = "adsSdkHuawei", description = "Patch Huawei Ads Kit / Petal Ads formats.")
     val sdkYandex by booleanOption(title = "Ad SDKs > Yandex / MyTarget", default = true, key = "adsSdkYandex", description = "Patch Yandex Ads and VK MyTarget/RuStore ad entry points.")
     val sdkOther by booleanOption(title = "Ad SDKs > Other supported SDKs", default = true, key = "adsSdkOther", description = "Patch StartApp, MoPub, Chartboost, InMobi, and Mintegral when detected.")
-    val easyListFilter by booleanOption(title = "Host filters > EasyList / uBlock ads", default = true, key = "adsFilterEasyList", description = "Redirect common advertising and ad-serving host literals. Recommended.")
+    val runtimeHookModules by booleanOption(title = "Overlay integration > Runtime policy", default = false, key = "adsRuntimeHookModules", description = "Master switch for the optional overlay controls. Enable this, enable at least one module below, and patch this together with Universal Overlay or an app-specific overlay. The controls are otherwise not shown. Runtime changes are session-only and unsupported/native SDK paths are unchanged.")
+    val runtimeBlockAdsModule by booleanOption(title = "Overlay integration > Modules > Block Ads", default = false, key = "adsRuntimeBlockAdsModule", description = "Add a Block Ads settings popup to the overlay. It starts with the effective Interstitial, Banner, App-open, MREC, Rewarded, and Native choices from this patch, and can change only instrumented SDK methods while the app is running. Requires Runtime policy.")
+    val runtimeRewardsModule by booleanOption(title = "Overlay integration > Modules > Ads Free Rewards", default = false, key = "adsRuntimeRewardsModule", description = "Add an Ads Free Rewards settings popup to the overlay. It controls supported availability and rewarded-policy guards. Reward callbacks remain SDK-specific; enabling this cannot create support for an unrecognized or native reward path. Requires Runtime policy.")
+    val runtimeHostsModule by booleanOption(title = "Overlay integration > Modules > Block Ads / Tracking Hosts", default = false, key = "adsRuntimeHostsModule", description = "Add a host-blocking checkbox to the overlay. Its initial state follows this patch, and it controls only literal host strings instrumented by this patch; it does not inspect encrypted or dynamically generated requests. Requires Runtime policy.")
+    val uBlockFilter by booleanOption(title = "Host filters > uBlock Origin ads", default = true, key = "adsFilterUblock", description = "Enable a small embedded subset of uBlock Origin-style ad-network hosts. This is not the complete uBlock subscription and does not target sign-in or billing domains.")
+    val easyListFilter by booleanOption(title = "Host filters > EasyList ads", default = true, key = "adsFilterEasyList", description = "Enable a small embedded subset of EasyList-style advertising hosts. This is separate from the uBlock subset and only affects literal hosts found in the APK.")
     val adGuardFilter by booleanOption(title = "Host filters > AdGuard mobile ads", default = true, key = "adsFilterAdGuard", description = "Redirect common mobile ad-network host literals. Recommended.")
     val oisdFilter by booleanOption(title = "Host filters > OISD privacy", default = true, key = "adsFilterOisd", description = "Redirect a conservative set of analytics and tracking host literals. Recommended; disable if sign-in, telemetry-dependent features, or diagnostics fail.")
+    val hageziProMiniFilter by booleanOption(title = "Host filters > HaGeZi Pro mini", default = true, key = "adsFilterHageziProMini", description = "Enable a conservative embedded subset inspired by HaGeZi Pro mini. It targets common ad and telemetry hosts, not account, billing, or social-login endpoints.")
+    val privacyEssentialsFilter by booleanOption(title = "Host filters > Privacy Essentials", default = true, key = "adsFilterPrivacyEssentials", description = "Enable a conservative embedded privacy subset. Disable it if an app depends on analytics or installation attribution for sign-in or account linking.")
+    val easyPrivacyFilter by booleanOption(title = "Host filters > EasyPrivacy", default = false, key = "adsFilterEasyPrivacy", description = "More invasive tracker blocking inspired by EasyPrivacy. Disabled by default because it can interfere with login, attribution, consent, or telemetry-dependent features.")
+    val peterLoweFilter by booleanOption(title = "Host filters > Peter Lowe's ad and tracking list", default = true, key = "adsFilterPeterLowe", description = "Enable a small embedded subset of Peter Lowe's ad and tracking list. Disable it if a site or account flow behaves unexpectedly.")
     val wildcardHosts by booleanOption(title = "Host filters > Match subdomains", default = true, key = "adsFilterWildcardHosts", description = "When enabled, an entry such as example.com also redirects ads.example.com and other subdomains. Disable for exact-host matching only.")
     val broadHeuristics by booleanOption(title = "Advanced > Enable broad audio-ad heuristics", default = false, key = "adsBroadAudioHeuristics", description = "Experimental: scan broadly named audio/stream classes for ad tokens. Disabled by default because obfuscated or unrelated app code can match.")
     val customFilterHosts by stringsOption(title = "Host filters > Custom host entries", default = emptyList(), key = "adsCustomFilterHosts", description = "Optional domains, URLs, or hosts-file lines to redirect. Add one entry per row. Examples: ads.example.com or 0.0.0.0 tracker.example.com. Entries also match subdomains.")
@@ -326,22 +434,22 @@ val controlAppAdsPatch = bytecodePatch(
         val detectionLogger = Logger.getLogger(this::class.java.name)
 
         // Apply preset logic
-        val effectiveBlockInterstitials = when (preset) {
+        var effectiveBlockInterstitials = when (preset) {
             "aggressive" -> true
             "recommended" -> true
             else -> blockInterstitials == true
         }
-        val effectiveBlockBanners = when (preset) {
+        var effectiveBlockBanners = when (preset) {
             "aggressive" -> true
             "recommended" -> true
             else -> blockBanners == true
         }
-        val effectiveBlockAppOpen = when (preset) {
+        var effectiveBlockAppOpen = when (preset) {
             "aggressive" -> true
             "recommended" -> true
             else -> blockAppOpen == true
         }
-        val effectiveBlockMRec = when (preset) {
+        var effectiveBlockMRec = when (preset) {
             "aggressive" -> true
             "recommended" -> true
             else -> blockMRec == true
@@ -351,7 +459,7 @@ val controlAppAdsPatch = bytecodePatch(
             "recommended" -> false
             else -> blockRewarded == true
         }
-        val effectiveBlockNative = when (preset) {
+        var effectiveBlockNative = when (preset) {
             "aggressive" -> true
             "recommended" -> true
             else -> blockNative == true
@@ -364,6 +472,65 @@ val controlAppAdsPatch = bytecodePatch(
 
         if (!effectiveBlockRewarded && preset == "recommended") {
             detectionLogger.info("Control App Ads: Block rewarded is off in Recommended mode so reward flows remain usable.")
+        }
+
+        val configuredBlockedFormats = (if (effectiveBlockInterstitials) 1 else 0) or
+            (if (effectiveBlockBanners) 2 else 0) or
+            (if (effectiveBlockAppOpen) 4 else 0) or
+            (if (effectiveBlockMRec) 8 else 0) or
+            (if (effectiveBlockRewarded) 16 else 0) or
+            (if (effectiveBlockNative) 32 else 0)
+
+        runtimeHooksEnabled = runtimeHookModules == true
+        runtimeCategoryByFingerprint = if (runtimeHooksEnabled) buildMap {
+            fun add(category: String, vararg fingerprints: Fingerprint) {
+                fingerprints.forEach { put(it, category) }
+            }
+            add("interstitials", ShowInterstitialFingerprint, MaxInterstitialAdShowAdFingerprint,
+                AdMobInterstitialShowFingerprint, AdMobLegacyInterstitialShowFingerprint,
+                UnityAdsV3Show2ArgFingerprint, UnityAdsV3ShowOptionsFingerprint,
+                IronSourceShowDemandOnlyInterstitialFingerprint, IronSourceShowInterstitialFingerprint,
+                AppLovinInterstitialDialogShowFingerprint, AppLovinInterstitialDialogShowAndRenderFingerprint,
+                FacebookInterstitialAdShowFingerprint, FacebookInterstitialAdShowConfigFingerprint,
+                PangleInterstitialShowFingerprint, VungleInterstitialShowFingerprint,
+                HuaweiInterstitialAdShowFingerprint, YandexInterstitialAdLoadFingerprint,
+                MyTargetBaseInterstitialShowFingerprint,
+                StartAppAdShowFingerprint, MoPubInterstitialShowFingerprint, ChartboostShowInterstitialFingerprint,
+                InMobiInterstitialShowFingerprint, MintegralInterstitialShowFingerprint)
+            add("appOpen", ShowAppOpenAdFingerprint, MaxAppOpenAdShowAdFingerprint,
+                AdMobAppOpenShowFingerprint, AdMobAppOpenLoadFingerprint, PangleAppOpenShowFingerprint,
+                HuaweiSplashAdLoadFingerprint)
+            add("banners", ShowBannerFingerprint, StartBannerAutoRefreshFingerprint,
+                MaxAdViewStartAutoRefreshFingerprint, HuaweiBannerAdLoadFingerprint,
+                AdMobNativeAdViewFingerprint)
+            add("mrec", ShowMRecFingerprint, StartMRecAutoRefreshFingerprint)
+            add("rewarded", ShowRewardedAdFingerprint, MaxRewardedAdShowAdFingerprint,
+                AdMobRewardedShowFingerprint, AdMobLegacyRewardedVideoShowFingerprint,
+                UnityRewardedAdShowFingerprint, IronSourceShowDemandOnlyRewardedVideoFingerprint,
+                IronSourceShowRewardedVideoFingerprint, AppLovinIncentivizedShow4ListenerFingerprint,
+                AppLovinIncentivizedShow5ListenerFingerprint, FacebookRewardedVideoAdShowFingerprint,
+                FacebookRewardedVideoAdShowConfigFingerprint, FacebookRewardedInterstitialShowFingerprint,
+                FacebookRewardedInterstitialShowConfigFingerprint, PangleRewardedShowFingerprint,
+                VungleRewardedShowFingerprint, YandexRewardedAdLoadFingerprint, HuaweiRewardAdShowFingerprint,
+                UnityAdsAdvertisementIsReadyFingerprint, UnityAdsAdvertisementIsReadyPlacementFingerprint,
+                UnityAdsSdkIsReadyFingerprint, IronSourceIsRewardedVideoAvailableFingerprint,
+                MaxRewardedAdIsReadyFingerprint, LevelPlayRewardedAdIsReadyFingerprint,
+                IronSourceUnityRewardedAdIsReadyFingerprint)
+            add("interstitials", IronSourceIsInterstitialReadyFingerprint, MaxInterstitialAdIsReadyFingerprint)
+            add("appOpen", MaxAppOpenAdIsReadyFingerprint)
+            add("native", PangleNativeShowFingerprint, AdMobNativeAdViewFingerprint, AdMobAdLoaderLoadFingerprint,
+                HuaweiNativeAdLoadFingerprint)
+        } else emptyMap()
+
+        // Runtime block controls need every mapped method instrumented, even when its initial
+        // compile-time default is allow. The injected guard preserves that initial policy.
+        if (runtimeHooksEnabled && runtimeBlockAdsModule == true) {
+            effectiveBlockInterstitials = true
+            effectiveBlockBanners = true
+            effectiveBlockAppOpen = true
+            effectiveBlockMRec = true
+            effectiveBlockRewarded = true
+            effectiveBlockNative = true
         }
 
         val hasMaxUnity = sdkMax == true && (ShowInterstitialFingerprint.methodOrNull != null ||
@@ -739,15 +906,45 @@ val controlAppAdsPatch = bytecodePatch(
         if (adsFreeRewards == true) {
             applyLatestAdsFreeRewards(detectionLogger, rewardStrategy, instantReward)
             if (fakeAdAvailability == true) {
-                totalPatched += forceAdAvailability(detectionLogger, rewardStrategy)
+                totalPatched += forceAdAvailability(
+                    detectionLogger,
+                    rewardStrategy,
+                    runtimeHooksEnabled && runtimeRewardsModule == true,
+                )
             }
         }
 
         val filterHosts = buildSet {
+            if (uBlockFilter == true) addAll(uBlockHosts)
             if (easyListFilter == true) addAll(easyListHosts)
             if (adGuardFilter == true) addAll(adGuardMobileHosts)
             if (oisdFilter == true) addAll(oisdPrivacyHosts)
+            if (hageziProMiniFilter == true) addAll(hageziProMiniHosts)
+            if (privacyEssentialsFilter == true) addAll(privacyEssentialsHosts)
+            if (easyPrivacyFilter == true) addAll(easyPrivacyHosts)
+            if (peterLoweFilter == true) addAll(peterLoweHosts)
             addAll(parseFilterHosts(customFilterHosts.orEmpty()))
+        }
+        if (runtimeHooksEnabled) {
+            val moduleMask = buildSet {
+                if (runtimeBlockAdsModule == true) add("block")
+                if (runtimeRewardsModule == true) add("rewards")
+                if (runtimeHostsModule == true) add("hosts")
+            }.let { selected ->
+                (if ("block" in selected) 1 else 0) or
+                    (if ("rewards" in selected) 2 else 0) or
+                    (if ("hosts" in selected) 4 else 0)
+            }
+            val policy = listOf(
+                "1", moduleMask.toString(), configuredBlockedFormats.toString(),
+                if (adsFreeRewards == true) "1" else "0",
+                if (instantReward == true) "1" else "0",
+                if (fakeAdAvailability == true) "1" else "0",
+                if (runtimeHostsModule == true && filterHosts.isNotEmpty()) "1" else "0",
+                if (wildcardHosts == true) "1" else "0",
+                filterHosts.sorted().joinToString(","),
+            ).joinToString("|")
+            injectRuntimePolicy(policy, detectionLogger)
         }
         totalPatched += redirectLiteralHosts(filterHosts, wildcardHosts == true, detectionLogger)
 
@@ -757,4 +954,37 @@ val controlAppAdsPatch = bytecodePatch(
             detectionLogger.info("Control App Ads: changed $totalPatched item(s)  -  preset: $preset, interstitials=$effectiveBlockInterstitials, banners=$effectiveBlockBanners, appOpen=$effectiveBlockAppOpen, mrec=$effectiveBlockMRec, rewarded=$effectiveBlockRewarded, native=$effectiveBlockNative")
         }
     }
+}
+
+private fun BytecodePatchContext.injectRuntimePolicy(policy: String, logger: Logger) {
+    val descriptor = StartupHooks.resolvedApplicationDescriptor ?: run {
+        logger.warning("Control App Ads: runtime policy enabled but the Application class could not be resolved; runtime overlay controls are unavailable.")
+        return
+    }
+    val owner = mutableClassDefByOrNull(descriptor) ?: run {
+        logger.warning("Control App Ads: runtime policy Application class $descriptor was not found.")
+        return
+    }
+    val method = owner.methods.firstOrNull { it.name == "onCreate" && it.returnType == "V" && it.parameterTypes.isEmpty() }
+        ?: run {
+            logger.warning("Control App Ads: runtime policy Application.onCreate() was not found.")
+            return
+        }
+    val temporaryBase = method.implementation?.registerCount ?: run {
+        logger.warning("Control App Ads: runtime policy Application.onCreate() has no implementation.")
+        return
+    }
+    val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters + 2)
+    val receiver = cloned.p0Register
+    cloned.addInstructionsWithLabels(
+        0,
+        """
+        move-object/from16 v$temporaryBase, v$receiver
+        const-string v${temporaryBase + 1}, "${StartupHooks.escapeSmali(policy)}"
+        invoke-static {v${temporaryBase + 1}}, $ADS_POLICY_CLASS->configure(Ljava/lang/String;)V
+        """.trimIndent(),
+    )
+    owner.methods.remove(method)
+    owner.methods.add(cloned)
+    logger.info("Control App Ads: injected runtime policy with ${runtimeCategoryByFingerprint.size} dynamic ad guard mappings.")
 }

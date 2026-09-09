@@ -19,7 +19,7 @@ import java.util.logging.Logger
  * the gates to return true makes the game proceed to show(), letting the
  * reward flow grant without a real ad.
  */
-internal fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStrategy: String?): Int {
+internal fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStrategy: String?, runtimePolicy: Boolean = false): Int {
     var patched = 0
     fun patchIsReady(label: String, fingerprint: app.morphe.patcher.Fingerprint) {
         val method = fingerprint.methodOrNull ?: return
@@ -35,13 +35,26 @@ internal fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStra
             logger.warning("Ads Free Rewards: skip $label  -  registerCount ${impl.registerCount} < 1")
             return
         }
-        method.addInstructions(
-            0,
+        val instructions = if (runtimePolicy) {
+            """
+            invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldFakeRewardAvailability()Z
+            move-result v0
+            if-eqz v0, :unipatch_ads_runtime_availability_original
+            const/4 v0, 0x1
+            return v0
+            :unipatch_ads_runtime_availability_original
+            """.trimIndent()
+        } else {
             """
             const/4 v0, 0x1
             return v0
-            """.trimIndent(),
-        )
+            """.trimIndent()
+        }
+        if (runtimePolicy && impl.registerCount - method.numberOfParameterRegisters < 1) {
+            logger.warning("Ads Free Rewards: skip $label - runtime policy needs a local register")
+            return
+        }
+        method.addInstructions(0, instructions)
         logger.info("Ads Free Rewards: faked availability for $label")
         patched++
     }
