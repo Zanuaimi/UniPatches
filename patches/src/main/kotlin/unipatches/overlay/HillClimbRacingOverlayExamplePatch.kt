@@ -1,17 +1,12 @@
 package unipatches.overlay
 
-import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.patch.Compatibility
 import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.bytecodePatch
-import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
-import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
-import helpers.bytecode.*
 import helpers.startup.StartupHooks
 import java.util.logging.Logger
 
 private const val HCR_PROFILE = "hillClimbRacingExample"
-private const val RUNTIME_CLASS = "Lunipatch/overlaycore/OverlayRuntime;"
 
 /**
  * Safe shared-core example for contributors building an app-specific overlay. The runtime
@@ -20,9 +15,10 @@ private const val RUNTIME_CLASS = "Lunipatch/overlaycore/OverlayRuntime;"
 @Suppress("unused")
 val hillClimbRacingOverlayExamplePatch = bytecodePatch(
     name = "Hill Climb Racing Overlay Example (Experimental)",
-    description = "Contributor example for a safe app-specific overlay on Hill Climb Racing (package: com.fingersoft.hillclimb). Morphe shows this patch only for that app. Select one or more demo modules below, patch the matching app, then open the overlay and use each module's Settings or Preview control. The settings and values reset when the app process restarts. This example only demonstrates shared UI, explicit launcher injection, settings popups, checkbox lists, and one-shot actions using mock session state; it never alters currencies, unlocks, purchases, saves, or game bytecode. Do not combine with Universal Overlay Patch.",
+    description = "Safe app-specific overlay example for Hill Climb Racing (com.fingersoft.hillclimb). Select one or more preview modules, patch, then use their Settings and Preview controls in the shared overlay UI. Values are session-only and reset when the app process restarts. This contributor example demonstrates explicit launcher injection, styled settings popups, checkbox lists, and one-shot actions; it never alters currencies, unlocks, purchases, saves, or game bytecode. Do not combine with Universal Overlay Patch, because both patches install the same shared overlay runtime.",
     default = false,
 ) {
+    extendWith("extensions/extension.mpe")
     compatibleWith(
         Compatibility(
             packageName = "com.fingersoft.hillclimb",
@@ -33,37 +29,37 @@ val hillClimbRacingOverlayExamplePatch = bytecodePatch(
     dependsOn(StartupHooks.resolveRealApplicationPatch)
 
     val addCoins by booleanOption(
-        title = "Modules > App-specific demo > Add Coins preview",
+        title = "Quick setup > Overlay modules > App-specific previews > Add Coins preview",
         default = false,
         key = "hcrDemoAddCoins",
         description = "After patching, show a mock signed 32-bit value editor and Preview button in the overlay. Set a value, then preview it; the value is session-only and never reads or changes Hill Climb Racing coins.",
     )
     val addGems by booleanOption(
-        title = "Modules > App-specific demo > Add Gems preview",
+        title = "Quick setup > Overlay modules > App-specific previews > Add Gems preview",
         default = false,
         key = "hcrDemoAddGems",
         description = "After patching, show a mock signed 32-bit value editor and Preview button in the overlay. Set a value, then preview it; the value is session-only and never reads or changes Hill Climb Racing gems.",
     )
     val addPaints by booleanOption(
-        title = "Modules > App-specific demo > Add Paints preview",
+        title = "Quick setup > Overlay modules > App-specific previews > Add Paints preview",
         default = false,
         key = "hcrDemoAddPaints",
         description = "After patching, show a mock signed 32-bit value editor and Preview button in the overlay. Set a value, then preview it; the value is session-only and never reads or changes Hill Climb Racing paints.",
     )
     val vehicles by booleanOption(
-        title = "Modules > App-specific demo > Vehicle selection preview",
+        title = "Quick setup > Overlay modules > App-specific previews > Vehicle selection preview",
         default = false,
         key = "hcrDemoVehicles",
         description = "After patching, show a mock scrollable vehicle checkbox list and Preview action. It demonstrates the shared settings popup but never unlocks, locks, or inspects vehicles.",
     )
     val stages by booleanOption(
-        title = "Modules > App-specific demo > Stage selection preview",
+        title = "Quick setup > Overlay modules > App-specific previews > Stage selection preview",
         default = false,
         key = "hcrDemoStages",
         description = "After patching, show a mock scrollable stage checkbox list and Preview action. It demonstrates the shared settings popup but never unlocks, locks, or inspects stages.",
     )
     val garage by booleanOption(
-        title = "Modules > App-specific demo > Garage selection preview",
+        title = "Quick setup > Overlay modules > App-specific previews > Garage selection preview",
         default = false,
         key = "hcrDemoGarage",
         description = "After patching, show a mock Lock/Unlock checkbox and Preview action. It demonstrates the shared settings popup but never changes or inspects the garage.",
@@ -90,17 +86,23 @@ val hillClimbRacingOverlayExamplePatch = bytecodePatch(
             injectionMode = OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE,
             trailingFields = listOf("", selectedModules),
         )
+        val adsRuntimePolicy = OverlayAdsRuntimeIntegration.pendingPolicy()
         val target = StartupHooks.resolvedLauncherActivityDescriptor?.let(::mutableClassDefByOrNull)
+            ?: findOverlayFallbackActivity()
         val method = target?.methods?.firstOrNull {
             it.name == "onCreate" && it.returnType == "V" &&
                 it.parameterTypes == listOf("Landroid/os/Bundle;")
         }
         if (target == null || method == null) {
-            logger.warning("Hill Climb Racing overlay example: launcher Activity was not found; no changes applied.")
+            logger.warning("Hill Climb Racing overlay example: no suitable explicit launcher or controlled Activity fallback was found; no changes applied.")
             return@execute
         }
-        injectActivity(target, method, config)
-        logger.info("Installed the safe Hill Climb Racing app-specific overlay example. Runtime modules are mock-only and session-local.")
+        injectOverlayBridge(this, target, method, config, application = false, adsRuntimePolicy = adsRuntimePolicy)
+        if (adsRuntimePolicy != null) {
+            OverlayAdsRuntimeIntegration.markInjected("Hill Climb Racing Overlay Example")
+            logger.info("Control App Ads runtime policy was injected beside the app-specific overlay bridge.")
+        }
+        logger.info("Installed the safe Hill Climb Racing app-specific overlay example into ${target.type}. Runtime modules are mock-only and session-local.")
     }
 }
 
@@ -117,27 +119,5 @@ private fun hillClimbRacingDefaults(): List<String> = listOf(
     "#FFFFFF", "#CFEAFF", "#A9D8F5", "#78C8FF", "#8FD3FF",
     "ascii", "none", "left", "0", "rounded", "static", "1", "fade", "180", "linear",
     "", "center", "#CFEAFF", "1", "fade", "#CFEAFF", "#40515E", "none",
-    "parts", "triangle", "#FFFFFF", "#FFFFFF", "0", "0", "3", "70", "0", "0", "0", "#FFFFFF", "0", "flat", "#35414C", "#26313A",
+    "text", "triangle", "#FFFFFF", "#FFFFFF", "0", "0", "3", "70", "0", "0", "0", "#FFFFFF", "0", "flat", "#35414C", "#26313A",
 ).also { require(it.size == 82) { "Overlay example defaults must contain 82 common fields" } }
-
-private fun injectActivity(owner: MutableClass, method: MutableMethod, config: String) {
-    val temporaryBase = method.implementation?.registerCount
-        ?: error("Cannot inject into ${owner.type}->${method.name} without an implementation")
-    val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters + 2)
-    val receiver = cloned.p0Register
-    val instructions = cloned.implementation?.instructions
-    val superIndex = instructions?.indexOfFirst {
-        it.toString().contains("invoke-super") && it.toString().contains("->onCreate(")
-    } ?: -1
-    val index = if (superIndex >= 0) superIndex + 1 else maxOf(0, (instructions?.size ?: 0) - 1)
-    cloned.addInstructionsWithLabels(
-        index,
-        """
-        move-object/from16 v$temporaryBase, v$receiver
-        const-string v${temporaryBase + 1}, "${StartupHooks.escapeSmali(config)}"
-        invoke-static/range {v$temporaryBase .. v${temporaryBase + 1}}, $RUNTIME_CLASS->installActivity(Landroid/app/Activity;Ljava/lang/String;)V
-        """.trimIndent(),
-    )
-    owner.methods.remove(method)
-    owner.methods.add(cloned)
-}

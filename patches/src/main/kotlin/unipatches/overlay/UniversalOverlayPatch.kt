@@ -23,7 +23,7 @@ import java.util.Base64
 import java.util.logging.Logger
 import kotlin.math.roundToInt
 
-private const val RUNTIME_CLASS = "Lunipatch/overlaycore/OverlayRuntime;"
+private const val RUNTIME_CLASS = OVERLAY_RUNTIME_CLASS
 private const val PRESET_SCHEMA_VERSION = 5
 private const val MAX_CUSTOM_ICON_BYTES = 1024 * 1024
 private const val MAX_TITLE_CHARACTERS = 80
@@ -214,7 +214,7 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             iconOutline = flag("iconOutline", fallback.iconOutline),
             iconOutlineWidth = number("iconOutlineWidth", fallback.iconOutlineWidth, 1..8),
             iconOutlineColor = rgbColor("iconOutlineColor", fallback.iconOutlineColor),
-            iconStyle = choice("iconStyle", fallback.iconStyle, setOf("text", "shape", "multi", "parts")),
+            iconStyle = if (text("iconStyle", fallback.iconStyle) == "parts") "parts" else "text",
             iconShape = choice("iconShape", fallback.iconShape, setOf("triangle", "chevron", "smile", "circle", "z", "revanced")),
             iconShapeColor1 = rgbColor("iconShapeColor1", fallback.iconShapeColor1),
             iconShapeColor2 = rgbColor("iconShapeColor2", fallback.iconShapeColor2),
@@ -460,85 +460,26 @@ private fun validate(
     check(opacity in 10..100)
 }
 
-private fun injectMethod(owner: MutableClass, method: MutableMethod, config: String, application: Boolean) {
-    /*
-     * Keep the injected bridge independent of the target method's register layout. cloneMutable
-     * moves the original parameters into the expanded register frame, leaving the registers at
-     * the old registerCount free for our temporaries. Copy the receiver into the first temporary
-     * and place the configuration immediately after it so the bridge can use invoke-static/range.
-     *
-     * An ordinary invoke-static has a five-register, four-bit register-list encoding. It can
-     * therefore fail when a Unity or other game Activity has a large register frame and the new
-     * temporary register is above v15. The range form is valid in the supported Morphe inline
-     * compiler and addresses the high registers safely.
-     */
-    val temporaryBase = method.implementation?.registerCount
-        ?: error("Cannot inject into ${owner.type}->${method.name} without an implementation")
-    // cloneMutable shifts parameters upward by the number of added registers. Reserve those
-    // parameter slots first, then reserve two registers for the receiver and configuration so
-    // neither temporary can alias p0/p1 after cloning.
-    val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters + 2)
-    val originalReceiver = cloned.p0Register
-    // The runtime API accepts the platform base type. The injected receiver may be any concrete
-    // Activity subclass; using owner.type here would generate a method descriptor that does not
-    // exist in OverlayRuntime and fail with NoSuchMethodError at launch.
-    val type = if (application) "Landroid/app/Application;" else "Landroid/app/Activity;"
-    val injectionIndex = if (application) {
-        0
-    } else {
-        // Activity views cannot be attached reliably until the framework superclass has completed
-        // onCreate. Place the fallback bridge after invoke-super so it works with AppCompat,
-        // Unity, Godot, and ordinary platform Activity subclasses.
-        val instructions = cloned.implementation?.instructions
-        val superIndex = instructions?.indexOfFirst {
-            val text = it.toString()
-            text.contains("invoke-super") && text.contains("->onCreate(")
-        } ?: -1
-        if (superIndex >= 0) {
-            superIndex + 1
-        } else {
-            // A non-standard Activity may omit invoke-super. Run at the end of onCreate so the
-            // host still has a chance to initialize its content before overlay attachment.
-            // Use the final existing instruction rather than relying on return-void text: some
-            // dex instruction proxy implementations do not expose that text consistently.
-            maxOf(0, (instructions?.size ?: 0) - 1)
-        }
-    }
-    // Use the label-aware compiler entry point. Morphe Manager versions in the wild have
-    // rejected range instructions through addInstructions even though the same Smali is valid
-    // when compiled through addInstructionsWithLabels.
-    cloned.addInstructionsWithLabels(
-        injectionIndex,
-        """
-        move-object/from16 v$temporaryBase, v$originalReceiver
-        const-string v${temporaryBase + 1}, "${StartupHooks.escapeSmali(config)}"
-        invoke-static/range {v$temporaryBase .. v${temporaryBase + 1}}, $RUNTIME_CLASS->${if (application) "install" else "installActivity"}(${type}Ljava/lang/String;)V
-        """.trimIndent(),
-    )
-    owner.methods.remove(method)
-    owner.methods.add(cloned)
-}
-
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v2.0 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v2.1 (Experimental)",
     description = """
-        Universal in-app overlay for Android apps and games. Optional modules include System Time, FPS,
-        fullscreen, app brightness, and haptic controls. Modules are excluded and disabled by default;
-        select them in Morphe settings before patching. Statistic modules show information, Activity modules
-        control the current Activity, and Hook modules control internal app behavior, such as disabling
-        animations, through best-effort runtime changes. The legacy icon can be text, an original
-        geometric shape, or a multi-part shape with configurable colors, gradients, highlights, shadows,
-        and outlines. A selected local image automatically replaces the legacy icon; empty or invalid
-        image input falls back to the configured legacy icon. This is experimental
-        and may not work on all apps. UI presets can save and reuse supported UI and Advanced
+        A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual
+        preset, select the overlay modules you want, optionally supply an icon image, then patch. Modules
+        are excluded and disabled by default. Monitor modules show information, Activity modules control
+        the current Activity, and Hook modules make best-effort changes to app behavior. Text is the
+        default legacy icon; an optional image replaces it completely, while the advanced Multi-parts editor
+        supports custom drawn icons. This is experimental
+        and may not work on all apps. UI presets can save and reuse supported appearance and advanced icon
         settings. The title, description, repository button text, and repository button URL remain
-        controlled by the visible Morphe settings. Modules and Settings to Modules are excluded
+        controlled by the visible Morphe settings. Module selections and module behavior are excluded
         because hook and module combinations can be app-specific. If Control App Ads is patched
         with its optional runtime policy enabled, its selected ad-control modules appear here
-        automatically; Universal Overlay does not patch ad SDKs by itself.
+        automatically; Universal Overlay does not patch ad SDKs by itself. When both patches are
+        selected, Control App Ads attaches its runtime policy to this overlay's exact startup bridge,
+        including an explicit Activity override, instead of selecting a separate Activity.
 
-        The idea and initial works of this Universal Overlay Patch are from Zanuaimi / Noobite.
+        Attribution: the idea and initial work for this Universal Overlay Patch are from Zanuaimi / Noobite.
     """.trimIndent(),
     default = false,
 ) {
@@ -548,419 +489,370 @@ val universalOverlayPatch = bytecodePatch(
     dependsOn(StartupHooks.resolveRealApplicationPatch)
 
     val selectedPreset by stringOption(
-        title = "Preset > Select > Preset",
+        title = "Quick setup > 1. Choose preset",
         default = "custom",
         key = "runtimeOverlaySelectedPreset",
-        description = "Choose Custom to use the visible settings. UniPatches, Morphe-inspired, Dark, Light, ZArchiver-inspired, LuckyPatcher-inspired, and ReVanced-inspired presets replace supported UI settings. Title, description, repository button text, and repository button URL always remain from the visible Morphe settings. Presets never change Modules or Settings to Modules.",
-        values = linkedMapOf("Custom" to "custom").apply {
+        description = "Start here. Custom (UniPatches defaults) is the editable red UniPatches look. Other presets apply a complete visual style: Morphe blue, dark, light, ZArchiver-inspired, LuckyPatcher-inspired, or ReVanced-inspired. Presets never change selected modules or your title and repository details.",
+        values = linkedMapOf("Custom (UniPatches defaults)" to "custom").apply {
             OverlayPresetCatalog.definitions.forEach { put(it.displayName, it.id) }
         },
     )
-    val importUiPreset by filePathOption(
-        title = "Preset > Import > UI preset",
-        default = "",
-        key = "runtimeOverlayImportUiPreset",
-        allowedExtensions = listOf("json"),
-        description = "Optional path to a Universal Overlay .json preset. Only Custom mode uses it. A valid JSON preset overrides the visible UI settings during patching; an empty, unreadable, malformed, or unsupported file falls back to the visible Morphe settings. The Manager controls do not change visually.",
-    )
-    val exportUiPreset by stringOption(
-        title = "Preset > Export > UI preset",
-        default = "",
-        key = "runtimeOverlayExportUiPreset",
-        description = "Optional existing folder where Custom mode exports the final UI preset as JSON after patching. Leave empty to disable. Export errors are logged and never cancel APK patching. Protected system/root locations are rejected.",
-    )
-    val exportedUiPresetOutputName by stringOption(
-        title = "Preset > Export > Output name",
-        default = "UniversalOverlay.json",
-        key = "runtimeOverlayExportedUiPresetOutputName",
-        description = "Output name for exported JSON. Defaults to UniversalOverlay.json; .json is added automatically and duplicate names receive -1, -2, and so on.",
-    )
-
     val controlTheme by stringOption(
-        title = "UI > Controls > Theme",
+        title = "Customize appearance > Button controls > Theme",
         default = "modern",
         key = "runtimeOverlayControlTheme",
-        description = "Theme used by buttons, sliders, checkboxes, and dropdowns.",
+        description = "Geometry used by overlay controls. Settings, Action, and dropdown controls use Legacy square corners, Modern rounded corners, or Monet-style pill corners. Their fill and outline colors come from the overlay menu.",
         values = linkedMapOf("Legacy" to "legacy", "Modern (default)" to "modern", "Monet-style" to "monet"),
     )
     val controlBackground by stringOption(
-        title = "UI > Controls > Background color",
+        title = "Customize appearance > Button controls > Accent background color",
         default = "#300000",
         key = "runtimeOverlayControlBackground",
         description = "Background color for overlay controls.",
     )
     val controlForeground by stringOption(
-        title = "UI > Controls > Foreground color",
+        title = "Customize appearance > Button controls > Accent foreground color",
         default = "#FF5656",
         key = "runtimeOverlayControlForeground",
         description = "Foreground color for control contents, such as text, slider progress, and checked checkbox state.",
     )
     val bottomButtonStyle by stringOption(
-        title = "UI > Controls > Bottom action button style",
+        title = "Customize appearance > Button controls > Bottom buttons > Style",
         default = "text",
         key = "runtimeOverlayBottomButtonStyle",
         description = "Style of the repository, close-menu, and fully-close buttons.",
         values = linkedMapOf("Text only (default)" to "text", "Solid background" to "solid", "Gradient background" to "gradient"),
     )
     val bottomButtonShape by stringOption(
-        title = "UI > Controls > Bottom action button shape",
+        title = "Customize appearance > Button controls > Bottom buttons > Shape",
         default = "square",
         key = "runtimeOverlayBottomButtonShape",
         description = "Shape of bottom action button backgrounds.",
         values = linkedMapOf("Full square" to "square", "Squircle" to "squircle"),
     )
     val bottomButtonPadding by booleanOption(
-        title = "UI > Controls > Bottom action button padding",
+        title = "Customize appearance > Button controls > Bottom buttons > Add spacing",
         default = false,
         key = "runtimeOverlayBottomButtonPadding",
         description = "Add padding between the three bottom action buttons.",
     )
     val bottomButtonTextColor by stringOption(
-        title = "UI > Controls > Bottom action button text color",
+        title = "Customize appearance > Button controls > Bottom buttons > Text color",
         default = "#FFFFFF",
         key = "runtimeOverlayBottomButtonTextColor",
         description = "Text color of the three bottom action buttons.",
     )
     val bottomButtonBackground1 by stringOption(
-        title = "UI > Controls > Bottom action button background 1",
+        title = "Customize appearance > Button controls > Bottom buttons > Background color 1",
         default = "#FF5656",
         key = "runtimeOverlayBottomButtonBackground1",
         description = "First background color for solid or gradient bottom action buttons.",
     )
     val bottomButtonBackground2 by stringOption(
-        title = "UI > Controls > Bottom action button background 2",
+        title = "Customize appearance > Button controls > Bottom buttons > Background color 2",
         default = "#FF5656",
         key = "runtimeOverlayBottomButtonBackground2",
         description = "Second background color for gradient bottom action buttons.",
     )
-    val menuTextColor1 by stringOption(title = "UI > Menu > Text color 1 (title, lines, and scrollbar)", default = "#FF5656", key = "runtimeOverlayMenuTextColor1", description = "Color for the menu title, title/separator lines, and the module list scrollbar thumb. This keeps the scrollbar visible without forcing a black thumb on dark presets.")
-    val menuTextColor2 by stringOption(title = "UI > Menu > Text color 2 (module names)", default = "#FF5656", key = "runtimeOverlayMenuTextColor2", description = "Module name color.")
-    val menuTextColor3 by stringOption(title = "UI > Menu > Text color 3 (descriptions)", default = "#FF5656", key = "runtimeOverlayMenuTextColor3", description = "Overlay and module description color.")
-    val menuTextColor4 by stringOption(title = "UI > Menu > Text color 4 (monitor)", default = "#FF5656", key = "runtimeOverlayMenuTextColor4", description = "Monitor label color.")
-    val menuTextColor5 by stringOption(title = "UI > Menu > Text color 5 (active)", default = "#FF5656", key = "runtimeOverlayMenuTextColor5", description = "Active label color.")
-    val menuTextColor6 by stringOption(title = "UI > Menu > Text color 6 (module separators)", default = "#FF5656", key = "runtimeOverlayMenuTextColor6", description = "Module separator text color.")
-    val separatorBackgroundColor by stringOption(title = "UI > Menu > Separator background color", default = CUSTOM_SEPARATOR_BACKGROUND_DEFAULT, key = "runtimeOverlaySeparatorBackgroundColor", description = "Background color used by the module separator when Background behind text is selected. Custom preset defaults to a darker shade than the overlay background.")
+    val menuTextColor1 by stringOption(title = "Customize appearance > Colors > Text color 1 (title, lines, scrollbar)", default = "#FF5656", key = "runtimeOverlayMenuTextColor1", description = "Color for the menu title, separator lines, and scrollbar thumb.")
+    val menuTextColor2 by stringOption(title = "Customize appearance > Colors > Text color 2 (module names)", default = "#FF5656", key = "runtimeOverlayMenuTextColor2", description = "Color for module names.")
+    val menuTextColor3 by stringOption(title = "Customize appearance > Colors > Text color 3 (descriptions)", default = "#FF5656", key = "runtimeOverlayMenuTextColor3", description = "Color for overlay and module descriptions.")
+    val menuTextColor4 by stringOption(title = "Customize appearance > Colors > Text color 4 (monitor)", default = "#FF5656", key = "runtimeOverlayMenuTextColor4", description = "Color for monitor labels.")
+    val menuTextColor5 by stringOption(title = "Customize appearance > Colors > Text color 5 (active)", default = "#FF5656", key = "runtimeOverlayMenuTextColor5", description = "Color for Active labels.")
+    val menuTextColor6 by stringOption(title = "Customize appearance > Colors > Text color 6 (module separators)", default = "#FF5656", key = "runtimeOverlayMenuTextColor6", description = "Color for module separator text.")
+    val separatorBackgroundColor by stringOption(title = "Customize appearance > Colors > Module separator background", default = CUSTOM_SEPARATOR_BACKGROUND_DEFAULT, key = "runtimeOverlaySeparatorBackgroundColor", description = "Used only with the Background behind text separator style.")
     val separatorStyle by stringOption(
-        title = "UI > Menu > Module separator style",
+        title = "Customize appearance > Layout > Module separator style",
         default = "ascii",
         key = "runtimeOverlaySeparatorStyle",
         description = "How module type separators and hints appear.",
         values = linkedMapOf("--- Module type ---" to "ascii", "Lines above and below" to "doubleLine", "Background behind text" to "background", "Line below" to "singleLine", "Inline after module name" to "inline"),
     )
     val titleIconPlacement by stringOption(
-        title = "UI > Menu > Title icon placement",
+        title = "Customize appearance > Layout > Title icon placement",
         default = "none",
         key = "runtimeOverlayTitleIconPlacement",
         description = "Show a non-clickable copy of the overlay icon beside the menu title.",
         values = linkedMapOf("No icons (default)" to "none", "Top left" to "left", "Top right" to "right", "Both sides" to "both"),
     )
     val titleAlignment by stringOption(
-        title = "UI > Menu > Title alignment",
+        title = "Customize appearance > Layout > Title alignment",
         default = "left",
         key = "runtimeOverlayTitleAlignment",
         description = "Alignment of the overlay menu title.",
         values = linkedMapOf("Left" to "left", "Center" to "center", "Right" to "right"),
     )
-    val titleSeparator by booleanOption(title = "UI > Menu > Title separator", default = false, key = "runtimeOverlayTitleSeparator", description = "Show a Color 1 line below the title.")
-    val menuCorners by stringOption(title = "UI > Menu > Corners", default = "rounded", key = "runtimeOverlayMenuCorners", description = "Shape of the overlay menu corners.", values = linkedMapOf("Rounded (default)" to "rounded", "Square" to "square"))
-    val menuOutlineAnimation by stringOption(title = "UI > Menu > Outline animation", default = "static", key = "runtimeOverlayMenuOutlineAnimation", description = "Animation style for the overlay menu outline. Horizontal scrolling moves the gradient sideways; Vertical gradient moves it vertically.", values = linkedMapOf("Static (default)" to "static", "Horizontal scrolling gradient" to "gradient", "Vertical gradient" to "vertical", "Rainbow gradient" to "rainbow"))
-    val outlineAnimationSpeed by intOption(title = "UI > Menu > Outline gradient animation speed", default = 1, key = "runtimeOverlayOutlineAnimationSpeed", description = "Animation speed from -10 to 10. Zero disables movement. For Vertical gradient, positive values move upward and negative values move downward; for example, 3 is faster upward motion and -2 is slower downward motion.")
+    val titleSeparator by booleanOption(title = "Customize appearance > Layout > Title separator", default = false, key = "runtimeOverlayTitleSeparator", description = "Show a Text color 1 line below the title.")
+    val menuCorners by stringOption(title = "Customize appearance > Layout > Menu corners", default = "rounded", key = "runtimeOverlayMenuCorners", description = "Choose rounded or square menu corners.", values = linkedMapOf("Rounded (default)" to "rounded", "Square" to "square"))
+    val menuOutlineAnimation by stringOption(title = "Customize appearance > Animation > Outline animation", default = "static", key = "runtimeOverlayMenuOutlineAnimation", description = "Choose a static, horizontal, vertical, or rainbow menu outline animation.", values = linkedMapOf("Static (default)" to "static", "Horizontal scrolling gradient" to "gradient", "Vertical gradient" to "vertical", "Rainbow gradient" to "rainbow"))
+    val outlineAnimationSpeed by intOption(title = "Customize appearance > Animation > Outline speed", default = 1, key = "runtimeOverlayOutlineAnimationSpeed", description = "Use -10 to 10. Zero stops movement; positive vertical values move upward and negative values move downward.")
     val openingAnimation by stringOption(
-        title = "UI > Menu > Opening animation",
+        title = "Customize appearance > Animation > Opening animation",
         default = "fade",
         key = "runtimeOverlayOpeningAnimation",
         description = "Opening animation. Directional appearances also fade in the menu.",
         values = linkedMapOf("Fade (default)" to "fade", "Appear from right" to "appearRight", "Appear from top" to "appearTop", "Appear from bottom" to "appearBottom", "Appear from left" to "appearLeft", "Scale" to "scale", "Disabled" to "disabled"),
     )
     val closingAnimation by stringOption(
-        title = "UI > Menu > Closing animation",
+        title = "Customize appearance > Animation > Closing animation",
         default = "fade",
         key = "runtimeOverlayClosingAnimation",
         description = "Closing animation. Directional disappearances also fade out the menu.",
         values = linkedMapOf("Fade (default)" to "fade", "Disappear upwards" to "disappearUp", "Disappear downwards" to "disappearDown", "Disappear leftwards" to "disappearLeft", "Disappear rightwards" to "disappearRight", "Scale" to "scale", "Disabled" to "disabled"),
     )
-    val animationDuration by intOption(title = "UI > Menu > Animation duration (ms)", default = 180, key = "runtimeOverlayAnimationDuration", description = "Duration used by both opening and closing animations. Values below 0 are clamped to 0.")
-    val animationEasing by stringOption(title = "UI > Menu > Animation graph", default = "linear", key = "runtimeOverlayAnimationEasing", description = "Easing used by fade, directional, and scale menu animations.", values = linkedMapOf("Linear (default)" to "linear", "Logarithmic" to "logarithmic"))
+    val animationDuration by intOption(title = "Customize appearance > Animation > Duration (ms)", default = 180, key = "runtimeOverlayAnimationDuration", description = "Duration for opening and closing animations. Negative values become zero.")
+    val animationEasing by stringOption(title = "Customize appearance > Animation > Motion curve", default = "linear", key = "runtimeOverlayAnimationEasing", description = "Motion curve for fade, directional, and scale animations.", values = linkedMapOf("Linear (default)" to "linear", "Logarithmic" to "logarithmic"))
     val outlineWidth by intOption(
-        title = "UI > Menu > Outline width (dp)",
+        title = "Customize appearance > Layout > Menu outline width (dp)",
         default = 2,
         key = "runtimeOverlayOutlineWidthDp",
         description = "Width of the menu, monitor, and confirmation outlines, from 1 to 8dp.",
     )
 
     val title by stringOption(
-        title = "General > Overlay > Title",
+        title = "Customize appearance > Menu text > Title",
         default = "UniPatches Universal Overlay Patch",
         key = "runtimeOverlayTitle",
         description = "Title shown in the overlay menu. Limited to 80 characters.",
     )
     val descriptionText by stringOption(
-        title = "General > Overlay > Description",
+        title = "Customize appearance > Menu text > Description",
         default = DEFAULT_DESCRIPTION,
         key = "runtimeOverlayDescription",
         description = "Description below the title. Limited to 500 characters.",
     )
     val appendDescriptionText by stringOption(
-        title = "General > Overlay > Appended description",
+        title = "Customize appearance > Menu text > Appended description",
         default = "",
         key = "runtimeOverlayAppendDescription",
         description = "Optional text appended below the overlay description. Useful for short inspiration or attribution notes such as Inspired by Example. The main and appended descriptions share a combined 500-character limit.",
     )
     val descriptionAlignment by stringOption(
-        title = "General > Overlay > Description alignment",
+        title = "Customize appearance > Menu text > Description alignment",
         default = "center",
         key = "runtimeOverlayDescriptionAlignment",
         description = "Alignment of the main and appended overlay description text.",
         values = linkedMapOf("Left" to "left", "Center (default)" to "center", "Right" to "right"),
     )
     val appendDescriptionColor by stringOption(
-        title = "General > Overlay > Appended description color",
+        title = "Customize appearance > Colors > Appended description",
         default = "#FF5656",
         key = "runtimeOverlayAppendDescriptionColor",
         description = "Color of appended overlay-description text. Presets default to menu text color 3.",
     )
     val backgroundColor by stringOption(
-        title = "General > Overlay > Background color",
+        title = "Customize appearance > Colors > Menu background",
         default = "#300000",
         key = "runtimeOverlayBackgroundColor",
         description = "Overlay background color as #RRGGBB. Transparency is controlled separately.",
     )
     val backgroundTransparency by intOption(
-        title = "General > Overlay > Background transparency (%)",
+        title = "Customize appearance > Colors > Menu transparency (%)",
         default = 80,
         key = "runtimeOverlayBackgroundTransparency",
         description = "Transparency of the overlay background from 0% to 100%. 80% matches the default Morphe-style background alpha.",
     )
     val outlineColor by stringOption(
-        title = "General > Overlay > Outline color",
+        title = "Customize appearance > Colors > Menu and control outline/text",
         default = "#FF5656",
         key = "runtimeOverlayOutlineColor",
-        description = "Overlay outline color as #RRGGBB.",
+        description = "Color of the overlay menu outline, Settings/Action button outlines and text, and dropdown outlines and text. Use #RRGGBB. Animated gradient menu outlines keep their own gradient colors, but these controls still use this color.",
     )
     val repositoryText by stringOption(
-        title = "General > Repository button > Text",
+        title = "Customize appearance > Bottom buttons > Repository text",
         default = "UniPatches repository",
         key = "runtimeOverlayRepositoryText",
         description = "Text of the always-present repository button.",
     )
     val repositoryUrl by stringOption(
-        title = "General > Repository button > URL",
+        title = "Customize appearance > Bottom buttons > Repository URL",
         default = "https://github.com/Zanuaimi/UniPatches",
         key = "runtimeOverlayRepositoryUrl",
         description = "URL opened by the repository button.",
     )
     val buttonText by stringOption(
-        title = "UI > Icon > Legacy text",
+        title = "Customize appearance > Icon > Text",
         default = "U",
         key = "runtimeOverlayButtonText",
-        description = "Text shown by the legacy icon. Maximum three characters.",
+        description = "Text shown on the default floating icon. Maximum three characters.",
     )
     val iconBold by booleanOption(
-        title = "UI > Icon > Legacy bold text",
+        title = "Customize appearance > Icon > Bold text",
         default = true,
         key = "runtimeOverlayIconBold",
-        description = "Use bold text in the legacy icon. Enabled by default.",
+        description = "Make the default floating-icon text bold.",
     )
     val buttonTextColor by stringOption(
-        title = "UI > Icon > Legacy text color",
+        title = "Customize appearance > Icon > Text color",
         default = "#FFFFFF",
         key = "runtimeOverlayButtonTextColor",
-        description = "Text color used by the legacy icon.",
+        description = "Text color for the default floating icon.",
     )
     val iconTextSize by intOption(
-        title = "UI > Icon > Legacy text size (sp)",
+        title = "Customize appearance > Icon > Text size (sp)",
         default = 18,
         key = "runtimeOverlayIconTextSizeSp",
-        description = "Text size of the legacy icon in scaled pixels, from 8 to 48sp. The default is slightly larger than the pre-v1.2 fixed size.",
+        description = "Text size for the default floating icon, from 8 to 48sp.",
     )
     val iconStyle by stringOption(
-        title = "UI > Icon > Icon part type",
+        title = "Customize appearance > Icon > Type",
         default = "text",
         key = "runtimeOverlayIconStyle",
-        description = "Choose how the legacy icon is built. Text icon is one text part, for example U or RV. Single shape is one geometric part. Multi-part uses a built-in combination such as Smile. Custom part list uses the Parts list below, where every row controls one shape's position, size, rotation, colors, stroke, opacity, and layer.",
-        values = linkedMapOf("Text icon (default)" to "text", "Single shape" to "shape", "Multi-part icon" to "multi", "Custom part list" to "parts"),
-    )
-    val iconShape by stringOption(
-        title = "UI > Icon > Shape",
-        default = "triangle",
-        key = "runtimeOverlayIconShape",
-        description = "Shape used by Shape and Multi-part icon styles. For a single-part icon, choose Triangle, Chevron, Circle, or Z mark. ReVanced-inspired combines a gradient downward triangle with a white V. For the built-in multi-part example, choose Smile: it draws two eyes and a curved mouth as one icon. Colors, size, stroke, highlight, and shadow apply to the selected parts.",
-        values = linkedMapOf("Triangle" to "triangle", "Chevron" to "chevron", "Smile" to "smile", "Circle" to "circle", "Z mark" to "z", "ReVanced-inspired" to "revanced"),
-    )
-    val iconShapeColor1 by stringOption(
-        title = "UI > Icon > Shape color 1",
-        default = "#FFFFFF",
-        key = "runtimeOverlayIconShapeColor1",
-        description = "Primary color of the selected icon shape. Use #RRGGBB, for example #E651A0.",
-    )
-    val iconShapeColor2 by stringOption(
-        title = "UI > Icon > Shape color 2",
-        default = "#FFFFFF",
-        key = "runtimeOverlayIconShapeColor2",
-        description = "Second shape color when Shape gradient is enabled. Use #RRGGBB, for example #6564D3.",
-    )
-    val iconShapeGradient by booleanOption(
-        title = "UI > Icon > Shape gradient",
-        default = false,
-        key = "runtimeOverlayIconShapeGradient",
-        description = "Blend Shape color 1 into Shape color 2 inside the symbol. Disable it for a solid shape color.",
-    )
-    val iconShapeGradientAngle by intOption(
-        title = "UI > Icon > Shape gradient angle (degrees)",
-        default = 0,
-        key = "runtimeOverlayIconShapeGradientAngle",
-        description = "Direction of the shape gradient. 0 degrees runs top to bottom and 90 degrees runs left to right.",
-    )
-    val iconShapeStrokeWidth by intOption(
-        title = "UI > Icon > Shape stroke width (dp)",
-        default = 3,
-        key = "runtimeOverlayIconShapeStrokeWidthDp",
-        description = "Thickness of line-based shapes such as Chevron, Smile, and Circle. Use 1 to 12dp.",
-    )
-    val iconShapeScale by intOption(
-        title = "UI > Icon > Shape size (%)",
-        default = 70,
-        key = "runtimeOverlayIconShapeScalePercent",
-        description = "Size of the drawn symbol inside the button, from 20% to 100%. Leave room for the outline and background to stay visible.",
+        description = "Text is the simple default. Choose Multi-parts only when you want to build a drawn icon in Advanced settings.",
+        values = linkedMapOf("Text icon (default)" to "text", "Multi-parts icon" to "parts"),
     )
     val iconParts by stringsOption(
-        title = "UI > Icon > Parts > Custom part list",
+        title = "Advanced > Multi-parts icon editor > Part list",
         default = emptyList(),
         key = "runtimeOverlayIconParts",
-        description = "Optional composable icon parts, one per row. Format: shape|x|y|width|height|rotation|fill|color1|color2|stroke|opacity|layer. Positions and sizes are percentages of the icon. Example single part: triangle|50|50|55|55|0|solid|#4E97F0|#4E97F0|0|100|0. Example multi-part: v|50|52|64|72|0|solid|#FFFFFF|#FFFFFF|6|100|0 plus invertedTriangle|50|37|36|30|0|gradient|#E651A0|#6564D3|0|100|1. Supported shapes include triangle, invertedTriangle, circle, ring, square, roundedRect, chevron, v, z, line, arc, diamond, star, and heart. Leave empty to use the legacy Shape settings. Maximum 12 parts.",
+        description = """
+            Use only when Icon part type is Multi-parts. Add one string per part.
+
+            Template:
+            <shape>|<x-position>|<y-position>|<x-scale>|<y-scale>|<rotation>|<fill>|<color-1>|<color-2>|<stroke>|<opacity>|<layer>|<text>
+
+            Tag values:
+            shape = triangle, invertedTriangle, circle, square, roundedRect, chevron, z, line, arc, diamond, star, heart, or text.
+            x/y position and X/Y scale = 0–100 percent. Different scales make rectangles or ovals.
+            rotation = -360 to 360 degrees; for example 0, 45, or 90.
+            fill = solid or gradient. Colors use #RRGGBB. stroke = 0–32. opacity = 0–100. Higher layer draws on top.
+            text is optional except for a text part, and is trimmed to three characters.
+
+            Valid examples:
+            triangle|50|50|55|55|0|solid|#4E97F0|#4E97F0|0|100|0
+            chevron|50|52|64|72|0|solid|#FFFFFF|#FFFFFF|6|100|0
+            invertedTriangle|50|37|36|30|0|gradient|#E651A0|#6564D3|0|100|1
+            text|50|50|60|50|0|solid|#FFFFFF|#FFFFFF|0|100|2|LP
+
+            Maximum 12 parts.
+        """.trimIndent(),
     )
     val iconHighlight by booleanOption(
-        title = "UI > Icon > Shape highlight",
+        title = "Advanced > Multi-parts icon editor > Add highlight",
         default = false,
         key = "runtimeOverlayIconHighlight",
-        description = "Add a subtle glossy highlight to the upper-left of the icon. This affects Shape and Multi-part styles.",
-    )
-    val iconShadow by booleanOption(
-        title = "UI > Icon > Shape shadow",
-        default = false,
-        key = "runtimeOverlayIconShadow",
-        description = "Add a small dark shadow behind the drawn shape to improve contrast on bright backgrounds.",
+        description = "Add a subtle glossy highlight to the upper-left of a Multi-parts icon.",
     )
     val gradientBackground by booleanOption(
-        title = "UI > Icon > Gradient background",
+        title = "Customize appearance > Icon > Gradient background",
         default = true,
         key = "runtimeOverlayIconGradientBackground",
-        description = "Blend legacy icon background 1 into background 2. When disabled, only background 1 is used.",
+        description = "Blend floating-icon background color 1 into color 2. When disabled, only color 1 is used.",
     )
     val buttonBackgroundColor by stringOption(
-        title = "UI > Icon > Background color 1",
+        title = "Customize appearance > Icon > Background color 1",
         default = "#500000",
         key = "runtimeOverlayButtonBackgroundColor",
-        description = "First color of the legacy icon gradient.",
+        description = "First floating-icon background color.",
     )
     val iconBackground2 by stringOption(
-        title = "UI > Icon > Background color 2",
+        title = "Customize appearance > Icon > Background color 2",
         default = "#AA0000",
         key = "runtimeOverlayIconBackgroundColor2",
-        description = "Second color of the legacy icon gradient as #RRGGBB.",
+        description = "Second floating-icon background color. Use #RRGGBB.",
     )
     val iconGradientAngle by intOption(
-        title = "UI > Icon > Gradient angle (degrees)",
+        title = "Customize appearance > Icon > Gradient angle (degrees)",
         default = 0,
         key = "runtimeOverlayIconGradientAngle",
         description = "Gradient direction: 0 degrees runs top to bottom and 90 runs left to right. Values wrap through 360 degrees.",
     )
     val iconBackgroundStyle by stringOption(
-        title = "UI > Icon > Background style",
+        title = "Customize appearance > Icon > Background style",
         default = "flat",
         key = "runtimeOverlayIconBackgroundStyle",
-        description = "Choose a flat legacy-icon background or a faceted background made from angular color layers. Faceted mode is useful for geometric icons such as the Z mark.",
+        description = "Choose a flat floating-icon background or faceted angular layers. Faceted mode suits geometric icons such as Z.",
         values = linkedMapOf("Flat (default)" to "flat", "Faceted layers" to "faceted"),
     )
     val iconBackgroundColor3 by stringOption(
-        title = "UI > Icon > Background color 3",
+        title = "Customize appearance > Icon > Background color 3",
         default = "#3D7806",
         key = "runtimeOverlayIconBackgroundColor3",
         description = "Third color used by Faceted layers. It is ignored when Background style is Flat. Use #RRGGBB.",
     )
     val iconBackgroundColor4 by stringOption(
-        title = "UI > Icon > Background color 4",
+        title = "Customize appearance > Icon > Background color 4",
         default = "#4F9905",
         key = "runtimeOverlayIconBackgroundColor4",
         description = "Fourth color used by Faceted layers. It is ignored when Background style is Flat. Use #RRGGBB.",
     )
     val iconOutline by booleanOption(
-        title = "UI > Icon > Outline",
+        title = "Customize appearance > Icon > Outline",
         default = false,
         key = "runtimeOverlayIconOutline",
-        description = "Add a separate outline around the legacy text icon. Disabled by default.",
+        description = "Add a separate outline around the floating icon.",
     )
     val iconOutlineWidth by intOption(
-        title = "UI > Icon > Outline width (dp)",
+        title = "Customize appearance > Icon > Outline width (dp)",
         default = 3,
         key = "runtimeOverlayIconOutlineWidthDp",
-        description = "Width of the legacy icon outline from 1 to 8dp. This is independent from the overlay menu outline width.",
+        description = "Floating-icon outline width from 1 to 8dp. This is separate from the menu outline.",
     )
     val iconOutlineColor by stringOption(
-        title = "UI > Icon > Outline color",
+        title = "Customize appearance > Icon > Outline color",
         default = "#FFFFFF",
         key = "runtimeOverlayIconOutlineColor",
         description = "Color used only when the icon outline is enabled.",
     )
     val iconOutlineGradient by booleanOption(
-        title = "UI > Icon > Outline gradient",
+        title = "Customize appearance > Icon > Outline gradient",
         default = false,
         key = "runtimeOverlayIconOutlineGradient",
-        description = "Blend two colors around the legacy icon outline. This can create a moving-looking pink-to-blue ring when combined with a large outline width.",
+        description = "Blend two colors around the floating-icon outline.",
     )
     val iconOutlineColor2 by stringOption(
-        title = "UI > Icon > Outline color 2",
+        title = "Customize appearance > Icon > Outline color 2",
         default = "#FFFFFF",
         key = "runtimeOverlayIconOutlineColor2",
         description = "Second outline color used when Outline gradient is enabled. Use #RRGGBB.",
     )
     val iconOutlineGradientAngle by intOption(
-        title = "UI > Icon > Outline gradient angle (degrees)",
+        title = "Customize appearance > Icon > Outline gradient angle (degrees)",
         default = 0,
         key = "runtimeOverlayIconOutlineGradientAngle",
         description = "Direction of the icon outline gradient. 0 degrees runs top to bottom and 90 degrees runs left to right.",
     )
     val customIconImage by imageOption(
-        title = "UI > Icon > Custom button icon (local image)",
+        title = "Quick setup > 3. Optional icon image > Local image",
         default = "",
         key = "runtimeOverlayCustomIconImage",
         allowedExtensions = listOf("png", "jpg", "jpeg", "webp"),
         recommendedSize = app.morphe.patcher.patch.ImageSize(128, 128),
-        description = "Select a local PNG, JPG, JPEG, or WebP image file. This input has priority over the String Handler input when valid. Images are embedded during patching and scaled proportionally. Leave blank or use an invalid file to try the String Handler input, then fall back to the legacy icon.",
+        description = "Select a local PNG, JPG, JPEG, or WebP image file. This input has priority over the String Handler input when valid. Images are embedded during patching and scaled proportionally. Any supplied image takes full precedence over Text and Multi-parts icon rendering.",
     )
     val customIconImageInput by stringOption(
-        title = "UI > Icon > Custom button icon (String Handler)",
+        title = "Quick setup > 3. Optional icon image > Base64 or HTTPS image",
         default = "",
         key = "runtimeOverlayCustomIconImageInput",
-        description = "Optional non-local image input. Valid examples: <base64 string here>, data:image/png;base64,<base64 string here>, or an HTTPS image URL. For image-to-Base64 conversion, use https://base64.guru/converter/encode/image. Used only when the Local Image input is empty or invalid; invalid input falls back to the legacy icon.",
+        description = "Optional non-local image input. Valid examples: <base64 string here>, data:image/png;base64,<base64 string here>, or an HTTPS image URL. For image-to-Base64 conversion, use https://base64.guru/converter/encode/image. Used only when the Local Image input is empty or invalid. A supplied image takes full precedence over Text and Multi-parts icon rendering.",
     )
     val buttonShape by stringOption(
-        title = "UI > Button > Shape",
+        title = "Customize appearance > Floating button > Shape",
         default = "circle",
         key = "runtimeOverlayButtonShape",
-        description = "Shape of the legacy text icon background.",
+        description = "Shape of the floating icon background.",
         values = linkedMapOf("Circle" to "circle", "Squircle" to "squircle", "Square" to "square"),
     )
     val buttonSizeDp by intOption(
-        title = "UI > Button > Size (dp)",
+        title = "Customize appearance > Floating button > Size (dp)",
         default = 56,
         key = "runtimeOverlayButtonSizeDp",
         description = "Button size in density-independent pixels.",
     )
     val buttonOpacity by intOption(
-        title = "UI > Button > Idle opacity (%)",
+        title = "Customize appearance > Floating button > Idle opacity (%)",
         default = 50,
         key = "runtimeOverlayButtonIdleOpacityPercent",
         description = "Idle opacity from 10 to 100 percent. Higher values make the button less transparent.",
     )
     val buttonDragVisibilityDurationSeconds by intOption(
-        title = "UI > Button > Fully visible duration (seconds)",
+        title = "Customize appearance > Floating button > Fully visible duration (seconds)",
         default = 2,
         key = "runtimeOverlayButtonDragVisibilityDurationSeconds",
         description = "How long the overlay button stays fully visible after dragging before fading to its idle opacity. The timer resets while dragging and starts again when the finger is released. Use a value from 1 to 10 seconds.",
     )
     val buttonPosition by stringOption(
-        title = "UI > Button > Position",
+        title = "Customize appearance > Floating button > Initial position",
         default = "topRight",
         key = "runtimeOverlayButtonPosition",
         description = "Initial floating button position.",
@@ -971,175 +863,206 @@ val universalOverlayPatch = bytecodePatch(
         ),
     )
     val activityOverride by stringOption(
-        title = "Advanced > Activity name override",
+        title = "Advanced > Activity injection > Target Activity name",
         default = "",
         key = "runtimeOverlayActivityNameOverride",
-        description = "Optional fallback Activity class used only when Application startup cannot be found. Leave blank for universal automatic discovery. Example: com.example.MainActivity or Lcom/example/MainActivity;.",
+        description = "Risk: a wrong Activity can prevent the overlay from appearing. Leave blank for automatic discovery. Only use this with Explicit target Activity first; example: com.example.MainActivity.",
     )
     val activityInjectionMode by stringOption(
-        title = "Advanced > Activity > Injection strategy",
+        title = "Advanced > Activity injection > Strategy",
         default = OverlayConfigPayload.UNIVERSAL_INJECTION_MODE,
         key = "runtimeOverlayActivityInjectionMode",
-        description = "Universal automatic discovery uses the Application entry point first and a universal Activity fallback. Explicit target Activity first is intended for app-specific overlay patches; it uses the configured Activity name, then falls back to the universal strategy if that target is unavailable. This setting does not select app-specific modules or enable Control App Ads runtime modules.",
+        description = "Risk: manual targeting can miss or break an app's startup. Keep automatic discovery unless you know the target Activity. Explicit mode tries the Activity above, then safely falls back to automatic discovery.",
         values = linkedMapOf(
             "Universal automatic discovery (default)" to OverlayConfigPayload.UNIVERSAL_INJECTION_MODE,
             "Explicit target Activity, then universal fallback" to OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE,
         ),
     )
     val activityInstallBanlist by stringsOption(
-        title = "Advanced > Activity > Overlay install banlist",
+        title = "Advanced > Activity injection > Install banlist",
         default = DEFAULT_ACTIVITY_INSTALL_BANLIST.lines(),
         key = "runtimeOverlayActivityInstallBanlist",
-        description = "List of Activity class or package prefixes that must not receive the overlay. Add one entry per row; entries ending in * match a prefix. The default list protects common store, billing, and sign-in popups. Replace the list with a single entry none to disable it.",
+        description = "Risk: changing this can place the overlay on sign-in, billing, or store screens. Add one Activity class or package prefix per row; use * for a prefix. Keep the defaults unless an app needs a specific adjustment. Use only none to disable the list.",
+    )
+    val resetUiToDefaults by booleanOption(
+        title = "Advanced > Reset > Reset UI to UniPatches default",
+        default = false,
+        key = "runtimeOverlayResetUiToDefaults",
+        description = "Use the built-in UniPatches UI for this patched APK, ignoring the selected preset, imported preset, and appearance fields. Modules and title/repository details are kept.",
+    )
+    val resetIconToText by booleanOption(
+        title = "Advanced > Reset > Reset icon to text",
+        default = false,
+        key = "runtimeOverlayResetIconToText",
+        description = "Use the configured text icon for this patched APK and ignore image and Multi-parts icon inputs.",
     )
     val activateStatisticsOnLaunch by booleanOption(
-        title = "Modules > Settings > Activate statistic modules on launch",
+        title = "Quick setup > 2. Overlay modules > Monitor behavior > Activate statistics on launch",
         default = false,
         key = "runtimeOverlayActivateStatisticsOnLaunch",
         description = "Start selected statistic modules as soon as the app launches. Active is disabled by default.",
     )
     val showNoModulesWarning by booleanOption(
-        title = "Modules > Settings > Show no runtime modules warning",
+        title = "Quick setup > 2. Overlay modules > General > Show empty-module message",
         default = true,
         key = "runtimeOverlayShowNoModulesWarning",
         description = "Show a message in the overlay when no Statistic, Activity, Hook, app-specific, or integrated module is selected. Control App Ads modules count only when that patch was also configured and patched successfully.",
     )
     val enableMonitorsOnLaunch by booleanOption(
-        title = "Modules > Settings > Enable monitors for statistic modules on launch",
+        title = "Quick setup > 2. Overlay modules > Monitor behavior > Enable monitors on launch",
         default = false,
         key = "runtimeOverlayEnableMonitorsOnLaunch",
         description = "Show selected statistic monitors as soon as the app launches. Monitor is disabled by default.",
     )
     val statisticMonitorPosition by stringOption(
-        title = "Modules > Settings > Statistic monitor position",
+        title = "Quick setup > 2. Overlay modules > Monitor behavior > Monitor position",
         default = "bottom",
         key = "runtimeOverlayStatisticMonitorPosition",
         description = "Show enabled statistic monitors from statistic modules above or below the overlay button.",
         values = linkedMapOf("No stat monitors" to "none", "Above overlay button" to "top", "Below overlay button" to "bottom"),
     )
     val monitorScale by stringOption(
-        title = "Modules > Settings > Monitor panel size",
+        title = "Quick setup > 2. Overlay modules > Monitor behavior > Monitor panel size",
         default = "1",
         key = "runtimeOverlayMonitorScale",
         description = "Size multiplier for statistic monitor panels.",
         values = linkedMapOf("0.75x" to "0.75", "1x" to "1", "1.25x" to "1.25", "1.5x" to "1.5", "2x" to "2"),
     )
     val monitorColumns by stringOption(
-        title = "Modules > Settings > Monitor columns",
+        title = "Quick setup > 2. Overlay modules > Monitor behavior > Monitor columns",
         default = "2",
         key = "runtimeOverlayMonitorColumns",
         description = "Number of statistic monitor columns.",
         values = linkedMapOf("1 column" to "1", "2 columns" to "2", "3 columns" to "3"),
     )
     val temperatureFormat by stringOption(
-        title = "Modules > Settings > Temperature stat format",
+        title = "Quick setup > 2. Overlay modules > Monitor behavior > Temperature format",
         default = "celsius",
         key = "runtimeOverlayTemperatureFormat",
         description = "Temperature unit used by the Device Temperature menu value and monitor.",
         values = linkedMapOf("Celsius" to "celsius", "Fahrenheit" to "fahrenheit", "Kelvin" to "kelvin"),
     )
     val timeFormat by stringOption(
-        title = "Modules > Settings > System time format",
+        title = "Quick setup > 2. Overlay modules > Monitor behavior > Time format",
         default = "12",
         key = "runtimeOverlayTimeFormat",
         description = "Clock format used by the System Time menu value and monitor. Timezone is shown in the menu value.",
         values = linkedMapOf("12-hour clock" to "12", "24-hour clock" to "24"),
     )
     val includeDeviceInformation by booleanOption(
-        title = "Modules > Statistic > Device Information",
+        title = "Quick setup > 2. Overlay modules > Monitor > Device information",
         default = false,
         key = "runtimeOverlayIncludeDeviceInformation",
         description = "Include read-only phone and Android device information.",
     )
     val includeFps by booleanOption(
-        title = "Modules > Statistic > FPS",
+        title = "Quick setup > 2. Overlay modules > Monitor > FPS",
         default = false,
         key = "runtimeOverlayIncludeFps",
         description = "Include the approximate display frame-rate statistic module.",
     )
     val includeDeviceTemperature by booleanOption(
-        title = "Modules > Statistic > Device Temperature",
+        title = "Quick setup > 2. Overlay modules > Monitor > Device temperature",
         default = false,
         key = "runtimeOverlayIncludeDeviceTemperature",
         description = "Include battery-reported temperature in the selected temperature format.",
     )
     val includeSystemTime by booleanOption(
-        title = "Modules > Statistic > System Time",
+        title = "Quick setup > 2. Overlay modules > Monitor > System time",
         default = false,
         key = "runtimeOverlayIncludeSystemTime",
         description = "Include the phone system time statistic module.",
     )
     val includeSessionTime by booleanOption(
-        title = "Modules > Statistic > App Session Time",
+        title = "Quick setup > 2. Overlay modules > Monitor > App session time",
         default = false,
         key = "runtimeOverlayIncludeSessionTime",
         description = "Include the in-process overlay session timer statistic module.",
     )
     val includeBatteryStatus by booleanOption(
-        title = "Modules > Statistic > Battery Status",
+        title = "Quick setup > 2. Overlay modules > Monitor > Battery status",
         default = false,
         key = "runtimeOverlayIncludeBatteryStatus",
         description = "Include the current battery percentage statistic module.",
     )
     val includeAppMemory by booleanOption(
-        title = "Modules > Statistic > App Memory Usage",
+        title = "Quick setup > 2. Overlay modules > Monitor > App memory usage",
         default = false,
         key = "runtimeOverlayIncludeAppMemory",
         description = "Include approximate memory used by the current app process.",
     )
     val includeNetworkStatus by booleanOption(
-        title = "Modules > Statistic > Network Status",
+        title = "Quick setup > 2. Overlay modules > Monitor > Network status",
         default = false,
         key = "runtimeOverlayIncludeNetworkStatus",
         description = "Include incoming and outgoing app network traffic monitors.",
     )
     val includeKeepAwake by booleanOption(
-        title = "Modules > Activity > Keep screen awake",
+        title = "Quick setup > 2. Overlay modules > Activity controls > Keep screen awake",
         default = false,
         key = "runtimeOverlayIncludeKeepScreenAwake",
         description = "Include the keep-screen-awake activity module.",
     )
     val includeFullscreen by booleanOption(
-        title = "Modules > Activity > Fullscreen",
+        title = "Quick setup > 2. Overlay modules > Activity controls > Fullscreen",
         default = false,
         key = "runtimeOverlayIncludeFullscreen",
         description = "Include the fullscreen activity module.",
     )
     val includeScreenshots by booleanOption(
-        title = "Modules > Activity > Allow screenshots",
+        title = "Quick setup > 2. Overlay modules > Activity controls > Allow screenshots",
         default = false,
         key = "runtimeOverlayIncludeScreenshots",
         description = "Include the allow-screenshots activity module.",
     )
     val includeAppBrightness by booleanOption(
-        title = "Modules > Activity > App brightness",
+        title = "Quick setup > 2. Overlay modules > Activity controls > App brightness",
         default = false,
         key = "runtimeOverlayIncludeAppBrightness",
         description = "Include a per-Activity brightness slider.",
     )
     val includeRotationMode by booleanOption(
-        title = "Modules > Activity > Rotation mode",
+        title = "Quick setup > 2. Overlay modules > Activity controls > Rotation mode",
         default = false,
         key = "runtimeOverlayIncludeRotationMode",
         description = "Include a per-Activity rotation mode selector.",
     )
     val includeAppAudioMute by booleanOption(
-        title = "Modules > Activity > App audio mute",
+        title = "Quick setup > 2. Overlay modules > Activity controls > App audio mute",
         default = false,
         key = "runtimeOverlayIncludeAppAudioMute",
         description = "Include a best-effort app audio mute toggle.",
     )
     val includeDisableHaptics by booleanOption(
-        title = "Modules > Hook > Disable haptic feedback / vibrations",
+        title = "Advanced > Hook modules > Disable haptic feedback / vibrations",
         default = false,
         key = "runtimeOverlayIncludeDisableHaptics",
-        description = "Include a best-effort runtime haptic and vibration suppression module.",
+        description = "Risk: broad runtime hook. Include a best-effort haptic and vibration suppression module only if the app needs it.",
     )
     val includeDisableAnimations by booleanOption(
-        title = "Modules > Hook > Disable app animations",
+        title = "Advanced > Hook modules > Disable app animations",
         default = false,
         key = "runtimeOverlayIncludeDisableAnimations",
-        description = "Include a best-effort runtime animation suppression module.",
+        description = "Risk: broad runtime hook. Include a best-effort animation suppression module only if the app needs it.",
+    )
+    val importUiPreset by filePathOption(
+        title = "Advanced > Import / export > Import UI preset",
+        default = "",
+        key = "runtimeOverlayImportUiPreset",
+        allowedExtensions = listOf("json"),
+        description = "Optional JSON UI preset path. This is for advanced reuse and works only with Custom (UniPatches defaults). A valid file overrides appearance settings for this build; an invalid file safely uses the visible settings instead.",
+    )
+    val exportUiPreset by stringOption(
+        title = "Advanced > Import / export > Export UI preset",
+        default = "",
+        key = "runtimeOverlayExportUiPreset",
+        description = "Optional existing folder for exporting the final Custom UI preset as JSON. Leave blank to disable. Export errors are logged and never stop patching.",
+    )
+    val exportedUiPresetOutputName by stringOption(
+        title = "Advanced > Import / export > Export file name",
+        default = "UniversalOverlay.json",
+        key = "runtimeOverlayExportedUiPresetOutputName",
+        description = "Name of the exported JSON file. The .json suffix is added when needed; duplicate names receive -1, -2, and so on.",
     )
 
     execute {
@@ -1176,16 +1099,17 @@ val universalOverlayPatch = bytecodePatch(
             iconOutline = iconOutline == true,
             iconOutlineWidth = (iconOutlineWidth ?: 3).coerceIn(1, 8),
             iconOutlineColor = iconOutlineColor.orEmpty().ifBlank { "#FFFFFF" },
-            iconStyle = iconStyle.orEmpty().ifBlank { "text" },
-            iconShape = iconShape.orEmpty().ifBlank { "triangle" },
-            iconShapeColor1 = iconShapeColor1.orEmpty().ifBlank { "#FFFFFF" },
-            iconShapeColor2 = iconShapeColor2.orEmpty().ifBlank { iconShapeColor1.orEmpty().ifBlank { "#FFFFFF" } },
-            iconShapeGradient = iconShapeGradient == true,
-            iconShapeGradientAngle = ((iconShapeGradientAngle ?: 0) % 361 + 361) % 361,
-            iconShapeStrokeWidth = (iconShapeStrokeWidth ?: 3).coerceIn(1, 12),
-            iconShapeScale = (iconShapeScale ?: 70).coerceIn(20, 100),
+            iconStyle = if (iconStyle == "parts") "parts" else "text",
+            // Retained only in the compatible payload schema; Multi-parts owns all symbol data.
+            iconShape = "triangle",
+            iconShapeColor1 = "#FFFFFF",
+            iconShapeColor2 = "#FFFFFF",
+            iconShapeGradient = false,
+            iconShapeGradientAngle = 0,
+            iconShapeStrokeWidth = 3,
+            iconShapeScale = 70,
             iconHighlight = iconHighlight == true,
-            iconShadow = iconShadow == true,
+            iconShadow = false,
             iconOutlineGradient = iconOutlineGradient == true,
             iconOutlineColor2 = iconOutlineColor2.orEmpty().ifBlank { "#FFFFFF" },
             iconOutlineGradientAngle = ((iconOutlineGradientAngle ?: 0) % 361 + 361) % 361,
@@ -1232,8 +1156,13 @@ val universalOverlayPatch = bytecodePatch(
             animationDuration = (animationDuration ?: 180).coerceAtLeast(0),
             animationEasing = animationEasing.orEmpty().ifBlank { "linear" },
         )
+        val resetUi = resetUiToDefaults == true
+        val resetIcon = resetIconToText == true
         val customMode = selectedPreset.orEmpty().equals("custom", ignoreCase = true)
-        val selectedUiPreset = (if (customMode) {
+        val selectedUiPreset = (if (resetUi) {
+            logger.info("Universal Overlay: Reset UI to UniPatches default is enabled for this build.")
+            OverlayPresetCatalog.valuesFor("unipatches", manualPreset)
+        } else if (customMode) {
             readPresetFile(importUiPreset.orEmpty().trim(), manualPreset, logger)
         } else {
             OverlayPresetCatalog.valuesFor(selectedPreset.orEmpty(), manualPreset)
@@ -1268,7 +1197,7 @@ val universalOverlayPatch = bytecodePatch(
         val iconGradientAngleValue = selectedUiPreset.iconGradientAngle
         val backgroundTransparencyValue = selectedUiPreset.backgroundTransparency
         val iconOutlineWidthValue = selectedUiPreset.iconOutlineWidth
-        val iconStyleValue = selectedUiPreset.iconStyle
+        val iconStyleValue = if (resetIcon) "text" else selectedUiPreset.iconStyle
         val iconShapeValue = selectedUiPreset.iconShape
         val iconShapeColor1Value = selectedUiPreset.iconShapeColor1
         val iconShapeColor2Value = selectedUiPreset.iconShapeColor2
@@ -1284,9 +1213,9 @@ val universalOverlayPatch = bytecodePatch(
         val iconBackgroundStyleValue = selectedUiPreset.iconBackgroundStyle
         val iconBackgroundColor3Value = selectedUiPreset.iconBackgroundColor3
         val iconBackgroundColor4Value = selectedUiPreset.iconBackgroundColor4
-        val iconPartsValue = selectedUiPreset.iconParts
-        val customIconLocalSourceValue = selectedUiPreset.customIconImageLocal
-        val customIconStringSourceValue = selectedUiPreset.customIconImageInput
+        val iconPartsValue = if (resetIcon) emptyList() else selectedUiPreset.iconParts
+        val customIconLocalSourceValue = if (resetIcon) "" else selectedUiPreset.customIconImageLocal
+        val customIconStringSourceValue = if (resetIcon) "" else selectedUiPreset.customIconImageInput
         val iconTextSizeValue = selectedUiPreset.iconTextSize
         val controlThemeValue = selectedUiPreset.controlTheme
         val controlBackgroundValue = selectedUiPreset.controlBackground
@@ -1352,8 +1281,7 @@ val universalOverlayPatch = bytecodePatch(
             iconGradientAngleValue, backgroundTransparencyValue, iconOutlineWidthValue,
             shapeValue, positionValue, sizeValue, opacityValue,
         )
-        check(iconStyleValue in setOf("text", "shape", "multi", "parts"))
-        check(iconShapeValue in setOf("triangle", "chevron", "smile", "circle", "z", "revanced"))
+        check(iconStyleValue in setOf("text", "parts"))
         check(iconShapeColor1Value.matches(Regex("#[0-9a-fA-F]{6}")))
         check(iconShapeColor2Value.matches(Regex("#[0-9a-fA-F]{6}")))
         check(iconOutlineColor2Value.matches(Regex("#[0-9a-fA-F]{6}")))
@@ -1365,7 +1293,7 @@ val universalOverlayPatch = bytecodePatch(
         check(iconShapeStrokeWidthValue in 1..12)
         check(iconShapeScaleValue in 20..100)
         check(iconPartsValue.size <= 12)
-        check(iconPartsValue.all { it.length <= 240 && it.split('|').size == 12 })
+        check(iconPartsValue.all { it.length <= 240 && it.split('|').size in 12..13 })
         check(monitorPositionValue in setOf("none", "top", "bottom"))
         check(monitorScaleValue.toFloatOrNull() in listOf(.75f, 1f, 1.25f, 1.5f, 2f))
         check(monitorColumnsValue in setOf("1", "2", "3"))
@@ -1497,15 +1425,18 @@ val universalOverlayPatch = bytecodePatch(
         val appClass = appDescriptor?.let { mutableClassDefByOrNull(it) }
         val appMethod = appClass?.let { findInheritedApplicationOnCreate(it) }
         var bridgeInstalled = false
+        var adsPolicyAttached = false
+        val adsRuntimePolicy = OverlayAdsRuntimeIntegration.pendingPolicy()
         if (!explicitActivityFirst && appMethod != null) {
             val (appOwner, appOnCreate) = appMethod
             if (appOnCreate.implementation?.instructions?.any { it.toString().contains(RUNTIME_CLASS) } == true) {
                 logger.info("Runtime overlay bridge already exists in ${appOwner.type}->onCreate")
                 bridgeInstalled = true
             } else {
-                injectMethod(appOwner, appOnCreate, config, application = true)
+                injectOverlayBridge(this, appOwner, appOnCreate, config, application = true, adsRuntimePolicy = adsRuntimePolicy)
                 logger.info("Runtime overlay bridge injected into ${appOwner.type}->onCreate")
                 bridgeInstalled = true
+                adsPolicyAttached = adsRuntimePolicy != null
             }
         }
 
@@ -1514,7 +1445,7 @@ val universalOverlayPatch = bytecodePatch(
         } else {
             selectedUiPreset.activityOverride.trim().takeIf { it.isNotEmpty() }?.let(::descriptor)
                 ?.let { target -> mutableClassDefByOrNull(target) }
-                ?: findFallbackActivity()
+                ?: findOverlayFallbackActivity()
         }
         if (explicitActivityFirst && fallback == null) {
             logger.warning("Explicit Activity injection was requested but no target was found; universal fallback also failed.")
@@ -1527,35 +1458,22 @@ val universalOverlayPatch = bytecodePatch(
                 logger.info("Runtime overlay bridge already exists in ${fallback.type}->onCreate")
                 bridgeInstalled = true
             } else {
-                injectMethod(fallback, onCreate, config, application = false)
+                injectOverlayBridge(this, fallback, onCreate, config, application = false, adsRuntimePolicy = adsRuntimePolicy)
                 logger.warning("Runtime overlay used Activity fallback: ${fallback.type}->onCreate")
                 bridgeInstalled = true
+                adsPolicyAttached = adsRuntimePolicy != null
             }
         } else if (!bridgeInstalled) {
             logger.warning("No suitable Application or Activity entry point found. No changes applied.")
         }
+        if (adsPolicyAttached) {
+            OverlayAdsRuntimeIntegration.markInjected("Universal Overlay")
+            logger.info("Control App Ads runtime policy was injected beside the Universal Overlay bridge.")
+        } else if (bridgeInstalled && adsRuntimePolicy != null) {
+            logger.warning("Control App Ads runtime policy was not attached because this overlay bridge already existed.")
+        }
         if (customMode) exportPreset(exportUiPreset.orEmpty().trim(), exportedUiPresetOutputName.orEmpty(), selectedUiPreset, logger)
     }
-}
-
-private fun app.morphe.patcher.patch.BytecodePatchContext.findFallbackActivity(): MutableClass? {
-    val superMap = mutableMapOf<String, String>()
-    classDefForEach { it.superclass?.let { parent -> superMap[it.type] = parent } }
-    fun isActivity(type: String, seen: MutableSet<String> = mutableSetOf()): Boolean {
-        if (type == "Landroid/app/Activity;") return true
-        if (type == "Ljava/lang/Object;" || !seen.add(type)) return false
-        return superMap[type]?.let { isActivity(it, seen) } == true
-    }
-    val override = StartupHooks.resolvedLauncherActivityDescriptor
-    val candidates = mutableListOf<MutableClass>()
-    classDefForEach { classDef ->
-        if (!isActivity(classDef.type)) return@classDefForEach
-        val candidate = mutableClassDefBy(classDef)
-        if (candidate.methods.any { it.name == "onCreate" && it.returnType == "V" && it.parameterTypes == listOf("Landroid/os/Bundle;") }) {
-            candidates += candidate
-        }
-    }
-    return candidates.firstOrNull { it.type == override } ?: candidates.firstOrNull()
 }
 
 /**
