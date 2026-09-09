@@ -289,7 +289,9 @@ private val DEVICE_PRESETS = mapOf(
 val bypassEmulatorDetectionPatch = bytecodePatch(
     name = "Bypass Emulator Detection",
     description = """
-        Hides emulator traces by spoofing Build info and related checks so apps cannot detect an emulator.
+        Hides common emulator traces by spoofing Build info and related checks so apps are less likely
+        to identify an emulator. This patch is marked for enhancement in future updates; coverage is
+        currently limited to the checks it can safely recognize.
 
         Compatibility: PairIP Bypass and other server-side integrity systems can still reject a
         device when entitlement is bound to genuine device signals, package identity, or attestation.
@@ -300,7 +302,7 @@ val bypassEmulatorDetectionPatch = bytecodePatch(
     default = false,
 ) {
     val profile by stringOption(
-        title = "Device profile",
+        title = "Quick setup > Device profile to imitate",
         default = "pixel6",
         values = linkedMapOf(
             "Pixel 6" to "pixel6",
@@ -308,7 +310,7 @@ val bypassEmulatorDetectionPatch = bytecodePatch(
             "Xiaomi 13" to "xiaomi13",
         ),
         key = "emulatorProfile",
-        description = "Which real device identity to imitate.",
+        description = "Choose the real-device identity supplied to detected Build, serial, radio, phone-type, and system-property checks.",
     )
     execute {
         val logger = Logger.getLogger(this::class.java.name)

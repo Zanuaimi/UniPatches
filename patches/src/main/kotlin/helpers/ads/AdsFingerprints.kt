@@ -132,20 +132,6 @@ internal object GenericStringInstallerCheckFingerprint : Fingerprint(
     strings = listOf("com.android.vending"),
 )
 
-internal object FallbackBooleanInstallerCheckFingerprint : Fingerprint(
-    accessFlags = listOf(AccessFlags.PRIVATE),
-    returnType = "Z",
-    parameters = emptyList(),
-    strings = listOf("com.android.vending"),
-)
-
-internal object FallbackStringInstallerCheckFingerprint : Fingerprint(
-    accessFlags = listOf(AccessFlags.PRIVATE),
-    returnType = "Ljava/lang/String;",
-    parameters = emptyList(),
-    strings = listOf("com.android.vending"),
-)
-
 // -- Amazon Appstore availability fingerprints --
 // These target app-specific checks that directly reference an Amazon
 // Appstore package name. They do not modify PackageManager globally.

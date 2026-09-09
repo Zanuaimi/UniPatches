@@ -31,8 +31,8 @@ internal fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStra
             logger.warning("Ads Free Rewards: skip $label  -  expected boolean return, found ${method.returnType}")
             return
         }
-        if (impl.registerCount < 1) {
-            logger.warning("Ads Free Rewards: skip $label  -  registerCount ${impl.registerCount} < 1")
+        if (impl.registerCount - method.numberOfParameterRegisters < 1) {
+            logger.warning("Ads Free Rewards: skip $label - no safe local register")
             return
         }
         val instructions = if (runtimePolicy) {
@@ -49,10 +49,6 @@ internal fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStra
             const/4 v0, 0x1
             return v0
             """.trimIndent()
-        }
-        if (runtimePolicy && impl.registerCount - method.numberOfParameterRegisters < 1) {
-            logger.warning("Ads Free Rewards: skip $label - runtime policy needs a local register")
-            return
         }
         method.addInstructions(0, instructions)
         logger.info("Ads Free Rewards: faked availability for $label")

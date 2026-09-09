@@ -124,33 +124,35 @@ private fun isFalseConstant(instruction: Any?, register: Int): Boolean =
 val bypassForcedUpdatesPatch = bytecodePatch(
     name = "Bypass Forced Updates (Experimental)",
     description = """
-        Skip forced update screens and keep using the app.
+        Try to bypass high-confidence client-side forced-update screens. Start with the defaults;
+        each option handles a different part of an update flow. This cannot bypass a server that
+        refuses old app versions, and an unsupported app may still require an update.
     """.trimIndent(),
     default = false,
 ) {
     val bypassUpdateGate by booleanOption(
         key = "bypassUpdateGate",
         default = true,
-        title = "Bypass update gate",
-        description = "Ignore high-confidence client-side checks that report an update is required",
+        title = "Quick setup > Bypass update-required checks",
+        description = "Make high-confidence client-side checks report that an update is not required.",
     )
     val makeDialogsDismissible by booleanOption(
         key = "makeDialogsDismissible",
         default = true,
-        title = "Make dialogs dismissible",
-        description = "Allow detected update dialogs to be canceled instead of forcing the user to update",
+        title = "Quick setup > Allow closing update dialogs",
+        description = "Allow detected update dialogs to be canceled instead of forcing an update.",
     )
     val blockUpdateRedirects by booleanOption(
         key = "blockUpdateRedirects",
         default = true,
-        title = "Block update redirects",
-        description = "Block detected redirects to the Play Store, browser, or updater activity",
+        title = "Quick setup > Block update-store redirects",
+        description = "Block detected redirects to the Play Store, browser, or an updater Activity.",
     )
     val preventForcedExit by booleanOption(
         key = "preventForcedExit",
         default = true,
-        title = "Prevent forced exit",
-        description = "Remove detected finish or exit calls from update-related methods",
+        title = "Quick setup > Prevent update-triggered exit",
+        description = "Remove detected app-close calls in high-confidence update methods.",
     )
     execute {
         val logger = Logger.getLogger(this::class.java.name)

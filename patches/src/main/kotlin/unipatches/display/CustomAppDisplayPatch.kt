@@ -11,6 +11,7 @@ import helpers.bytecode.*
 import helpers.graphics.UnityPlayerActivityOnCreateFingerprint
 import helpers.manifest.NS_ANDROID
 import helpers.manifest.applicationOrNull
+import helpers.startup.StartupHooks
 import java.util.logging.Logger
 import org.w3c.dom.Element
 
@@ -44,9 +45,9 @@ private fun Element.removeAspectRestrictions(): Int {
 val customAppDisplayPatch = bytecodePatch(
     name = "Custom App Display Patch (Experimental, Enhanced)",
     description = """
-        Configure display compatibility for an APK: aspect-ratio scaling, a Unity window-resolution
-        override, preferred refresh rate, Unity renderer preference, ANGLE preference, and game
-        category hints. Android and the app remain in control and can ignore any request.
+        Adjust an APK's display compatibility: screen shape, Unity window-size request, preferred
+        refresh rate, Unity renderer preference, ANGLE preference, and Android game-category hint.
+        Start with Display scaling. Android and the app can ignore any request.
 
         Resolution and renderer overrides currently target Unity activities. Scaling removes Android
         aspect-ratio restrictions where present; it cannot universally rescale every game engine.
@@ -56,53 +57,61 @@ val customAppDisplayPatch = bytecodePatch(
     """.trimIndent(),
     default = false,
 ) {
+    dependsOn(StartupHooks.resolveRealApplicationPatch)
     val scalingMode by stringOption(
-        title = "Display scaling > Mode",
+        title = "Quick setup > Display scaling > Mode",
         default = "default",
         key = "displayScalingMode",
         description = "Default preserves the app's behavior. Remove aspect restrictions lets Android use more screen space without forcing a stretch. Stretch to screen also requests resizable activities; engines may still keep their own letterboxing.",
         values = linkedMapOf("Default (default)" to "default", "Remove aspect restrictions" to "fit", "Stretch to screen" to "stretch"),
     )
     val customResolutionEnabled by booleanOption(
-        title = "Resolution override > Enable",
+        title = "Optional overrides > Resolution > Enable",
         default = false,
         key = "displayCustomResolutionEnabled",
         description = "Request this window size for supported Unity activities. Disabled by default. Fullscreen games and Android window policy may override it.",
     )
     val resolutionWidth by intOption(
-        title = "Resolution override > Width (px)",
+        title = "Optional overrides > Resolution > Width (px)",
         default = 1920,
         key = "displayResolutionWidth",
         description = "Requested horizontal window size in pixels when Resolution override is enabled. Default: 1920.",
     )
     val resolutionHeight by intOption(
-        title = "Resolution override > Height (px)",
+        title = "Optional overrides > Resolution > Height (px)",
         default = 1080,
         key = "displayResolutionHeight",
         description = "Requested vertical window size in pixels when Resolution override is enabled. Default: 1080. Swap width and height for portrait content.",
     )
     val fpsEnabled by booleanOption(
-        title = "Frame rate > Enable FPS preference",
+        title = "Optional overrides > Frame rate > Enable FPS preference",
         default = false,
         key = "displayFpsEnabled",
-        description = "Request a preferred display refresh rate for every Activity window in the APK. This cannot exceed the display, bypass a game FPS cap, or override battery/thermal policy.",
+        description = "Request a preferred display refresh rate for the selected Activity scope. This cannot exceed the display, bypass a game FPS cap, or override battery/thermal policy.",
     )
     val targetFps by stringOption(
-        title = "Frame rate > Target FPS",
+        title = "Optional overrides > Frame rate > Target FPS",
         default = "60",
         key = "displayTargetFps",
         description = "Preferred display refresh rate used when Enable FPS preference is on. Default: 60 FPS.",
         values = frameRateValues,
     )
+    val fpsScope by stringOption(
+        title = "Optional overrides > Frame rate > Activity scope",
+        default = "launcher",
+        key = "displayFpsScope",
+        description = "Launcher activity only (recommended) avoids changing sign-in, billing, settings, and third-party screens. All app activities applies the preference broadly and may affect those flows.",
+        values = linkedMapOf("Launcher activity only (recommended)" to "launcher", "All app activities" to "all"),
+    )
     val graphicsApi by stringOption(
-        title = "Graphics > API preference",
+        title = "Optional overrides > Graphics > API preference",
         default = "app",
         key = "displayGraphicsApi",
         description = "Decided by app makes no renderer change. OpenGL ES and Vulkan add a Unity launch argument only when a supported Unity player activity exists. ANGLE adds Android's official GLES-driver preference metadata on supported devices.",
         values = linkedMapOf("Decided by app (default)" to "app", "Prefer OpenGL ES" to "opengl", "Prefer ANGLE for OpenGL ES" to "angle", "Prefer Vulkan" to "vulkan"),
     )
     val gameMode by stringOption(
-        title = "Game mode > Optimization preference",
+        title = "Optional overrides > Game mode > Optimization preference",
         default = "app",
         key = "displayGameMode",
         description = "Decided by app makes no change. Mark as game adds Android's game app-category hint, which may let the device offer its own game optimizations. It cannot force an OEM Game Mode on or off.",
@@ -159,7 +168,7 @@ val customAppDisplayPatch = bytecodePatch(
                     entry.setAttributeNS(NS_ANDROID, "android:value", "true")
                     changes++
                 }
-                if (gameMode == "game" || gameMode == "performance" || gameMode == "battery") {
+                if (gameMode == "game") {
                     application.setAttributeNS(NS_ANDROID, "android:appCategory", "game")
                     changes++
                     logger.info("Custom App Display: added Android game app-category hint.")
@@ -186,7 +195,12 @@ val customAppDisplayPatch = bytecodePatch(
                     type == "Ljava/lang/Object;" || !seen.add(type) -> false
                     else -> parents[type]?.let(::isActivity) == true
                 }
+                val launcher = StartupHooks.resolvedLauncherActivityDescriptor
+                if (fpsScope == "launcher" && launcher == null) {
+                    logger.warning("Custom App Display: launcher Activity could not be resolved; skipping the scoped FPS preference. Choose All app activities only if you accept a broader change.")
+                }
                 classDefForEach { classDef ->
+                    if (fpsScope == "launcher" && classDef.type != launcher) return@classDefForEach
                     if (!isActivity(classDef.type)) return@classDefForEach
                     val mutableClass = mutableClassDefBy(classDef)
                     mutableClass.methods.toList().filter {
@@ -214,7 +228,7 @@ val customAppDisplayPatch = bytecodePatch(
                         applied++
                     }
                 }
-                logger.info("Custom App Display: requested ${targetFps.orEmpty()} FPS for $applied Activity window(s).")
+                logger.info("Custom App Display: requested ${targetFps.orEmpty()} FPS for $applied ${if (fpsScope == "launcher") "launcher" else "Activity"} window(s).")
             }
         }
 

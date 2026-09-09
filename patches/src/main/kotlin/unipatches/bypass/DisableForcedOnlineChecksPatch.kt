@@ -77,8 +77,8 @@ private fun isKnownAdOrNetworkClass(type: String): Boolean {
 val disableForcedOnlineChecksPatch = bytecodePatch(
     name = "Disable Forced Online Checks (Experimental)",
     description = """
-        Try to bypass high-confidence client-side offline gates. It cannot bypass server-side login,
-        entitlement, or game-state checks.
+        Try to bypass high-confidence client-side “internet required” gates. Start with Auto mode.
+        This cannot bypass server-side login, entitlement, multiplayer, or game-state checks.
 
         Compatibility: Control App Ads can intentionally block ad hosts. Keep “Exclude ad SDK and
         networking code” enabled when both patches are selected so blocked ads are not falsely told
@@ -88,37 +88,37 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
 ) {
     val autoMode by booleanOption(
         key = "autoMode",
-        title = "Auto mode",
-        description = "Automatically run all strategies supported by the detected APK",
+        title = "Quick setup > Automatic engine detection",
+        description = "Automatically run only detected engine strategies. Broad Android and generic scans stay opt-in to avoid changing normal networking.",
         default = true,
     )
     val commonAndroidNetwork by booleanOption(
         key = "commonAndroidNetwork",
-        title = "Common Android/network API",
-        description = "Make common Android connectivity checks report an active connection",
-        default = true,
+        title = "Advanced > Broad Android connectivity checks",
+        description = "Advanced: make common Android connectivity checks report an active connection. This can affect normal syncing, billing, or login, so it is disabled by default.",
+        default = false,
     )
     val unityStrategy by booleanOption(
         key = "unityStrategy",
-        title = "Unity strategy",
+        title = "Engine strategies > Unity",
         description = "Apply generic high-confidence online-gate detection when Unity is detected",
         default = true,
     )
     val unrealStrategy by booleanOption(
         key = "unrealStrategy",
-        title = "Unreal strategy",
+        title = "Engine strategies > Unreal",
         description = "Apply generic high-confidence online-gate detection when Unreal is detected",
         default = true,
     )
     val godotStrategy by booleanOption(
         key = "godotStrategy",
-        title = "Godot strategy",
+        title = "Engine strategies > Godot",
         description = "Apply generic high-confidence online-gate detection when Godot is detected",
         default = true,
     )
     val genericBytecodeStrategy by booleanOption(
         key = "genericBytecodeStrategy",
-        title = "Generic bytecode strategy",
+        title = "Advanced > Generic bytecode scan",
         description = "Scan app bytecode for high-confidence online gate methods without engine detection",
         default = false,
     )
@@ -135,12 +135,11 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
         classDefForEach { classDef -> types += classDef.type }
         val engines = engineFlags(types)
         val auto = autoMode == true
-        val useCommon = auto || commonAndroidNetwork == true
+        val useCommon = commonAndroidNetwork == true
         val useUnity = engines.unity && (auto || unityStrategy == true)
         val useUnreal = engines.unreal && (auto || unrealStrategy == true)
         val useGodot = engines.godot && (auto || godotStrategy == true)
-        val anyEngineDetected = engines.unity || engines.unreal || engines.godot
-        val useGeneric = if (auto) !anyEngineDetected else genericBytecodeStrategy == true
+        val useGeneric = genericBytecodeStrategy == true
 
         var patched = 0
         if (useCommon) {

@@ -34,8 +34,9 @@ private const val TRANSPARENT_ICON_XML = """
 val customAppOutputPatch = resourcePatch(
     name = "Custom App Output Patch (Experimental, Enhanced)",
     description = """
-        Customize an APK's install identity and launcher presentation in one patch. Clone mode can
-        install a side-by-side copy, while name, icon, hide-icon, and target-SDK options are
+        Customize an APK's install identity and launcher presentation in one patch. Start with the
+        launcher name or icon; enable Clone only when you need a side-by-side copy. Name, icon,
+        hide-icon, and target-SDK options are
         independent. This cannot preserve original-app data when a package or signing identity
         changes. Clone mode rewrites supported manifest identifiers only; it does not rewrite
         bytecode strings, explicit process names, task affinities, or arbitrary SDK configuration.
@@ -50,70 +51,70 @@ val customAppOutputPatch = resourcePatch(
     default = false,
 ) {
     val cloneEnabled by booleanOption(
-        title = "Clone > Enable clone",
+        title = "Advanced > Clone for side-by-side install > Enable",
         default = false,
         key = "customAppOutputCloneEnabled",
         description = "Create a side-by-side install by changing the manifest package name. Disabled by default. This does not bypass app signatures or preserve original-app data. Package/certificate-bound OAuth, Firebase, Google Play Games, billing, deep links, and server licenses may stop working; PairIP cannot reliably bypass server package checks on a clone.",
     )
     val cloneMode by stringOption(
-        title = "Clone > Package name mode",
+        title = "Advanced > Clone for side-by-side install > Package name mode",
         default = "append",
         key = "customAppOutputCloneMode",
         description = "Append adds a suffix to the original package, such as com.example.app.u. Complete replace uses the Package name override exactly as entered.",
         values = linkedMapOf("Append suffix (default)" to "append", "Complete replace" to "replace"),
     )
     val cloneSuffix by stringOption(
-        title = "Clone > Append package suffix",
+        title = "Advanced > Clone for side-by-side install > Append package suffix",
         default = ".u",
         key = "customAppOutputCloneSuffix",
         description = "Suffix used by Append mode. Use one or more lowercase package segments, for example .u, .clone, or .patched.test. A leading dot is added automatically when omitted.",
     )
     val packageNameOverride by stringOption(
-        title = "Clone > Package name override",
+        title = "Advanced > Clone for side-by-side install > Package name override",
         default = "",
         key = "customAppOutputPackageNameOverride",
         description = "Complete replacement package name used only in Complete replace mode, for example com.example.mycopy. Leave empty when using Append mode.",
     )
     val rewriteAuthorities by booleanOption(
-        title = "Clone > Compatibility > Rewrite provider authorities",
+        title = "Advanced > Clone compatibility > Rewrite provider authorities",
         default = true,
         key = "customAppOutputRewriteAuthorities",
         description = "Update ContentProvider authorities that begin with the original package. This avoids common side-by-side install conflicts.",
     )
     val rewritePermissions by booleanOption(
-        title = "Clone > Compatibility > Rewrite custom permissions",
+        title = "Advanced > Clone compatibility > Rewrite custom permissions",
         default = true,
         key = "customAppOutputRewritePermissions",
         description = "Update app-defined permission names and matching uses-permission entries that begin with the original package.",
     )
     val expandRelativeComponents by booleanOption(
-        title = "Clone > Compatibility > Preserve relative components",
+        title = "Advanced > Clone compatibility > Preserve relative components",
         default = true,
         key = "customAppOutputExpandRelativeComponents",
         description = "Expand relative Activity, Service, Receiver, Provider, and alias class names to the original package before cloning. This prevents Android from searching for classes in the new package.",
     )
 
     val appName by stringOption(
-        title = "Custom App Name > Launcher name",
+        title = "Quick setup > Launcher presentation > App name",
         default = "",
         key = "customAppOutputName",
         description = "Name shown in the home launcher. It updates the application label and launcher activities or aliases. Leave empty to keep the original name.",
     )
 
     val hideAppIcon by booleanOption(
-        title = "App Icon > Hide launcher icon",
+        title = "Quick setup > Launcher presentation > Hide launcher icon",
         default = false,
         key = "customAppOutputHideIcon",
         description = "Replace launcher icons with a transparent drawable. The app remains installed and launchable, but its launcher entry appears blank. This takes priority over Custom app icon.",
     )
     val customIconEnabled by booleanOption(
-        title = "Custom App Icon > Enable custom icon",
+        title = "Quick setup > Launcher presentation > Use custom icon",
         default = false,
         key = "customAppOutputCustomIconEnabled",
         description = "Replace the application and all Activity or Activity-alias icon attributes with your supplied image. Ignored when Hide launcher icon is enabled.",
     )
     val customIconLocal by imageOption(
-        title = "Custom App Icon > Local image",
+        title = "Quick setup > Launcher presentation > Icon local image",
         default = "",
         key = "customAppOutputCustomIconLocal",
         allowedExtensions = listOf("png", "jpg", "jpeg", "webp"),
@@ -121,20 +122,20 @@ val customAppOutputPatch = resourcePatch(
         description = "Local PNG, JPG, JPEG, or WebP file. A square image with transparent padding is recommended. This source takes priority over String Handler.",
     )
     val customIconInput by stringOption(
-        title = "Custom App Icon > String Handler",
+        title = "Quick setup > Launcher presentation > Icon Base64 or HTTPS image",
         default = "",
         key = "customAppOutputCustomIconInput",
         description = "Fallback icon source when Local image is empty: a raw Base64 image string, data:image/...;base64,..., or an HTTPS image URL. Example Base64 input: <base64 string here>. You can encode an image at https://base64.guru/converter/encode/image.",
     )
 
     val targetSdkEnabled by booleanOption(
-        title = "Compatibility > Target SDK > Override target SDK",
+        title = "Advanced > Android compatibility > Override target SDK",
         default = false,
         key = "customAppOutputTargetSdkEnabled",
         description = "Write a targetSdkVersion into the manifest. Enable only when you need to address an installer compatibility issue, because changing it can alter Android behavior.",
     )
     val targetSdk by intOption(
-        title = "Compatibility > Target SDK > Version",
+        title = "Advanced > Android compatibility > Target SDK version",
         default = 35,
         key = "customAppOutputTargetSdk",
         description = "Target SDK used when Override target SDK is enabled. Common current values are 34 or 35. Valid range: 1 to 100.",
