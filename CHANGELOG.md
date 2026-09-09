@@ -1,3 +1,11 @@
+## [1.11.0](https://github.com/Zanuaimi/UniPatches/compare/v1.10.3...v1.11.0) (2026-09-09)
+
+### ✨ New Features
+
+* **ads:** add runtime policy controls ([d2ea7cc](https://github.com/Zanuaimi/UniPatches/commit/d2ea7cc450d308d89bc35045d7cf6aa629e653f9))
+* **overlay:** extend shared core for integrated modules ([3d1d030](https://github.com/Zanuaimi/UniPatches/commit/3d1d030e0ad426476a99af9167bc7b0cc0316838))
+* **overlay:** release universal overlay v2.0 ([4984b27](https://github.com/Zanuaimi/UniPatches/commit/4984b27cb1e8b55da66369c755fa941f82cbabf8))
+
 ## [1.10.3](https://github.com/Zanuaimi/UniPatches/compare/v1.10.2...v1.10.3) (2026-09-09)
 
 ### 🐛 Bug Fixes

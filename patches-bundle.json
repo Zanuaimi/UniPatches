@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-09T05:59:38",
-  "description": "## [1.10.3](https://github.com/Zanuaimi/UniPatches/compare/v1.10.2...v1.10.3) (2026-09-09)\n\n### 🐛 Bug Fixes\n\n* **overlay:** finalize shared core release ([6b525ec](https://github.com/Zanuaimi/UniPatches/commit/6b525ecd8317177cdafa7c8ebaab90f7b9ad6226))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.10.3/patches-1.10.3.mpp",
+  "created_at": "2026-09-09T09:00:51",
+  "description": "## [1.11.0](https://github.com/Zanuaimi/UniPatches/compare/v1.10.3...v1.11.0) (2026-09-09)\n\n### ✨ New Features\n\n* **ads:** add runtime policy controls ([d2ea7cc](https://github.com/Zanuaimi/UniPatches/commit/d2ea7cc450d308d89bc35045d7cf6aa629e653f9))\n* **overlay:** extend shared core for integrated modules ([3d1d030](https://github.com/Zanuaimi/UniPatches/commit/3d1d030e0ad426476a99af9167bc7b0cc0316838))\n* **overlay:** release universal overlay v2.0 ([4984b27](https://github.com/Zanuaimi/UniPatches/commit/4984b27cb1e8b55da66369c755fa941f82cbabf8))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.11.0/patches-1.11.0.mpp",
   "signature_download_url": "",
-  "version": "1.10.3"
+  "version": "1.11.0"
 }
