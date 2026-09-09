@@ -1,14 +1,14 @@
-package unipatch.universaloverlay.modules.hook;
+package unipatch.overlaycore.modules.hook;
 
 import android.app.Activity;
 import android.view.View;
 import android.view.ViewGroup;
 import java.util.Map;
 import java.util.WeakHashMap;
-import unipatch.universaloverlay.modules.UniversalOverlayHookModule;
+import unipatch.overlaycore.modules.OverlayHookModule;
 
 /** Best-effort runtime suppression for currently attached Android views. */
-public final class DisableHapticsModule extends UniversalOverlayHookModule {
+public final class DisableHapticsModule extends OverlayHookModule {
     private final Map<View, Boolean> originalStates = new WeakHashMap<>();
     @Override public String key() { return "disableHaptics"; }
     @Override public String label() { return "Disable haptic feedback / vibrations"; }

@@ -1,13 +1,13 @@
-package unipatch.universaloverlay.modules.statistic;
+package unipatch.overlaycore.modules.statistic;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
-import unipatch.universaloverlay.modules.UniversalOverlayStatisticModule;
+import unipatch.overlaycore.modules.OverlayStatisticModule;
 
 /** Displays the phone's local date and time in both common clock formats. */
-public final class SystemTimeModule extends UniversalOverlayStatisticModule {
+public final class SystemTimeModule extends OverlayStatisticModule {
     private final String format;
     public SystemTimeModule(String format) {
         super("systemTime", "System time", "Phone date and time in the selected clock format. The menu also shows the current timezone. Monitor short name: ST.");

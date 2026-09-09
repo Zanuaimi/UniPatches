@@ -1,11 +1,11 @@
-package unipatch.universaloverlay.modules.activity;
+package unipatch.overlaycore.modules.activity;
 
 import android.app.Activity;
 import android.view.WindowManager;
-import unipatch.universaloverlay.modules.UniversalOverlayActivityModule;
+import unipatch.overlaycore.modules.OverlayActivityModule;
 
 /** Temporarily adds the keep-screen-on flag to the current Activity window. */
-public final class KeepAwakeModule extends UniversalOverlayActivityModule {
+public final class KeepAwakeModule extends OverlayActivityModule {
     @Override public String key() { return "keepAwake"; }
     private static final int FLAG_KEEP_SCREEN_ON = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
     @Override public String label() { return "Keep screen awake"; }

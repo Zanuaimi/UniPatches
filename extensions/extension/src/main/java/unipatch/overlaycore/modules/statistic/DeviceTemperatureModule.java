@@ -1,13 +1,13 @@
-package unipatch.universaloverlay.modules.statistic;
+package unipatch.overlaycore.modules.statistic;
 
 import android.app.Activity;
 import android.content.Intent;
 import android.content.IntentFilter;
 import java.util.Locale;
-import unipatch.universaloverlay.modules.UniversalOverlayStatisticModule;
+import unipatch.overlaycore.modules.OverlayStatisticModule;
 
 /** Displays battery-reported temperature in Celsius, Fahrenheit, or Kelvin. */
-public final class DeviceTemperatureModule extends UniversalOverlayStatisticModule {
+public final class DeviceTemperatureModule extends OverlayStatisticModule {
     private final Activity activity;
     private final String format;
     public DeviceTemperatureModule(Activity activity, String format) {

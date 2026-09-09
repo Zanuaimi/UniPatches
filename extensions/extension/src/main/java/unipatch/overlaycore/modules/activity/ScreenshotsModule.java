@@ -1,11 +1,11 @@
-package unipatch.universaloverlay.modules.activity;
+package unipatch.overlaycore.modules.activity;
 
 import android.app.Activity;
 import android.view.WindowManager;
-import unipatch.universaloverlay.modules.UniversalOverlayActivityModule;
+import unipatch.overlaycore.modules.OverlayActivityModule;
 
 /** Temporarily clears FLAG_SECURE and restores the host Activity's original screenshot policy. */
-public final class ScreenshotsModule extends UniversalOverlayActivityModule {
+public final class ScreenshotsModule extends OverlayActivityModule {
     @Override public String key() { return "screenshots"; }
     private static final int FLAG_SECURE = WindowManager.LayoutParams.FLAG_SECURE;
     @Override public String label() { return "Allow screenshots"; }

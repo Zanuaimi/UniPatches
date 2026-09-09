@@ -1,4 +1,4 @@
-package unipatch.universaloverlay;
+package unipatch.overlaycore;
 
 import android.app.Activity;
 import android.app.Application;
@@ -34,26 +34,28 @@ import android.widget.ArrayAdapter;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.GradientDrawable;
 
-import unipatch.universaloverlay.modules.activity.AppAudioMuteModule;
-import unipatch.universaloverlay.modules.activity.AppBrightnessModule;
-import unipatch.universaloverlay.modules.activity.FullscreenModule;
-import unipatch.universaloverlay.modules.activity.KeepAwakeModule;
-import unipatch.universaloverlay.modules.activity.RotationModeModule;
-import unipatch.universaloverlay.modules.activity.ScreenshotsModule;
-import unipatch.universaloverlay.modules.hook.DisableAnimationsModule;
-import unipatch.universaloverlay.modules.hook.DisableHapticsModule;
-import unipatch.universaloverlay.modules.statistic.AppMemoryModule;
-import unipatch.universaloverlay.modules.statistic.BatteryStatusModule;
-import unipatch.universaloverlay.modules.statistic.DeviceInformationModule;
-import unipatch.universaloverlay.modules.statistic.DeviceTemperatureModule;
-import unipatch.universaloverlay.modules.statistic.FpsModule;
-import unipatch.universaloverlay.modules.statistic.NetworkStatusModule;
-import unipatch.universaloverlay.modules.statistic.SessionTimeModule;
-import unipatch.universaloverlay.modules.statistic.SystemTimeModule;
-import unipatch.universaloverlay.modules.UniversalOverlayActivityModule;
-import unipatch.universaloverlay.modules.UniversalOverlayHookModule;
-import unipatch.universaloverlay.modules.UniversalOverlayModule;
-import unipatch.universaloverlay.modules.UniversalOverlayStatisticModule;
+import unipatch.overlaycore.modules.activity.AppAudioMuteModule;
+import unipatch.overlaycore.modules.activity.AppBrightnessModule;
+import unipatch.overlaycore.modules.activity.FullscreenModule;
+import unipatch.overlaycore.modules.activity.KeepAwakeModule;
+import unipatch.overlaycore.modules.activity.RotationModeModule;
+import unipatch.overlaycore.modules.activity.ScreenshotsModule;
+import unipatch.overlaycore.modules.hook.DisableAnimationsModule;
+import unipatch.overlaycore.modules.hook.DisableHapticsModule;
+import unipatch.overlaycore.modules.statistic.AppMemoryModule;
+import unipatch.overlaycore.modules.statistic.BatteryStatusModule;
+import unipatch.overlaycore.modules.statistic.DeviceInformationModule;
+import unipatch.overlaycore.modules.statistic.DeviceTemperatureModule;
+import unipatch.overlaycore.modules.statistic.FpsModule;
+import unipatch.overlaycore.modules.statistic.NetworkStatusModule;
+import unipatch.overlaycore.modules.statistic.SessionTimeModule;
+import unipatch.overlaycore.modules.statistic.SystemTimeModule;
+import unipatch.overlaycore.modules.OverlayActivityModule;
+import unipatch.overlaycore.modules.OverlayHookModule;
+import unipatch.overlaycore.modules.OverlayModule;
+import unipatch.overlaycore.modules.OverlayStatisticModule;
+import unipatch.overlaycore.modules.OverlayAppSpecificModule;
+import unipatch.overlaycore.modules.OverlayAppSpecificModuleProvider;
 
 import java.util.Map;
 import java.util.ArrayList;
@@ -68,19 +70,20 @@ import java.util.WeakHashMap;
  * generated Smali methods. The implementation deliberately uses platform Views only so it can run
  * in ordinary Android apps, Unity/Godot hosts, and game Activities without AppCompat coupling.
  */
-public final class UniversalOverlayRuntime {
+public final class OverlayRuntime {
     private static final Map<Activity, Controller> CONTROLLERS = new WeakHashMap<>();
     private static boolean callbacksRegistered;
     private static boolean globallyClosed;
     private static Application installedApplication;
-    private static UniversalOverlayLifecycle lifecycleCallbacks;
-    private static UniversalOverlayConfig configuration;
+    private static OverlayLifecycle lifecycleCallbacks;
+    private static OverlayConfig configuration;
     private static Boolean keepAwakeState;
     private static Boolean fullscreenState;
     private static Boolean screenshotsState;
     private static final Map<String, Boolean> MODULE_STATES = new java.util.HashMap<>();
     private static final Map<String, Boolean> MONITOR_STATES = new java.util.HashMap<>();
     private static final Map<String, Boolean> HOOK_STATES = new java.util.HashMap<>();
+    private static final Map<String, Boolean> APP_SPECIFIC_STATES = new java.util.HashMap<>();
     private static long sessionStartElapsed;
     private static boolean sharedButtonPositionInitialized;
     private static int sharedButtonX;
@@ -89,17 +92,38 @@ public final class UniversalOverlayRuntime {
     private static Integer rotationModeState;
     private static boolean customIconFallbackNotified;
     private static boolean fullyClosedToastShown;
+    private static final List<OverlayAppSpecificModuleProvider> APP_SPECIFIC_PROVIDERS = new ArrayList<>();
 
-    private UniversalOverlayRuntime() { }
+    private OverlayRuntime() { }
+
+    /** Registers a target-specific module provider. Duplicate profile IDs are ignored. */
+    public static synchronized void registerAppSpecificProvider(OverlayAppSpecificModuleProvider provider) {
+        if (provider == null) return;
+        final String profileId;
+        try {
+            profileId = provider.profileId();
+        } catch (RuntimeException ignored) {
+            return;
+        }
+        if (profileId == null || profileId.trim().isEmpty()) return;
+        for (OverlayAppSpecificModuleProvider existing : APP_SPECIFIC_PROVIDERS) {
+            try {
+                if (profileId.equals(existing.profileId())) return;
+            } catch (RuntimeException ignored) {
+                // A broken provider must not prevent another provider from registering.
+            }
+        }
+        APP_SPECIFIC_PROVIDERS.add(provider);
+    }
 
     /** Primary entry point, called once from Application.onCreate(). */
     public static synchronized void install(Application application, String encodedConfig) {
         if (application == null || globallyClosed) return;
-        configuration = UniversalOverlayConfig.decode(encodedConfig);
+        configuration = OverlayConfig.decode(encodedConfig);
         if (sessionStartElapsed == 0) sessionStartElapsed = SystemClock.elapsedRealtime();
         if (!callbacksRegistered) {
             installedApplication = application;
-            lifecycleCallbacks = new UniversalOverlayLifecycle();
+            lifecycleCallbacks = new OverlayLifecycle();
             application.registerActivityLifecycleCallbacks(lifecycleCallbacks);
             callbacksRegistered = true;
         }
@@ -114,10 +138,10 @@ public final class UniversalOverlayRuntime {
             if (application != null) {
                 install(application, encodedConfig);
             } else {
-                configuration = UniversalOverlayConfig.decode(encodedConfig);
+                configuration = OverlayConfig.decode(encodedConfig);
             }
         } catch (RuntimeException ignored) {
-            configuration = UniversalOverlayConfig.decode(encodedConfig);
+            configuration = OverlayConfig.decode(encodedConfig);
         }
         showActivity(activity);
     }
@@ -182,6 +206,7 @@ public final class UniversalOverlayRuntime {
         MODULE_STATES.clear();
         MONITOR_STATES.clear();
         HOOK_STATES.clear();
+        APP_SPECIFIC_STATES.clear();
         if (installedApplication != null && lifecycleCallbacks != null) {
             try { installedApplication.unregisterActivityLifecycleCallbacks(lifecycleCallbacks); }
             catch (RuntimeException ignored) { }
@@ -217,18 +242,19 @@ public final class UniversalOverlayRuntime {
         private enum MenuState { CLOSED, OPENING, OPEN, CLOSING }
         private final Activity activity;
         private final Context overlayContext;
-        private final UniversalOverlayConfig config;
+        private final OverlayConfig config;
         private final FrameLayout root;
         private final TextView floatingButton;
         private final FrameLayout menuLayer;
         private final View menuScrim;
         private final LinearLayout panel;
-        private final UniversalOverlayViews.AnimatedOutline menuOutline;
+        private final OverlayViews.AnimatedOutline menuOutline;
         private final FrameLayout confirmationLayer;
         private final View brightnessDimLayer;
-        private final List<UniversalOverlayActivityModule> activityModules = new ArrayList<>();
-        private final List<UniversalOverlayHookModule> hookModules = new ArrayList<>();
-        private final List<UniversalOverlayStatisticModule> statistics = new ArrayList<>();
+        private final List<OverlayActivityModule> activityModules = new ArrayList<>();
+        private final List<OverlayHookModule> hookModules = new ArrayList<>();
+        private final List<OverlayAppSpecificModule> appSpecificModules = new ArrayList<>();
+        private final List<OverlayStatisticModule> statistics = new ArrayList<>();
         private final Map<String, CheckBox> featureControls = new java.util.HashMap<>();
         private final Map<String, List<TextView>> statisticMonitors = new java.util.HashMap<>();
         private final int monitorWidth;
@@ -249,7 +275,7 @@ public final class UniversalOverlayRuntime {
         private String pendingInlineSectionLabel;
         private final Runnable dragVisibilityFade;
 
-        Controller(Activity activity, UniversalOverlayConfig config) {
+        Controller(Activity activity, OverlayConfig config) {
             this.activity = activity;
             int overlayTheme = android.os.Build.VERSION.SDK_INT >= 21
                     ? android.R.style.Theme_Material_Light_NoActionBar
@@ -302,7 +328,7 @@ public final class UniversalOverlayRuntime {
             menuLayer = new FrameLayout(overlayContext);
             menuScrim = createMenuScrim();
             menuOutline = "static".equals(config.menuOutlineAnimation) || config.outlineAnimationSpeed == 0 ? null
-                    : UniversalOverlayViews.animatedOutline(
+                    : OverlayViews.animatedOutline(
                             config.background,
                             config.buttonBackground,
                             config.iconBackground2,
@@ -344,7 +370,7 @@ public final class UniversalOverlayRuntime {
             detached = true;
             root.removeCallbacks(dragVisibilityFade);
             if (menuOutline != null) menuOutline.stop();
-            for (UniversalOverlayStatisticModule module : statistics) module.stopSafely();
+            for (OverlayStatisticModule module : statistics) module.stopSafely();
             restoreActivityModules();
             removeRoot();
         }
@@ -360,7 +386,7 @@ public final class UniversalOverlayRuntime {
             menuLayer.setVisibility(View.GONE);
             confirmationLayer.setVisibility(View.GONE);
             floatingButton.setAlpha(config.opacity);
-            for (UniversalOverlayStatisticModule module : statistics) {
+            for (OverlayStatisticModule module : statistics) {
                 module.setMenuVisible(false);
                 module.setEnabled(module.isEnabled(), false);
             }
@@ -384,22 +410,30 @@ public final class UniversalOverlayRuntime {
         }
 
         private void restoreActivityModules() {
-            for (UniversalOverlayActivityModule feature : activityModules) {
+            for (OverlayActivityModule feature : activityModules) {
                 try {
                     feature.restore(activity, originalWindowFlags, originalSystemUi);
                 } catch (RuntimeException ignored) {
                     // A single incompatible Activity module must not prevent other modules or host cleanup.
                 }
             }
-            for (UniversalOverlayHookModule hook : hookModules) {
+            for (OverlayHookModule hook : hookModules) {
                 try {
                     hook.restore(activity, originalWindowFlags, originalSystemUi);
                 } catch (RuntimeException ignored) {
                     // Hook cleanup is independent from Activity module cleanup.
                 }
             }
+            for (OverlayAppSpecificModule module : appSpecificModules) {
+                try {
+                    module.restore(activity, originalWindowFlags, originalSystemUi);
+                } catch (RuntimeException ignored) {
+                    // App-specific cleanup is independent from universal module cleanup.
+                }
+            }
             activityModules.clear();
             hookModules.clear();
+            appSpecificModules.clear();
             statistics.clear();
             featureControls.clear();
             statisticMonitors.clear();
@@ -442,7 +476,7 @@ public final class UniversalOverlayRuntime {
                     button.setText(config.buttonText);
                     button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, config.iconTextSize);
                     button.setTypeface(Typeface.DEFAULT, config.iconBold ? Typeface.BOLD : Typeface.NORMAL);
-                    button.setBackground(UniversalOverlayViews.gradientBackground(
+                    button.setBackground(OverlayViews.gradientBackground(
                             config.buttonBackground,
                             config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
                             config.iconGradientAngle,
@@ -456,7 +490,7 @@ public final class UniversalOverlayRuntime {
         }
 
         private android.graphics.drawable.Drawable legacyIconDrawable() {
-            return UniversalOverlayViews.icon(
+            return OverlayViews.icon(
                     config.buttonBackground,
                     config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
                     config.iconGradientAngle,
@@ -530,13 +564,13 @@ public final class UniversalOverlayRuntime {
             }
         }
 
-        private void createStatisticMonitors(UniversalOverlayStatisticModule module) {
+        private void createStatisticMonitors(OverlayStatisticModule module) {
             List<TextView> monitors = new ArrayList<>();
             for (int i = 0; i < module.monitorCount(); i++) {
                 TextView monitor = text("", 12, config.menuTextColor4);
                 monitor.setGravity(Gravity.CENTER);
                 monitor.setPadding(dp(3), 0, dp(3), 0);
-                monitor.setBackground(UniversalOverlayViews.background(config.background, config.outline, false, config.outlineWidth));
+                monitor.setBackground(OverlayViews.background(config.background, config.outline, false, config.outlineWidth));
                 monitor.setClickable(false);
                 monitor.setFocusable(false);
                 monitor.setFocusableInTouchMode(false);
@@ -550,19 +584,19 @@ public final class UniversalOverlayRuntime {
             module.bindMonitors(monitors);
         }
 
-        private boolean shouldStatisticsRun(UniversalOverlayStatisticModule module) {
+        private boolean shouldStatisticsRun(OverlayStatisticModule module) {
             // Menu-only statistics sample only while visible. Monitor statistics continue only
             // when their monitor is enabled, avoiding background work for hidden modules.
             return menuVisible || (module.isMonitorEnabled() && module.monitorCount() > 0);
         }
 
         private void syncStatisticExecution() {
-            for (UniversalOverlayStatisticModule module : statistics) {
+            for (OverlayStatisticModule module : statistics) {
                 module.setEnabled(module.isEnabled(), shouldStatisticsRun(module));
             }
         }
 
-        private void updateStatisticMonitor(UniversalOverlayStatisticModule module) {
+        private void updateStatisticMonitor(OverlayStatisticModule module) {
             List<TextView> monitors = statisticMonitors.get(module.key());
             if (monitors == null) return;
             for (TextView monitor : monitors) {
@@ -577,7 +611,7 @@ public final class UniversalOverlayRuntime {
             int buttonX = Math.round(floatingButton.getX());
             int buttonY = Math.round(floatingButton.getY());
             int count = 0;
-            for (UniversalOverlayStatisticModule module : statistics) {
+            for (OverlayStatisticModule module : statistics) {
                 List<TextView> monitors = statisticMonitors.get(module.key());
                 if (monitors != null) for (TextView monitor : monitors) {
                     if (monitor.getVisibility() == View.VISIBLE) count++;
@@ -596,7 +630,7 @@ public final class UniversalOverlayRuntime {
             gridStartX = Math.max(0, Math.min(gridStartX, Math.max(0, root.getWidth() - gridWidth)));
             // Follow the same stable order used by addModules.
             int slot = 0;
-            for (UniversalOverlayStatisticModule module : statistics) {
+            for (OverlayStatisticModule module : statistics) {
                 List<TextView> monitors = statisticMonitors.get(module.key());
                 if (monitors == null) continue;
                 for (TextView monitor : monitors) {
@@ -668,7 +702,7 @@ public final class UniversalOverlayRuntime {
             // Consume unused panel area without preventing its child controls from receiving taps.
             menu.setOnTouchListener((v, event) -> true);
             menu.setPadding(dp(20), dp(18), dp(20), dp(12));
-            menu.setBackground(menuOutline != null ? menuOutline : UniversalOverlayViews.background(
+            menu.setBackground(menuOutline != null ? menuOutline : OverlayViews.background(
                     config.background, config.outline, false, config.outlineWidth,
                     !"square".equals(config.menuCorners)));
             FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
@@ -772,7 +806,7 @@ public final class UniversalOverlayRuntime {
                     icon.setText("");
                     icon.setBackground(legacyIconDrawable());
                 } else {
-                    icon.setBackground(UniversalOverlayViews.gradientBackground(
+                    icon.setBackground(OverlayViews.gradientBackground(
                             config.buttonBackground,
                             config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
                             config.iconGradientAngle, Color.TRANSPARENT, 0, config.shape == 1));
@@ -811,7 +845,7 @@ public final class UniversalOverlayRuntime {
             LinearLayout card = new LinearLayout(overlayContext);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(dp(20), dp(18), dp(20), dp(12));
-            card.setBackground(UniversalOverlayViews.background(config.background, config.outline, false,
+            card.setBackground(OverlayViews.background(config.background, config.outline, false,
                     config.outlineWidth, !"square".equals(config.menuCorners)));
             card.setClickable(true);
             card.setOnClickListener(v -> { });
@@ -849,7 +883,8 @@ public final class UniversalOverlayRuntime {
             boolean hasActivity = config.keepAwake || config.fullscreen || config.screenshots
                     || config.appBrightness || config.rotationMode || config.appAudioMute;
             boolean hasHooks = config.disableHaptics || config.disableAnimations;
-            if (!hasStatistics && !hasActivity && !hasHooks && config.showNoModulesWarning) {
+            boolean hasAppSpecific = hasRegisteredAppSpecificProvider();
+            if (!hasStatistics && !hasActivity && !hasHooks && !hasAppSpecific && config.showNoModulesWarning) {
                 TextView warning = text(
                         "\n No Runtime Modules Selected. Select modules in patch settings before patching APK if you want to have runtime modules in this app. \n",
                         14,
@@ -884,6 +919,47 @@ public final class UniversalOverlayRuntime {
                 if (config.disableHaptics) addHookModuleSafely(modules, DisableHapticsModule::new);
                 if (config.disableAnimations) addHookModuleSafely(modules, DisableAnimationsModule::new);
             }
+            addAppSpecificModules(modules);
+        }
+
+        private boolean hasRegisteredAppSpecificProvider() {
+            if (config.appSpecificProfile == null || config.appSpecificProfile.isEmpty()) return false;
+            for (OverlayAppSpecificModuleProvider provider : APP_SPECIFIC_PROVIDERS) {
+                try {
+                    if (config.appSpecificProfile.equals(provider.profileId())) return true;
+                } catch (RuntimeException ignored) {
+                    // Ignore broken providers and continue looking for the selected profile.
+                }
+            }
+            return false;
+        }
+
+        private void addAppSpecificModules(LinearLayout parent) {
+            if (config.appSpecificProfile == null || config.appSpecificProfile.isEmpty()) return;
+            for (OverlayAppSpecificModuleProvider provider : APP_SPECIFIC_PROVIDERS) {
+                try {
+                    if (!config.appSpecificProfile.equals(provider.profileId())) continue;
+                    List<OverlayAppSpecificModule> targetModules = provider.create(activity);
+                    if (targetModules == null || targetModules.isEmpty()) return;
+                    List<OverlayAppSpecificModule> supportedModules = new ArrayList<>();
+                    for (OverlayAppSpecificModule module : targetModules) {
+                        if (module == null) continue;
+                        try {
+                            if (module.supports(activity)) supportedModules.add(module);
+                        } catch (RuntimeException ignored) {
+                            // One target mismatch must not hide other app-specific modules.
+                        }
+                    }
+                    if (supportedModules.isEmpty()) return;
+                    addSectionLabel(parent, "App-specific modules");
+                    for (OverlayAppSpecificModule module : supportedModules) {
+                        addAppSpecificModuleSafely(parent, () -> module);
+                    }
+                } catch (RuntimeException ignored) {
+                    // Target-specific code must not prevent universal modules from rendering.
+                }
+                return;
+            }
         }
 
         private void addActivityModuleSafely(LinearLayout parent, ActivityModuleFactory factory) {
@@ -908,6 +984,40 @@ public final class UniversalOverlayRuntime {
             } catch (RuntimeException ignored) {
                 // A hook constructor or UI setup failure must not hide other modules.
             }
+        }
+
+        private void addAppSpecificModuleSafely(LinearLayout parent, AppSpecificModuleFactory factory) {
+            try {
+                addAppSpecificModule(parent, factory.create());
+            } catch (RuntimeException ignored) {
+                // A target-specific constructor or UI setup failure must not hide other modules.
+            }
+        }
+
+        private void addAppSpecificModule(LinearLayout controls, OverlayAppSpecificModule module) {
+            final boolean initial;
+            try {
+                Boolean remembered = APP_SPECIFIC_STATES.get(module.key());
+                initial = remembered != null ? remembered
+                        : module.initiallyEnabled(activity, originalWindowFlags, originalSystemUi);
+                if (remembered != null && !module.setEnabled(activity, remembered, originalWindowFlags, originalSystemUi)) {
+                    APP_SPECIFIC_STATES.put(module.key(), false);
+                    return;
+                }
+            } catch (RuntimeException ignored) {
+                return;
+            }
+            appSpecificModules.add(module);
+            addControlRow(controls, module, initial, checked -> {
+                try {
+                    boolean applied = module.setEnabled(activity, checked, originalWindowFlags, originalSystemUi);
+                    APP_SPECIFIC_STATES.put(module.key(), applied && checked);
+                    return applied;
+                } catch (RuntimeException ignored) {
+                    APP_SPECIFIC_STATES.put(module.key(), false);
+                    return false;
+                }
+            });
         }
 
         private void addSectionLabel(LinearLayout parent, String label) {
@@ -960,7 +1070,7 @@ public final class UniversalOverlayRuntime {
             parent.addView(separator, params);
         }
 
-        private void addActivityModule(LinearLayout controls, UniversalOverlayActivityModule feature) {
+        private void addActivityModule(LinearLayout controls, OverlayActivityModule feature) {
             if (feature instanceof AppBrightnessModule) {
                 addBrightnessModule(controls, (AppBrightnessModule) feature);
                 return;
@@ -994,7 +1104,7 @@ public final class UniversalOverlayRuntime {
             });
         }
 
-        private void addHookModule(LinearLayout controls, UniversalOverlayHookModule hook) {
+        private void addHookModule(LinearLayout controls, OverlayHookModule hook) {
             final boolean initial;
             try {
                 Boolean remembered = HOOK_STATES.get(hook.key());
@@ -1078,7 +1188,7 @@ public final class UniversalOverlayRuntime {
             // Keep the collapsed control and popup visually attached to the same menu surface.
             // The platform Spinner outline can otherwise become a large black rectangle outside
             // the panel, especially when a preset uses a dark control background.
-            spinner.setBackground(UniversalOverlayViews.background(
+            spinner.setBackground(OverlayViews.background(
                     config.background, Color.TRANSPARENT, false, 0, !"square".equals(config.menuCorners)));
             if (android.os.Build.VERSION.SDK_INT >= 16) {
                 GradientDrawable popupBackground = new GradientDrawable();
@@ -1120,7 +1230,7 @@ public final class UniversalOverlayRuntime {
             return row;
         }
 
-        private void addStatistic(LinearLayout parent, UniversalOverlayStatisticModule module) {
+        private void addStatistic(LinearLayout parent, OverlayStatisticModule module) {
             String key = module.key();
             String label = module.label();
             String description = module.description();
@@ -1203,7 +1313,7 @@ public final class UniversalOverlayRuntime {
 
         private void applyRememberedStates() {
             if (detached) return;
-            for (UniversalOverlayActivityModule feature : activityModules) {
+            for (OverlayActivityModule feature : activityModules) {
                 Boolean remembered = rememberedState(feature.key());
                 if (remembered == null) continue;
                 try {
@@ -1220,7 +1330,7 @@ public final class UniversalOverlayRuntime {
                     // A failed feature must not prevent the remaining controls from syncing.
                 }
             }
-            for (UniversalOverlayStatisticModule module : statistics) {
+            for (OverlayStatisticModule module : statistics) {
                 Boolean rememberedMonitor = MONITOR_STATES.get(module.key());
                 if (rememberedMonitor != null) module.setMonitorEnabled(rememberedMonitor);
                 Boolean remembered = rememberedModuleState(module.key());
@@ -1232,7 +1342,7 @@ public final class UniversalOverlayRuntime {
                 }
                 updateStatisticMonitor(module);
             }
-            for (UniversalOverlayHookModule hook : hookModules) {
+            for (OverlayHookModule hook : hookModules) {
                 Boolean remembered = HOOK_STATES.get(hook.key());
                 if (remembered == null) continue;
                 try {
@@ -1246,9 +1356,23 @@ public final class UniversalOverlayRuntime {
                     HOOK_STATES.put(hook.key(), false);
                 }
             }
+            for (OverlayAppSpecificModule module : appSpecificModules) {
+                Boolean remembered = APP_SPECIFIC_STATES.get(module.key());
+                if (remembered == null) continue;
+                try {
+                    if (!module.setEnabled(activity, remembered, originalWindowFlags, originalSystemUi)) {
+                        APP_SPECIFIC_STATES.put(module.key(), false);
+                        continue;
+                    }
+                    CheckBox control = featureControls.get(module.key());
+                    if (control != null && control.isChecked() != remembered) control.setChecked(remembered);
+                } catch (RuntimeException ignored) {
+                    APP_SPECIFIC_STATES.put(module.key(), false);
+                }
+            }
         }
 
-        private void addControlRow(LinearLayout parent, UniversalOverlayModule feature, boolean initial, final Toggle toggle) {
+        private void addControlRow(LinearLayout parent, OverlayModule feature, boolean initial, final Toggle toggle) {
             LinearLayout row = new LinearLayout(overlayContext);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1343,12 +1467,12 @@ public final class UniversalOverlayRuntime {
             action.setOnClickListener(listener);
             boolean hasBackground = !"text".equals(config.bottomButtonStyle);
             if (hasBackground) {
-                action.setBackground(UniversalOverlayViews.solidOrGradientBackground(
+                action.setBackground(OverlayViews.solidOrGradientBackground(
                         config.bottomButtonBackground1, config.bottomButtonBackground2, 0f,
                         Color.TRANSPARENT, 0, !"square".equals(config.bottomButtonShape),
                         "gradient".equals(config.bottomButtonStyle)));
             } else {
-                action.setBackground(UniversalOverlayViews.selectableBackground(overlayContext));
+                action.setBackground(OverlayViews.selectableBackground(overlayContext));
             }
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(56), 1f);
             if (config.bottomButtonPadding) params.setMargins(dp(3), 0, dp(3), 0);
@@ -1360,7 +1484,7 @@ public final class UniversalOverlayRuntime {
             boolean opening = menuState == MenuState.CLOSED || menuState == MenuState.CLOSING;
             menuVisible = opening;
             menuState = opening ? MenuState.OPENING : MenuState.CLOSING;
-            for (UniversalOverlayStatisticModule module : statistics) module.setMenuVisible(menuVisible);
+            for (OverlayStatisticModule module : statistics) module.setMenuVisible(menuVisible);
             if (menuVisible) {
                 root.requestFocus();
                 menuLayer.setVisibility(View.VISIBLE);
@@ -1369,7 +1493,7 @@ public final class UniversalOverlayRuntime {
                 menuLayer.setAlpha(1f);
                 panel.setAlpha(0f);
                 prepareOpeningAnimation();
-                for (UniversalOverlayStatisticModule module : statistics) {
+                for (OverlayStatisticModule module : statistics) {
                     if (module.isEnabled() && !module.startSafely()) {
                         rememberModuleState(module.key(), false);
                         module.setChecked(false);
@@ -1402,7 +1526,7 @@ public final class UniversalOverlayRuntime {
             menuVisible = false;
             menuState = MenuState.CLOSING;
             root.clearFocus();
-            for (UniversalOverlayStatisticModule module : statistics) module.setMenuVisible(false);
+            for (OverlayStatisticModule module : statistics) module.setMenuVisible(false);
             hideMenuLayer();
             syncStatisticExecution();
             floatingButton.animate().alpha(config.opacity).setDuration(180).start();
@@ -1431,7 +1555,7 @@ public final class UniversalOverlayRuntime {
                     panel.setLayerType(View.LAYER_TYPE_NONE, null);
                     menuState = MenuState.CLOSED;
                     if (menuOutline != null) menuOutline.stop();
-                    for (UniversalOverlayStatisticModule module : statistics) updateStatisticMonitor(module);
+                    for (OverlayStatisticModule module : statistics) updateStatisticMonitor(module);
                 }
             }).start();
         }
@@ -1574,15 +1698,19 @@ public final class UniversalOverlayRuntime {
     private interface Toggle { boolean changed(boolean checked); }
 
     private interface ActivityModuleFactory {
-        UniversalOverlayActivityModule create();
+        OverlayActivityModule create();
     }
 
     private interface StatisticModuleFactory {
-        UniversalOverlayStatisticModule create();
+        OverlayStatisticModule create();
     }
 
     private interface HookModuleFactory {
-        UniversalOverlayHookModule create();
+        OverlayHookModule create();
+    }
+
+    private interface AppSpecificModuleFactory {
+        OverlayAppSpecificModule create();
     }
 
     private static final class BoundedScrollView extends ScrollView {

@@ -1,10 +1,10 @@
-package unipatch.universaloverlay.modules.statistic;
+package unipatch.overlaycore.modules.statistic;
 
 import android.view.Choreographer;
-import unipatch.universaloverlay.modules.UniversalOverlayStatisticModule;
+import unipatch.overlaycore.modules.OverlayStatisticModule;
 
 /** Samples approximate display frame cadence only while the FPS row is visible. */
-public final class FpsModule extends UniversalOverlayStatisticModule {
+public final class FpsModule extends OverlayStatisticModule {
     private int frames;
     private Choreographer.FrameCallback frameCallback;
     public FpsModule() {

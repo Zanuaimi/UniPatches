@@ -1,7 +1,7 @@
-package unipatch.universaloverlay.modules;
+package unipatch.overlaycore.modules;
 
 /** Common identity contract for every optional Universal Overlay module. */
-public interface UniversalOverlayModule {
+public interface OverlayModule {
     String key();
     String label();
     String description();

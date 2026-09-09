@@ -1,4 +1,4 @@
-package unipatch.universaloverlay.modules;
+package unipatch.overlaycore.modules;
 
 import android.os.Handler;
 import android.os.Looper;
@@ -7,7 +7,7 @@ import android.widget.TextView;
 import java.util.List;
 
 /** Base for low-frequency statistic modules that update only while enabled. */
-public abstract class UniversalOverlayStatisticModule implements UniversalOverlayModule {
+public abstract class OverlayStatisticModule implements OverlayModule {
     private final String key;
     private final String label;
     private final String description;
@@ -32,7 +32,7 @@ public abstract class UniversalOverlayStatisticModule implements UniversalOverla
         }
     }
 
-    protected UniversalOverlayStatisticModule(String key, String label, String description) {
+    protected OverlayStatisticModule(String key, String label, String description) {
         this.key = key;
         this.label = label;
         this.description = description;

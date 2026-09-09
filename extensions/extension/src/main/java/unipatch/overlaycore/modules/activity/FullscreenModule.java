@@ -1,11 +1,11 @@
-package unipatch.universaloverlay.modules.activity;
+package unipatch.overlaycore.modules.activity;
 
 import android.app.Activity;
 import android.view.View;
-import unipatch.universaloverlay.modules.UniversalOverlayActivityModule;
+import unipatch.overlaycore.modules.OverlayActivityModule;
 
 /** Applies immersive system-UI flags while preserving the Activity's original visibility state. */
-public final class FullscreenModule extends UniversalOverlayActivityModule {
+public final class FullscreenModule extends OverlayActivityModule {
     @Override public String key() { return "fullscreen"; }
     private static final int FULLSCREEN_FLAGS = View.SYSTEM_UI_FLAG_LOW_PROFILE
             | View.SYSTEM_UI_FLAG_FULLSCREEN

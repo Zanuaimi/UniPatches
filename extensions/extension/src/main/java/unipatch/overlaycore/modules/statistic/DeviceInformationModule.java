@@ -1,13 +1,13 @@
-package unipatch.universaloverlay.modules.statistic;
+package unipatch.overlaycore.modules.statistic;
 
 import android.app.ActivityManager;
 import android.content.Context;
 import android.os.Build;
 import android.view.WindowManager;
-import unipatch.universaloverlay.modules.UniversalOverlayStatisticModule;
+import unipatch.overlaycore.modules.OverlayStatisticModule;
 
 /** Read-only device facts that are inexpensive to collect when the menu is refreshed. */
-public final class DeviceInformationModule extends UniversalOverlayStatisticModule {
+public final class DeviceInformationModule extends OverlayStatisticModule {
     private final ActivityManager memory;
     private final WindowManager windows;
     private String cachedValue;

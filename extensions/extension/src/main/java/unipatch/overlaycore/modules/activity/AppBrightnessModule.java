@@ -1,11 +1,11 @@
-package unipatch.universaloverlay.modules.activity;
+package unipatch.overlaycore.modules.activity;
 
 import android.app.Activity;
 import android.view.View;
-import unipatch.universaloverlay.modules.UniversalOverlayActivityModule;
+import unipatch.overlaycore.modules.OverlayActivityModule;
 
 /** Applies a temporary app-content dimming layer without changing system brightness. */
-public final class AppBrightnessModule extends UniversalOverlayActivityModule {
+public final class AppBrightnessModule extends OverlayActivityModule {
     private View dimLayer;
     @Override public String key() { return "appBrightness"; }
     @Override public String label() { return "App brightness"; }

@@ -1,11 +1,11 @@
-package unipatch.universaloverlay.modules.activity;
+package unipatch.overlaycore.modules.activity;
 
 import android.app.Activity;
 import android.media.AudioManager;
-import unipatch.universaloverlay.modules.UniversalOverlayActivityModule;
+import unipatch.overlaycore.modules.OverlayActivityModule;
 
 /** Best-effort temporary mute for the device music stream. */
-public final class AppAudioMuteModule extends UniversalOverlayActivityModule {
+public final class AppAudioMuteModule extends OverlayActivityModule {
     private static int activeInstances;
     private static int sharedOriginalVolume = -1;
     private boolean applied;

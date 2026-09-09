@@ -1,11 +1,11 @@
-package unipatch.universaloverlay.modules.activity;
+package unipatch.overlaycore.modules.activity;
 
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
-import unipatch.universaloverlay.modules.UniversalOverlayActivityModule;
+import unipatch.overlaycore.modules.OverlayActivityModule;
 
 /** Applies a per-Activity orientation request and restores the original request. */
-public final class RotationModeModule extends UniversalOverlayActivityModule {
+public final class RotationModeModule extends OverlayActivityModule {
     private int originalOrientation;
     @Override public String key() { return "rotationMode"; }
     @Override public String label() { return "Rotation mode"; }

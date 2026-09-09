@@ -1,4 +1,4 @@
-package unipatch.universaloverlay;
+package unipatch.overlaycore;
 
 import android.content.Context;
 import android.graphics.Canvas;
@@ -11,8 +11,8 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.RectF;
 
 /** Shared view construction and styling primitives for the overlay controller. */
-final class UniversalOverlayViews {
-    private UniversalOverlayViews() { }
+final class OverlayViews {
+    private OverlayViews() { }
     static GradientDrawable background(int color, int stroke, boolean circle) {
         return background(color, stroke, circle, 1);
     }

@@ -1,4 +1,4 @@
-package unipatch.universaloverlay.modules;
+package unipatch.overlaycore.modules;
 
 import android.app.Activity;
 
@@ -8,8 +8,8 @@ import android.app.Activity;
  * Hook modules have their own guarded Activity-aware lifecycle. They are separate from activity
  * controls because hooks modify host behavior rather than exposing an Activity setting.
  */
-public abstract class UniversalOverlayHookModule implements UniversalOverlayModule {
-    protected UniversalOverlayHookModule() { }
+public abstract class OverlayHookModule implements OverlayModule {
+    protected OverlayHookModule() { }
 
     public final boolean initiallyEnabled(Activity activity, int originalWindowFlags, int originalSystemUi) {
         try { return readEnabled(activity, originalWindowFlags, originalSystemUi); }

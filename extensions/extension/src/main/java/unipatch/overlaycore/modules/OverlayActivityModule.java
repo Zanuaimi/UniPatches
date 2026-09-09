@@ -1,10 +1,10 @@
-package unipatch.universaloverlay.modules;
+package unipatch.overlaycore.modules;
 
 import android.app.Activity;
 
 /** Safe base for Activity modules; subclasses provide only Activity-specific operations. */
-public abstract class UniversalOverlayActivityModule implements UniversalOverlayModule {
-    protected UniversalOverlayActivityModule() { }
+public abstract class OverlayActivityModule implements OverlayModule {
+    protected OverlayActivityModule() { }
 
     public final boolean initiallyEnabled(Activity activity, int originalWindowFlags, int originalSystemUi) {
         try { return readEnabled(activity, originalWindowFlags, originalSystemUi); }

@@ -1,12 +1,12 @@
-package unipatch.universaloverlay.modules.statistic;
+package unipatch.overlaycore.modules.statistic;
 
 import android.app.Activity;
 import android.content.Intent;
 import android.content.IntentFilter;
-import unipatch.universaloverlay.modules.UniversalOverlayStatisticModule;
+import unipatch.overlaycore.modules.OverlayStatisticModule;
 
 /** Shows the current device battery percentage without polling more often than the base sampler. */
-public final class BatteryStatusModule extends UniversalOverlayStatisticModule {
+public final class BatteryStatusModule extends OverlayStatisticModule {
     private final Activity activity;
     public BatteryStatusModule(Activity activity) {
         super("batteryStatus", "Battery status", "Current battery percentage and charging state. Monitor short name: BAT.");

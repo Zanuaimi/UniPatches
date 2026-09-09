@@ -1,4 +1,4 @@
-package unipatch.universaloverlay;
+package unipatch.overlaycore;
 
 import android.graphics.Color;
 import android.view.Gravity;
@@ -7,7 +7,7 @@ import android.view.Gravity;
  * Decodes and validates overlay configuration inside the extension runtime.
  * The patch-building Kotlin code supplies the current version; older payloads remain supported.
  */
-final class UniversalOverlayConfig {
+final class OverlayConfig {
     private static final String DEFAULT_ACTIVITY_INSTALL_BANLIST =
             "com.google.android.gms.games.*\n" +
             "com.google.android.play.games.*\n" +
@@ -27,6 +27,7 @@ final class UniversalOverlayConfig {
             "Welcome! This is the UniPatches Universal Overlay Patch Menu. " +
             "The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.";
     String title, description, appendDescription, descriptionAlignment, repositoryText, repositoryUrl, buttonText;
+    String appSpecificProfile, injectionMode;
     String activityInstallBanlist;
     int background, outline, overlayTextColor, buttonTextColor, buttonBackground, buttonSize, gravity;
     int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle, iconOutlineWidth, iconTextSize;
@@ -57,12 +58,12 @@ final class UniversalOverlayConfig {
             iconOutlineColor2, iconOutlineGradientAngle, iconBackgroundColor3, iconBackgroundColor4;
     boolean bottomButtonPadding, titleSeparator, iconShapeGradient, iconHighlight, iconShadow, iconOutlineGradient;
 
-    static UniversalOverlayConfig decode(String encoded) {
-        UniversalOverlayConfig c = new UniversalOverlayConfig();
+    static OverlayConfig decode(String encoded) {
+        OverlayConfig c = new OverlayConfig();
         String[] values = encoded == null ? new String[0] : encoded.split("\\|", -1);
         // Version 1 through 16 prepends a version field. Keep accepting the original 14-field format so an
         // older generated patch remains safe when paired with this newer extension.
-        String[] v = new String[83];
+        String[] v = new String[85];
         for (int i = 0; i < v.length; i++) v[i] = i < values.length ? decodePart(values[i]) : "";
         int offset = ("1".equals(v[0]) || "2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0])) ? 1 : 0;
         c.title = limit(field(v, offset, 0), 80, "UniPatches Universal Overlay Patch");
@@ -175,6 +176,8 @@ final class UniversalOverlayConfig {
         c.iconBackgroundStyle = choice(field(v, offset, 79), "flat", "flat", "faceted");
         c.iconBackgroundColor3 = color(field(v, offset, 80), c.iconBackground2);
         c.iconBackgroundColor4 = color(field(v, offset, 81), c.background);
+        c.appSpecificProfile = field(v, offset, 82);
+        c.injectionMode = choice(field(v, offset, 83), "universal", "universal", "explicitActivity");
         c.appendDescriptionColor = color(field(v, offset, 60), c.menuTextColor3);
         c.showNoModulesWarning = !"0".equals(field(v, offset, 61));
         c.separatorStyle = choice(field(v, offset, 48), "ascii", "ascii", "doubleLine", "background", "singleLine", "inline");

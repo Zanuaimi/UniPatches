@@ -1,12 +1,12 @@
-package unipatch.universaloverlay.modules.hook;
+package unipatch.overlaycore.modules.hook;
 
 import android.app.Activity;
 import android.view.View;
 import android.view.ViewGroup;
-import unipatch.universaloverlay.modules.UniversalOverlayHookModule;
+import unipatch.overlaycore.modules.OverlayHookModule;
 
 /** Best-effort runtime cancellation of animations on currently attached Android views. */
-public final class DisableAnimationsModule extends UniversalOverlayHookModule {
+public final class DisableAnimationsModule extends OverlayHookModule {
     @Override public String key() { return "disableAnimations"; }
     @Override public String label() { return "Disable app animations"; }
     @Override public String description() { return "Cancel animations currently running on attached app views. It cannot stop animations created later."; }

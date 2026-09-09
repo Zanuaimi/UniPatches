@@ -1,11 +1,11 @@
-package unipatch.universaloverlay.modules.statistic;
+package unipatch.overlaycore.modules.statistic;
 
 import android.app.ActivityManager;
 import android.app.Application;
-import unipatch.universaloverlay.modules.UniversalOverlayStatisticModule;
+import unipatch.overlaycore.modules.OverlayStatisticModule;
 
 /** Shows the host process' approximate private memory in MB. */
-public final class AppMemoryModule extends UniversalOverlayStatisticModule {
+public final class AppMemoryModule extends OverlayStatisticModule {
     private final ActivityManager manager;
     private final int pid;
     public AppMemoryModule(android.content.Context context) {

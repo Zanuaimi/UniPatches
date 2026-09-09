@@ -1,11 +1,11 @@
-package unipatch.universaloverlay.modules.statistic;
+package unipatch.overlaycore.modules.statistic;
 
 import android.os.SystemClock;
 import java.util.Locale;
-import unipatch.universaloverlay.modules.UniversalOverlayStatisticModule;
+import unipatch.overlaycore.modules.OverlayStatisticModule;
 
 /** Displays elapsed time from the first initialization of the overlay process. */
-public final class SessionTimeModule extends UniversalOverlayStatisticModule {
+public final class SessionTimeModule extends OverlayStatisticModule {
     private final long startElapsed;
     public SessionTimeModule(long startElapsed) {
         super("sessionTime", "App session time", "Time since this overlay process first started. Monitor short name: AST.");

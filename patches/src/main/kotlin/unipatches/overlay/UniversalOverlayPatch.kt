@@ -23,8 +23,7 @@ import java.util.Base64
 import java.util.logging.Logger
 import kotlin.math.roundToInt
 
-private const val RUNTIME_CLASS = "Lunipatch/universaloverlay/UniversalOverlayRuntime;"
-private const val CONFIG_VERSION = "1"
+private const val RUNTIME_CLASS = "Lunipatch/overlaycore/OverlayRuntime;"
 private const val PRESET_SCHEMA_VERSION = 5
 private const val MAX_CUSTOM_ICON_BYTES = 1024 * 1024
 private const val MAX_TITLE_CHARACTERS = 80
@@ -51,9 +50,6 @@ private val DEFAULT_DESCRIPTION =
     Welcome! This is the UniPatches Universal Overlay Patch Menu.
     The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.
     """.trimIndent()
-
-private fun encode(value: String): String =
-    Base64.getEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))
 
 private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
     addProperty("format", "unipatches-universal-overlay-preset")
@@ -470,7 +466,7 @@ private fun injectMethod(owner: MutableClass, method: MutableMethod, config: Str
     val originalReceiver = cloned.p0Register
     // The runtime API accepts the platform base type. The injected receiver may be any concrete
     // Activity subclass; using owner.type here would generate a method descriptor that does not
-    // exist in UniversalOverlayRuntime and fail with NoSuchMethodError at launch.
+    // exist in OverlayRuntime and fail with NoSuchMethodError at launch.
     val type = if (application) "Landroid/app/Application;" else "Landroid/app/Activity;"
     val injectionIndex = if (application) {
         0
@@ -957,6 +953,16 @@ val universalOverlayPatch = bytecodePatch(
         key = "runtimeOverlayActivityNameOverride",
         description = "Optional fallback Activity class used only when Application startup cannot be found. Leave blank for universal automatic discovery. Example: com.example.MainActivity or Lcom/example/MainActivity;.",
     )
+    val activityInjectionMode by stringOption(
+        title = "Advanced > Activity > Injection strategy",
+        default = OverlayConfigPayload.UNIVERSAL_INJECTION_MODE,
+        key = "runtimeOverlayActivityInjectionMode",
+        description = "Universal automatic discovery uses the Application entry point first and a universal Activity fallback. Explicit target Activity first is intended for app-specific overlay patches; it uses the configured Activity name, then falls back to the universal strategy if that target is unavailable.",
+        values = linkedMapOf(
+            "Universal automatic discovery (default)" to OverlayConfigPayload.UNIVERSAL_INJECTION_MODE,
+            "Explicit target Activity, then universal fallback" to OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE,
+        ),
+    )
     val activityInstallBanlist by stringsOption(
         title = "Advanced > Activity > Overlay install banlist",
         default = DEFAULT_ACTIVITY_INSTALL_BANLIST.lines(),
@@ -1355,8 +1361,9 @@ val universalOverlayPatch = bytecodePatch(
         check(menuTextColor6Value.matches(Regex("#[0-9a-fA-F]{6}")))
         check(separatorBackgroundColorValue.matches(Regex("#[0-9a-fA-F]{6}")))
 
-        val config = listOf(
-            CONFIG_VERSION, titleValue, descriptionValue, labelValue, urlValue,
+        val config = OverlayConfigPayload.serialize(
+            listOf(
+            OverlayConfigPayload.VERSION, titleValue, descriptionValue, labelValue, urlValue,
             backgroundValue, outlineValue, selectedUiPreset.buttonText.ifBlank { "U" },
             buttonTextColorValue, buttonBackgroundValue, shapeValue,
             sizeValue.toString(), opacityValue.toString(), positionValue,
@@ -1446,15 +1453,21 @@ val universalOverlayPatch = bytecodePatch(
             iconBackgroundStyleValue,
             iconBackgroundColor3Value,
             iconBackgroundColor4Value,
-        ).joinToString("|") { encode(it) }
+            ),
+            profileId = OverlayConfigPayload.UNIVERSAL_PROFILE,
+            injectionMode = activityInjectionMode.orEmpty().ifBlank {
+                OverlayConfigPayload.UNIVERSAL_INJECTION_MODE
+            },
+        )
 
         // Prefer the process Application entry point. The Activity path is a compatibility fallback
         // for APKs whose Application class or onCreate method cannot be resolved safely.
+        val explicitActivityFirst = activityInjectionMode.orEmpty() == OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE
         val appDescriptor = StartupHooks.resolvedApplicationDescriptor
         val appClass = appDescriptor?.let { mutableClassDefByOrNull(it) }
         val appMethod = appClass?.let { findInheritedApplicationOnCreate(it) }
         var bridgeInstalled = false
-        if (appMethod != null) {
+        if (!explicitActivityFirst && appMethod != null) {
             val (appOwner, appOnCreate) = appMethod
             if (appOnCreate.implementation?.instructions?.any { it.toString().contains(RUNTIME_CLASS) } == true) {
                 logger.info("Runtime overlay bridge already exists in ${appOwner.type}->onCreate")
@@ -1472,6 +1485,9 @@ val universalOverlayPatch = bytecodePatch(
             selectedUiPreset.activityOverride.trim().takeIf { it.isNotEmpty() }?.let(::descriptor)
                 ?.let { target -> mutableClassDefByOrNull(target) }
                 ?: findFallbackActivity()
+        }
+        if (explicitActivityFirst && fallback == null) {
+            logger.warning("Explicit Activity injection was requested but no target was found; universal fallback also failed.")
         }
         val onCreate = fallback?.methods?.firstOrNull {
             it.name == "onCreate" && it.returnType == "V" && it.parameterTypes == listOf("Landroid/os/Bundle;")

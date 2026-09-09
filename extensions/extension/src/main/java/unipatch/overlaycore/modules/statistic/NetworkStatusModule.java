@@ -1,12 +1,12 @@
-package unipatch.universaloverlay.modules.statistic;
+package unipatch.overlaycore.modules.statistic;
 
 import android.app.Activity;
 import android.net.TrafficStats;
 import java.util.Locale;
-import unipatch.universaloverlay.modules.UniversalOverlayStatisticModule;
+import unipatch.overlaycore.modules.OverlayStatisticModule;
 
 /** Displays process network traffic deltas as separate incoming and outgoing monitors. */
-public final class NetworkStatusModule extends UniversalOverlayStatisticModule {
+public final class NetworkStatusModule extends OverlayStatisticModule {
     private final int uid;
     private long lastRx = TrafficStats.UNSUPPORTED;
     private long lastTx = TrafficStats.UNSUPPORTED;
