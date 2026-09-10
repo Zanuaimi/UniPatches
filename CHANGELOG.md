@@ -1,3 +1,14 @@
+## [1.15.0](https://github.com/Zanuaimi/UniPatches/compare/v1.14.3...v1.15.0) (2026-09-10)
+
+### 🐛 Bug Fixes
+
+* **icon-builder:** reset template state and align geometry ([7edc063](https://github.com/Zanuaimi/UniPatches/commit/7edc0631d8a2382ca500e814ae68307a8d15e0f3))
+* **overlay:** improve control styling and popup sizing ([d59e395](https://github.com/Zanuaimi/UniPatches/commit/d59e395a405c4b308da6ae0dee8dafe0abe3d93d))
+
+### ✨ New Features
+
+* **overlay:** update presets and patch version ([184547a](https://github.com/Zanuaimi/UniPatches/commit/184547a787449b1b741a403dc5662b42a0584106))
+
 ## [1.14.3](https://github.com/Zanuaimi/UniPatches/compare/v1.14.2...v1.14.3) (2026-09-10)
 
 ### 🐛 Bug Fixes
