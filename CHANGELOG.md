@@ -1,3 +1,9 @@
+## [1.14.2](https://github.com/Zanuaimi/UniPatches/compare/v1.14.1...v1.14.2) (2026-09-10)
+
+### 🐛 Bug Fixes
+
+* register fixes ([8af8e59](https://github.com/Zanuaimi/UniPatches/commit/8af8e59d11b669b1a0144a2403fc7faf7b0c37d6))
+
 ## [1.14.1](https://github.com/Zanuaimi/UniPatches/compare/v1.14.0...v1.14.1) (2026-09-10)
 
 ### 🐛 Bug Fixes
