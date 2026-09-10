@@ -88,8 +88,8 @@ public final class AdsControlRuntimeProvider implements OverlayAppSpecificModule
         @Override public String[] settingsChoices() { return labels.clone(); }
         @Override public String[] settingsDescriptions() {
             return new String[] {
-                "Enabled: skip supported rewarded ads. Disabled: let the ad flow proceed normally.",
-                "Enabled: grant the supported reward immediately. Disabled: wait for normal completion.",
+                "Enabled: skip supported rewarded ads. With Instant rewards off, no reward is granted.",
+                "Enabled: grant the supported reward immediately. The ad still shows unless Skip rewarded ads is also enabled.",
                 "Enabled: report a supported reward ad as ready. Disabled: use the SDK's real availability."
             };
         }

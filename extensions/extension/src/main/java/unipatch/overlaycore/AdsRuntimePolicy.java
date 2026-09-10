@@ -63,7 +63,8 @@ public final class AdsRuntimePolicy {
     public static synchronized boolean shouldBlockAppOpen() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 4) != 0; }
     public static synchronized boolean shouldBlockMrec() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 8) != 0; }
     public static synchronized boolean shouldBlockRewarded() {
-        return (hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 16) != 0) || shouldSkipRewarded();
+        return (hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 16) != 0) ||
+                shouldSkipRewarded();
     }
     public static synchronized boolean shouldBlockNative() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 32) != 0; }
     public static synchronized boolean shouldSkipRewarded() { return hasModule(MODULE_REWARDS) && skipRewarded; }

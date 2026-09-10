@@ -2,6 +2,7 @@ package unipatches.ads
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.removeInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.BytecodePatchContext
 import helpers.ads.*
 import helpers.bytecode.*
@@ -21,7 +22,31 @@ private fun guardedPolicyBlock(policyMethod: String, instructions: String, origi
 }
 
 private fun guardedInstantReward(instructions: String, originalLabel: String): String {
-    return guardedPolicyBlock("shouldGrantReward", instructions, originalLabel)
+    if (!adsFreeRewardsRuntimeGuardEnabled) return instructions
+    val skipLabel = "${originalLabel}_skip"
+    val runtimeInstructions = instructions
+        .replace(
+            "return-void",
+            """
+            invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldSkipRewarded()Z
+            move-result v0
+            if-eqz v0, :$skipLabel
+            return-void
+            :$skipLabel
+            """.trimIndent(),
+        )
+        .replace(
+            "return v0",
+            """
+            invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldSkipRewarded()Z
+            move-result v0
+            if-eqz v0, :$skipLabel
+            const/4 v0, 0x1
+            return v0
+            :$skipLabel
+            """.trimIndent(),
+        )
+    return guardedPolicyBlock("shouldGrantReward", runtimeInstructions, originalLabel)
 }
 
 private fun guardedFakeAvailability(originalLabel: String): String {
@@ -163,7 +188,7 @@ private fun BytecodePatchContext.applyAdsFreeRewardsV1190(logger: Logger, reward
     // DEFAULT value, so no SDK-internal implementation class is required.
     val huaweiReady = HuaweiRewardAdIsLoadedFingerprint.methodOrNull
     val huaweiShow = HuaweiRewardAdShowFingerprint.methodOrNull
-    if (useHuawei && instantReward == true && huaweiReady != null && huaweiShow != null) {
+    if (useHuawei && (instantReward == true || adsFreeRewardsRuntimeGuardEnabled) && huaweiReady != null && huaweiShow != null) {
         val showClass = HuaweiRewardAdShowFingerprint.classDefOrNull
         if (showClass != null) {
             val clonedShow = huaweiShow.cloneMutableAndPreserveParameters(showClass)
@@ -186,7 +211,7 @@ private fun BytecodePatchContext.applyAdsFreeRewardsV1190(logger: Logger, reward
         else logger.info("Ads Free Rewards: Huawei skipped (instantReward=$instantReward)")
     }
 
-    if (useRustore && instantReward == true) {
+    if (useRustore && (instantReward == true || adsFreeRewardsRuntimeGuardEnabled)) {
         applyMyTargetStrategy(logger)
         applyYandexWrapperStrategy(logger)
     }
@@ -267,7 +292,7 @@ private fun BytecodePatchContext.applyYandexWrapperStrategy(logger: Logger) {
 private fun BytecodePatchContext.applyInMobiRewardedStrategy(logger: Logger, useAutoFallback: Boolean, instantReward: Boolean?) {
     // These fingerprints belong to the InMobi adapter used by MAX. Do not
     // modify it when MAX has been disabled by the selected reward strategy.
-    if (!useAutoFallback || instantReward != true) return
+    if (!useAutoFallback || (instantReward != true && !adsFreeRewardsRuntimeGuardEnabled)) return
     // InMobi mediated via AppLovin MAX - patching the show to instantly reward covers both interstitial and rewarded
     // Use the rewarded fingerprint if available, otherwise fallback to interstitial
     val target = InMobiRewardedShowFingerprint.methodOrNull ?: InMobiInterstitialShowFingerprint.methodOrNull ?: return
@@ -282,7 +307,7 @@ private fun BytecodePatchContext.applyInMobiRewardedStrategy(logger: Logger, use
 }
 
 private fun BytecodePatchContext.applyIronSourceAdsStrategy(logger: Logger, useIronSource: Boolean, instantReward: Boolean?) {
-    if (instantReward != true || !useIronSource) return
+    if ((instantReward != true && !adsFreeRewardsRuntimeGuardEnabled) || !useIronSource) return
     val ironAds = IronSourceAdsRewardedShowFingerprint.methodOrNull ?: return
     try {
         ironAds.addInstructions(0, guardedInstantReward("""
@@ -298,7 +323,7 @@ private fun BytecodePatchContext.applyIronSourceAdsStrategy(logger: Logger, useI
 // Fires shown -> earned -> dismissed on the registered listener so the Unity
 // side grants the reward without a real ad. isReadyToShow is RV-only, force true.
 private fun BytecodePatchContext.applyIronSourceAdsWrapperStrategy(logger: Logger, useIronSource: Boolean, instantReward: Boolean?) {
-    if (instantReward != true || !useIronSource) return
+    if ((instantReward != true && !adsFreeRewardsRuntimeGuardEnabled) || !useIronSource) return
     val ready = IronSourceAdsRewardedIsReadyPreciseFingerprint.methodOrNull
     val show = IronSourceAdsRewardedShowPreciseFingerprint.methodOrNull
     if (ready == null || show == null) return
@@ -329,7 +354,7 @@ private fun BytecodePatchContext.applyIronSourceAdsWrapperStrategy(logger: Logge
 // original body for other formats. Reward fires via the RV handler
 // singleton with a fresh info + reward payload.
 private fun BytecodePatchContext.applyMadsStrategy(logger: Logger, useIronSource: Boolean, instantReward: Boolean?) {
-    if (instantReward != true || !useIronSource) return
+    if ((instantReward != true && !adsFreeRewardsRuntimeGuardEnabled) || !useIronSource) return
     val show = MadsWrapperShowAdFingerprint.methodOrNull ?: return
     if (MadsRvHandlerOnRewardedFingerprint.methodOrNull == null) return
     val enumClass = try {
@@ -394,7 +419,7 @@ private fun BytecodePatchContext.applyMaxUnityStrategy(logger: Logger, useMax: B
     if (!useMax || unityShow == null || unityReady == null) return false
     logger.info("Ads Free Rewards: MAX Unity Ad wrapper patch succeeded")
     unityReady.addInstructions(0, guardedFakeAvailability("morphe_max_unity_ready_original"))
-    if (instantReward == true) {
+    if (instantReward == true || adsFreeRewardsRuntimeGuardEnabled) {
         val showClass = ShowRewardedAdFingerprint.classDefOrNull ?: return true
         val clonedShow = unityShow.cloneMutableAndPreserveParameters(showClass)
         clonedShow.addInstructions(0, guardedInstantReward("""
@@ -471,7 +496,7 @@ private fun BytecodePatchContext.applyNativeMaxStrategy(logger: Logger, useMax: 
     if (!useMax || nativeReady == null || nativeShow == null) return
     logger.info("Ads Free Rewards: native MAX patch succeeded")
     nativeReady.addInstructions(0, guardedFakeAvailability("morphe_native_max_ready_original"))
-    if (instantReward == true) {
+    if (instantReward == true || adsFreeRewardsRuntimeGuardEnabled) {
         val rc = nativeShow.implementation?.registerCount ?: 0
         if (rc >= 7) {
             nativeShow.addInstructions(0, guardedInstantReward(fireRewardedAdCallbacks(), "morphe_native_max_original"))
@@ -480,14 +505,14 @@ private fun BytecodePatchContext.applyNativeMaxStrategy(logger: Logger, useMax: 
 }
 
 private fun BytecodePatchContext.applyAdMobRewardedStrategy(logger: Logger, useMax: Boolean, instantReward: Boolean?) {
-    if (!useMax || instantReward != true) return
+    if (!useMax || (instantReward != true && !adsFreeRewardsRuntimeGuardEnabled)) return
     // AdMob RewardedAd is from GMS (not in app dex), so patch call sites instead of definition
     var patchedCallSites = 0
     classDefForEach { classDef ->
         val tl = classDef.type.lowercase()
         if (tl.contains("okhttp") || tl.contains("androidx") || tl.contains("com/google/android/gms/ads/rewarded")) return@classDefForEach
         val matches = classDef.methods.mapNotNull { method ->
-            val instructionMatches = mutableListOf<Pair<Int, Int>>()
+            val instructionMatches = mutableListOf<Triple<Int, Int, String>>()
             method.implementation?.instructions?.forEachIndexed { index, insn ->
                 val ref = (insn as? com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction)?.reference as? com.android.tools.smali.dexlib2.iface.reference.MethodReference
                     ?: return@forEachIndexed
@@ -509,7 +534,14 @@ private fun BytecodePatchContext.applyAdMobRewardedStrategy(logger: Logger, useM
                         }
                         else -> return@forEachIndexed
                     }
-                instructionMatches += index to listenerRegister
+                    val originalInvoke = when (insn) {
+                        is com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction35c ->
+                            "invoke-virtual {v${insn.registerC}, v${insn.registerD}, v${insn.registerE}}, Lcom/google/android/gms/ads/rewarded/RewardedAd;->show(Landroid/app/Activity;Lcom/google/android/gms/ads/OnUserEarnedRewardListener;)V"
+                        is com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction3rc ->
+                            "invoke-virtual/range {v${insn.startRegister} .. v${insn.startRegister + 2}}, Lcom/google/android/gms/ads/rewarded/RewardedAd;->show(Landroid/app/Activity;Lcom/google/android/gms/ads/OnUserEarnedRewardListener;)V"
+                        else -> return@forEachIndexed
+                    }
+                    instructionMatches += Triple(index, listenerRegister, originalInvoke)
             }
             if (instructionMatches.isEmpty()) null else method to instructionMatches
         }
@@ -521,23 +553,26 @@ private fun BytecodePatchContext.applyAdMobRewardedStrategy(logger: Logger, useM
                     it.returnType == immutableMethod.returnType &&
                     it.parameterTypes == immutableMethod.parameterTypes
             } ?: return@forEach
-            instructionMatches.asReversed().forEach { (index, listenerReg) ->
+            instructionMatches.asReversed().forEach { (index, listenerReg, originalInvoke) ->
                 // Found call site: RewardedAd.show(Activity, OnUserEarnedRewardListener)
-                // Replace it with direct reward: if p2 != null, p2.onUserEarnedReward(null)
+                // Replace it with a conditional reward callback or the original show call.
                 try {
-                    method.addInstructions(index, """
+                    method.replaceInstruction(index, """
                         invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldGrantReward()Z
                         move-result v0
-                        if-eqz v0, :morphe_admob_skip_$index
-                        if-eqz v$listenerReg, :morphe_admob_skip_$index
+                        if-eqz v0, :morphe_admob_check_skip_$index
+                        if-eqz v$listenerReg, :morphe_admob_check_skip_$index
                         const/4 v0, 0x0
                         invoke-interface {v$listenerReg, v0}, Lcom/google/android/gms/ads/OnUserEarnedRewardListener;->onUserEarnedReward(Lcom/google/android/gms/ads/rewarded/RewardItem;)V
-                        :morphe_admob_skip_$index
+                        :morphe_admob_check_skip_$index
+                        invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldSkipRewarded()Z
+                        move-result v0
+                        if-eqz v0, :morphe_admob_original_$index
+                        goto :morphe_admob_done_$index
+                        :morphe_admob_original_$index
+                        $originalInvoke
+                        :morphe_admob_done_$index
                     """.trimIndent())
-                    // Keep original invoke as well? Actually we want to skip the ad, so we should nop the original invoke
-                    // Instead, we just inserted reward before, and let original show still run  -  it will show ad but also give reward instantly
-                    // To fully skip ad, we could nop the invoke, but that may break flow; for now we give instant reward plus still show ad (user sees ad but also gets reward)
-                    // For Ringdale, the ad is via MAX mediation, not direct, so this call site may not be the primary  -  but patching it still gives instant reward
                     patchedCallSites++
                 } catch (_: Exception) {}
             }
@@ -563,7 +598,7 @@ private fun BytecodePatchContext.applyIronSourceBridgeStrategy(logger: Logger, u
     if (!useIronSource || bridgeReady == null || bridgeShow == null) return false
     logger.info("Ads Free Rewards: IronSource patch succeeded")
     bridgeReady.addInstructions(0, guardedFakeAvailability("morphe_ironsource_bridge_ready_original"))
-    if (instantReward == true) {
+    if (instantReward == true || adsFreeRewardsRuntimeGuardEnabled) {
         bridgeShow.addInstructions(0, guardedInstantReward("""
             iget-object v0, p0, Lcom/ironsource/Ya;->k:Lcom/ironsource/Za;
             if-eqz v0, :morphe_ads_free_rewards_done
@@ -586,7 +621,7 @@ private fun BytecodePatchContext.applyIronSourceBridgeStrategy(logger: Logger, u
 
 private fun BytecodePatchContext.applyUnityAdsStrategy(logger: Logger, useUnityAds: Boolean, instantReward: Boolean?) {
     val adsShow = UnityRewardedAdShowFingerprint.methodOrNull ?: return
-    if (!useUnityAds || instantReward != true) return
+    if (!useUnityAds || (instantReward != true && !adsFreeRewardsRuntimeGuardEnabled)) return
     adsShow.addInstructions(0, guardedInstantReward("""
         invoke-interface {p3, p0}, Lcom/unity3d/ads/RewardedShowListener;->onRewarded(Lcom/unity3d/ads/RewardedAd;)V
         invoke-interface {p3, p0}, Lcom/unity3d/ads/ShowListener;->onStarted(Ljava/lang/Object;)V
@@ -598,7 +633,7 @@ private fun BytecodePatchContext.applyUnityAdsStrategy(logger: Logger, useUnityA
 }
 
 private fun BytecodePatchContext.applyUnityAdsV4Strategy(logger: Logger, useUnityAds: Boolean, instantReward: Boolean?) {
-    if (!useUnityAds || instantReward != true) return
+    if (!useUnityAds || (instantReward != true && !adsFreeRewardsRuntimeGuardEnabled)) return
     val v4Show3 = UnityAdsV4Show3ArgFingerprint.methodOrNull
     if (v4Show3 != null) {
         v4Show3.addInstructions(0, guardedInstantReward("""
