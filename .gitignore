@@ -137,3 +137,10 @@ testing/
 
 # Local Codex project skills and configuration
 .codex/
+
+# Local Serena project data and GitHub skills
+.serena/
+.github/skills/
+
+# Generated patch build output
+patches/bin/
