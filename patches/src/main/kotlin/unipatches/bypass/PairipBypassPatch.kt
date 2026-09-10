@@ -22,6 +22,12 @@ import helpers.manifest.NS_ANDROID
 import helpers.manifest.applicationOrNull
 import helpers.startup.StartupHooks
 
+private data class PairipCallerKey(
+    val name: String,
+    val returnType: String,
+    val parameterTypes: List<String>,
+)
+
 private fun ResourcePatchContext.discoverPairipAppClass(logger: Logger): String? {
     val dir = try {
         get("AndroidManifest.xml", false).parentFile
@@ -757,7 +763,15 @@ val pairipBypassPatch = bytecodePatch(
             isSelected(pairipStartupLauncherLaunch, risk = "high") ||
                     isSelected(pairipStartupLauncherPairip, risk = "high")
         val applyLicenseClientV3Activity = isSelected(pairipLicenseClientV3OnActivityCreate, risk = "high")
-        val applyVmCallSiteChecks = isSelected(vmCallSiteChecks, risk = "high")
+        val vmCallSiteOptionSelected = isSelected(vmCallSiteChecks, risk = "high")
+        val vmRunnerAvailable = PairipVMRunnerInvokeFingerprint.methodOrNull != null
+        val pairipRuntimeDetected = detectedGroups["PairIP runtime"] == true
+        val applyVmCallSiteChecks = vmCallSiteOptionSelected && vmRunnerAvailable && pairipRuntimeDetected
+        if (vmCallSiteOptionSelected && !vmRunnerAvailable) {
+            logger.info("Skipped external VMRunner call-site scan: PairIP VMRunner.invoke was not found")
+        } else if (vmCallSiteOptionSelected && !pairipRuntimeDetected) {
+            logger.info("Skipped external VMRunner call-site scan: PairIP runtime group was not detected")
+        }
         var repeatedCheckReadApplied = false
 
         if (applyLocalInstallerChecks) {
@@ -1242,19 +1256,23 @@ val pairipBypassPatch = bytecodePatch(
             classDefForEach { classDef ->
                 if (classDef.type.startsWith("Lcom/pairip/")) return@classDefForEach
 
-                val callers = classDef.methods.filter { method ->
-                    method.implementation?.instructions?.any { instruction ->
+                val callers = classDef.methods.mapNotNull { method ->
+                    val implementation = method.implementation ?: return@mapNotNull null
+                    val hasVmRunnerCall = implementation.instructions.any { instruction ->
                         val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference
                         reference?.definingClass == "Lcom/pairip/VMRunner;" &&
-                                reference.name == "invoke"
-                    } == true
+                            reference.name == "invoke"
+                    }
+                    if (!hasVmRunnerCall) return@mapNotNull null
+                    PairipCallerKey(method.name, method.returnType, method.parameterTypes.map { it.toString() })
                 }
                 if (callers.isEmpty()) return@classDefForEach
 
                 val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
                 callers.forEach { caller ->
                     mutableClass.methods.firstOrNull {
-                        it.name == caller.name && it.returnType == caller.returnType
+                        it.name == caller.name && it.returnType == caller.returnType &&
+                            it.parameterTypes.map { parameter -> parameter.toString() } == caller.parameterTypes
                     }?.let {
                         // A caller's return value may be used by the app. Only
                         // short-circuit void callers here; emitting return-void
