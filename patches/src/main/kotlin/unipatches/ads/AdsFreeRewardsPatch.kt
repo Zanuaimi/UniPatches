@@ -10,6 +10,20 @@ import java.util.logging.Logger
 
 internal var adsFreeRewardsRuntimeGuardEnabled = false
 
+internal data class AdsSdkCoverage(
+    val max: Boolean = true,
+    val adMob: Boolean = true,
+    val unity: Boolean = true,
+    val ironSource: Boolean = true,
+    val appLovin: Boolean = true,
+    val vungle: Boolean = true,
+    val meta: Boolean = true,
+    val pangle: Boolean = true,
+    val huawei: Boolean = true,
+    val yandex: Boolean = true,
+    val other: Boolean = true,
+)
+
 private fun guardedPolicyBlock(policyMethod: String, instructions: String, originalLabel: String): String {
     if (!adsFreeRewardsRuntimeGuardEnabled) return instructions
     return """
@@ -78,7 +92,12 @@ private fun guardedFakeAvailability(originalLabel: String): String {
  * the gates to return true makes the game proceed to show(), letting the
  * reward flow grant without a real ad.
  */
-internal fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStrategy: String?, runtimePolicy: Boolean = false): Int {
+internal fun BytecodePatchContext.forceAdAvailability(
+    logger: Logger,
+    rewardStrategy: String?,
+    runtimePolicy: Boolean = false,
+    sdkCoverage: AdsSdkCoverage = AdsSdkCoverage(),
+): Int {
     var patched = 0
     fun patchIsReady(label: String, fingerprint: app.morphe.patcher.Fingerprint) {
         val method = fingerprint.methodOrNull ?: return
@@ -115,11 +134,11 @@ internal fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStra
     }
 
     val auto = rewardStrategy == "auto"
-    val useMax = auto || rewardStrategy == "max"
-    val useUnity = auto || rewardStrategy == "unityAds"
-    val useIronSource = auto || rewardStrategy == "ironSource"
-    val useRustore = auto || rewardStrategy == "rustore"
-    val useHuawei = auto || rewardStrategy == "huawei"
+    val useMax = sdkCoverage.max && (auto || rewardStrategy == "max")
+    val useUnity = sdkCoverage.unity && (auto || rewardStrategy == "unityAds")
+    val useIronSource = sdkCoverage.ironSource && (auto || rewardStrategy == "ironSource")
+    val useRustore = sdkCoverage.yandex && (auto || rewardStrategy == "rustore")
+    val useHuawei = sdkCoverage.huawei && (auto || rewardStrategy == "huawei")
 
     if (useUnity) {
         patchIsReady("Unity Ads Advertisement.isReady()", UnityAdsAdvertisementIsReadyFingerprint)
@@ -143,14 +162,19 @@ internal fun BytecodePatchContext.forceAdAvailability(logger: Logger, rewardStra
     return patched
 }
 
-private fun BytecodePatchContext.applyAdsFreeRewardsV1190(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1190(
+    logger: Logger,
+    rewardStrategy: String?,
+    instantReward: Boolean?,
+    sdkCoverage: AdsSdkCoverage,
+) {
     val strategy = rewardStrategy
     val auto = strategy == "auto"
-    val useMax = strategy == "auto" || strategy == "max"
-    val useUnityAds = strategy == "auto" || strategy == "unityAds"
-    val useIronSource = strategy == "auto" || strategy == "ironSource"
-    val useRustore = strategy == "auto" || strategy == "rustore"
-    val useHuawei = strategy == "auto" || strategy == "huawei"
+    val useMax = sdkCoverage.max && (strategy == "auto" || strategy == "max")
+    val useUnityAds = sdkCoverage.unity && (strategy == "auto" || strategy == "unityAds")
+    val useIronSource = sdkCoverage.ironSource && (strategy == "auto" || strategy == "ironSource")
+    val useRustore = sdkCoverage.yandex && (strategy == "auto" || strategy == "rustore")
+    val useHuawei = sdkCoverage.huawei && (strategy == "auto" || strategy == "huawei")
 
     logger.info("Ads Free Rewards: strategy=$strategy instantReward=$instantReward")
 
@@ -217,11 +241,11 @@ private fun BytecodePatchContext.applyAdsFreeRewardsV1190(logger: Logger, reward
     }
     applyMaxUnityStrategy(logger, useMax, instantReward)
     applyNativeMaxStrategy(logger, useMax, instantReward)
-    applyInMobiRewardedStrategy(logger, auto, instantReward)
+    applyInMobiRewardedStrategy(logger, auto && sdkCoverage.other, instantReward)
     applyIronSourceAdsStrategy(logger, useIronSource, instantReward)
     applyIronSourceAdsWrapperStrategy(logger, useIronSource, instantReward)
     applyMadsStrategy(logger, useIronSource, instantReward)
-    applyAdMobRewardedStrategy(logger, useMax, instantReward)
+    applyAdMobRewardedStrategy(logger, sdkCoverage.adMob, instantReward)
     applyLevelPlayStrategy(logger, useIronSource)
     applyIronSourceBridgeStrategy(logger, useIronSource, instantReward)
     applyUnityAdsStrategy(logger, useUnityAds, instantReward)
@@ -504,8 +528,8 @@ private fun BytecodePatchContext.applyNativeMaxStrategy(logger: Logger, useMax: 
     }
 }
 
-private fun BytecodePatchContext.applyAdMobRewardedStrategy(logger: Logger, useMax: Boolean, instantReward: Boolean?) {
-    if (!useMax || (instantReward != true && !adsFreeRewardsRuntimeGuardEnabled)) return
+private fun BytecodePatchContext.applyAdMobRewardedStrategy(logger: Logger, useAdMob: Boolean, instantReward: Boolean?) {
+    if (!useAdMob || (instantReward != true && !adsFreeRewardsRuntimeGuardEnabled)) return
     // AdMob RewardedAd is from GMS (not in app dex), so patch call sites instead of definition
     var patchedCallSites = 0
     classDefForEach { classDef ->
@@ -659,49 +683,49 @@ private fun BytecodePatchContext.applyUnityAdsV4Strategy(logger: Logger, useUnit
 // Historical snapshots - each version is a frozen copy.
 // Newer entries delegate to the current implementation for now; future
 // bundle releases can diverge them with version-specific fixes.
-private fun BytecodePatchContext.applyAdsFreeRewardsV1200(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1200(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.20.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
-private fun BytecodePatchContext.applyAdsFreeRewardsV1210(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1210(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.21.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
-private fun BytecodePatchContext.applyAdsFreeRewardsV1220(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1220(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.22.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
-private fun BytecodePatchContext.applyAdsFreeRewardsV1300(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1300(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.30.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
-private fun BytecodePatchContext.applyAdsFreeRewardsV1310(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1310(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.31.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
-private fun BytecodePatchContext.applyAdsFreeRewardsV1320(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1320(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.32.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
-private fun BytecodePatchContext.applyAdsFreeRewardsV1330(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1330(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.33.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
-private fun BytecodePatchContext.applyAdsFreeRewardsV1340(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1340(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.34.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
-private fun BytecodePatchContext.applyAdsFreeRewardsV1380(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1380(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.38.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
-private fun BytecodePatchContext.applyAdsFreeRewardsV1400(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1400(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.40.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
-private fun BytecodePatchContext.applyAdsFreeRewardsV1410(logger: Logger, rewardStrategy: String?, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyAdsFreeRewardsV1410(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
     logger.info("Ads Free Rewards v1.41.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward)
+    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
 }
 
 /** Latest stable strategy shared by Control App Ads. */
@@ -709,4 +733,5 @@ internal fun BytecodePatchContext.applyLatestAdsFreeRewards(
     logger: Logger,
     rewardStrategy: String?,
     instantReward: Boolean?,
-) = applyAdsFreeRewardsV1320(logger, rewardStrategy, instantReward)
+    sdkCoverage: AdsSdkCoverage = AdsSdkCoverage(),
+) = applyAdsFreeRewardsV1320(logger, rewardStrategy, instantReward, sdkCoverage)

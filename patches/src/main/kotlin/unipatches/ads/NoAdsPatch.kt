@@ -615,50 +615,110 @@ val controlAppAdsPatch = bytecodePatch(
         val runtimeRewardsEnabled = runtimeHooksEnabled && runtimeRewardsModule == true
         runtimeHostsEnabled = runtimeHooksEnabled && runtimeHostsModule == true
         adsFreeRewardsRuntimeGuardEnabled = runtimeRewardsEnabled
+        val sdkCoverage = AdsSdkCoverage(
+            max = sdkMax == true,
+            adMob = sdkAdMob == true,
+            unity = sdkUnity == true,
+            ironSource = sdkIronSource == true,
+            appLovin = sdkAppLovin == true,
+            vungle = sdkVungle == true,
+            meta = sdkMeta == true,
+            pangle = sdkPangle == true,
+            huawei = sdkHuawei == true,
+            yandex = sdkYandex == true,
+            other = sdkOther == true,
+        )
         runtimeCategoryByFingerprint = if (runtimeHooksEnabled) buildMap {
-            fun add(category: String, vararg fingerprints: Fingerprint) {
+            fun add(enabled: Boolean, category: String, vararg fingerprints: Fingerprint) {
+                if (!enabled) return
                 fingerprints.forEach { put(it, category) }
             }
-            add("interstitials", ShowInterstitialFingerprint, MaxInterstitialAdShowAdFingerprint,
+            add(sdkCoverage.max, "interstitials", ShowInterstitialFingerprint, MaxInterstitialAdShowAdFingerprint,
+                MaxInterstitialAdIsReadyFingerprint,
+            )
+            add(sdkCoverage.adMob, "interstitials",
                 AdMobInterstitialShowFingerprint, AdMobLegacyInterstitialShowFingerprint,
+            )
+            add(sdkCoverage.unity, "interstitials",
                 UnityAdsV3Show2ArgFingerprint, UnityAdsV3ShowOptionsFingerprint,
+                UnityAdsV4Show3ArgFingerprint, UnityAdsV4Show4ArgFingerprint,
+            )
+            add(sdkCoverage.ironSource, "interstitials",
                 IronSourceShowDemandOnlyInterstitialFingerprint, IronSourceShowInterstitialFingerprint,
+                IronSourceIsInterstitialReadyFingerprint,
+                IronSourceShowInterstitialActivityFingerprint, IronSourceShowInterstitialActivityPlacementFingerprint,
+                IronSourceShowInterstitialPlacementFingerprint,
+            )
+            add(sdkCoverage.appLovin, "interstitials",
                 AppLovinInterstitialDialogShowFingerprint, AppLovinInterstitialDialogShowAndRenderFingerprint,
+                AppLovinAdViewLoadNextAdFingerprint,
+            )
+            add(sdkCoverage.meta, "interstitials",
                 FacebookInterstitialAdShowFingerprint, FacebookInterstitialAdShowConfigFingerprint,
-                PangleInterstitialShowFingerprint, VungleInterstitialShowFingerprint,
-                HuaweiInterstitialAdShowFingerprint, YandexInterstitialAdLoadFingerprint,
+            )
+            add(sdkCoverage.pangle, "interstitials", PangleInterstitialShowFingerprint)
+            add(sdkCoverage.vungle, "interstitials", VungleInterstitialShowFingerprint)
+            add(sdkCoverage.huawei, "interstitials", HuaweiInterstitialAdShowFingerprint)
+            add(sdkCoverage.yandex, "interstitials",
+                YandexInterstitialAdLoadFingerprint,
                 YandexUnityInterstitialWrapperShowFingerprint, MyTargetBaseInterstitialShowFingerprint,
+            )
+            add(sdkCoverage.other, "interstitials",
                 StartAppAdShowFingerprint, MoPubInterstitialShowFingerprint, ChartboostShowInterstitialFingerprint,
                 InMobiInterstitialShowFingerprint, MintegralInterstitialShowFingerprint,
-                IronSourceShowInterstitialActivityFingerprint, IronSourceShowInterstitialActivityPlacementFingerprint,
-                IronSourceShowInterstitialPlacementFingerprint)
-            add("appOpen", ShowAppOpenAdFingerprint, MaxAppOpenAdShowAdFingerprint,
-                AdMobAppOpenShowFingerprint, AdMobAppOpenLoadFingerprint, PangleAppOpenShowFingerprint,
-                HuaweiSplashAdLoadFingerprint)
-            add("banners", ShowBannerFingerprint, StartBannerAutoRefreshFingerprint,
-                MaxAdViewStartAutoRefreshFingerprint, HuaweiBannerAdLoadFingerprint)
-            add("mrec", ShowMRecFingerprint, StartMRecAutoRefreshFingerprint)
-            add("rewarded", ShowRewardedAdFingerprint, MaxRewardedAdShowAdFingerprint,
+            )
+            add(sdkCoverage.max, "appOpen", ShowAppOpenAdFingerprint, MaxAppOpenAdShowAdFingerprint,
+                MaxAppOpenAdIsReadyFingerprint,
+            )
+            add(sdkCoverage.adMob, "appOpen",
+                AdMobAppOpenShowFingerprint, AdMobAppOpenLoadFingerprint,
+            )
+            add(sdkCoverage.pangle, "appOpen", PangleAppOpenShowFingerprint)
+            add(sdkCoverage.huawei, "appOpen", HuaweiSplashAdLoadFingerprint)
+            add(sdkCoverage.max, "banners", ShowBannerFingerprint, StartBannerAutoRefreshFingerprint,
+                MaxAdViewStartAutoRefreshFingerprint,
+            )
+            add(sdkCoverage.huawei, "banners", HuaweiBannerAdLoadFingerprint)
+            add(sdkCoverage.appLovin, "banners", AppLovinAdViewLoadNextAdFingerprint)
+            add(sdkCoverage.max, "mrec", ShowMRecFingerprint, StartMRecAutoRefreshFingerprint)
+            add(sdkCoverage.appLovin, "mrec", StartMRecAutoRefreshFingerprint)
+            add(sdkCoverage.max, "rewarded", ShowRewardedAdFingerprint, MaxRewardedAdShowAdFingerprint,
+                MaxRewardedAdIsReadyFingerprint, IsRewardedAdReadyFingerprint,
+            )
+            add(sdkCoverage.adMob, "rewarded",
                 AdMobRewardedShowFingerprint, AdMobLegacyRewardedVideoShowFingerprint,
-                UnityRewardedAdShowFingerprint, IronSourceShowDemandOnlyRewardedVideoFingerprint,
-                IronSourceShowRewardedVideoFingerprint, AppLovinIncentivizedShow4ListenerFingerprint,
-                AppLovinIncentivizedShow5ListenerFingerprint, FacebookRewardedVideoAdShowFingerprint,
-                FacebookRewardedVideoAdShowConfigFingerprint, FacebookRewardedInterstitialShowFingerprint,
-                FacebookRewardedInterstitialShowConfigFingerprint, PangleRewardedShowFingerprint,
-                VungleRewardedShowFingerprint, YandexRewardedAdLoadFingerprint, YandexUnityRewardedWrapperShowFingerprint,
-                HuaweiRewardAdIsLoadedFingerprint, HuaweiRewardAdShowFingerprint,
-                UnityAdsAdvertisementIsReadyFingerprint, UnityAdsAdvertisementIsReadyPlacementFingerprint,
-                UnityAdsSdkIsReadyFingerprint, IronSourceIsRewardedVideoAvailableFingerprint,
-                IsRewardedAdReadyFingerprint, MaxRewardedAdIsReadyFingerprint, LevelPlayRewardedAdIsReadyFingerprint,
+            )
+            add(sdkCoverage.unity, "rewarded",
+                UnityRewardedAdShowFingerprint, UnityAdsAdvertisementIsReadyFingerprint,
+                UnityAdsAdvertisementIsReadyPlacementFingerprint, UnityAdsSdkIsReadyFingerprint,
+            )
+            add(sdkCoverage.ironSource, "rewarded",
+                IronSourceShowDemandOnlyRewardedVideoFingerprint, IronSourceShowRewardedVideoFingerprint,
+                IronSourceIsRewardedVideoAvailableFingerprint, LevelPlayRewardedAdIsReadyFingerprint,
                 IronSourceUnityRewardedAdIsReadyFingerprint,
                 IronSourceShowRewardedVideoActivityFingerprint, IronSourceShowRewardedVideoActivityPlacementFingerprint,
-                IronSourceShowRewardedVideoPlacementFingerprint)
-            add("interstitials", IronSourceIsInterstitialReadyFingerprint, MaxInterstitialAdIsReadyFingerprint)
-            add("appOpen", MaxAppOpenAdIsReadyFingerprint)
-            add("banners", AppLovinAdViewLoadNextAdFingerprint)
-            add("shared", UnityAdsV4Show3ArgFingerprint, UnityAdsV4Show4ArgFingerprint, VungleBaseFullscreenAdLoadFingerprint)
-            add("native", PangleNativeShowFingerprint, AdMobNativeAdViewFingerprint, AdMobAdLoaderLoadFingerprint,
-                HuaweiNativeAdLoadFingerprint)
+                IronSourceShowRewardedVideoPlacementFingerprint,
+            )
+            add(sdkCoverage.appLovin, "rewarded",
+                AppLovinIncentivizedShow4ListenerFingerprint, AppLovinIncentivizedShow5ListenerFingerprint,
+            )
+            add(sdkCoverage.meta, "rewarded",
+                FacebookRewardedVideoAdShowFingerprint, FacebookRewardedVideoAdShowConfigFingerprint,
+                FacebookRewardedInterstitialShowFingerprint, FacebookRewardedInterstitialShowConfigFingerprint,
+            )
+            add(sdkCoverage.pangle, "rewarded", PangleRewardedShowFingerprint)
+            add(sdkCoverage.vungle, "rewarded", VungleRewardedShowFingerprint)
+            add(sdkCoverage.yandex, "rewarded",
+                YandexRewardedAdLoadFingerprint, YandexUnityRewardedWrapperShowFingerprint,
+            )
+            add(sdkCoverage.huawei, "rewarded", HuaweiRewardAdIsLoadedFingerprint, HuaweiRewardAdShowFingerprint)
+            add(sdkCoverage.other, "rewarded", InMobiRewardedShowFingerprint)
+            add(sdkCoverage.ironSource, "shared", IronSourceLevelPlayFullScreenShowAdFingerprint)
+            add(sdkCoverage.unity, "shared", UnityAdsV4Show3ArgFingerprint, UnityAdsV4Show4ArgFingerprint)
+            add(sdkCoverage.vungle, "shared", VungleBaseFullscreenAdLoadFingerprint)
+            add(sdkCoverage.pangle, "native", PangleNativeShowFingerprint)
+            add(sdkCoverage.adMob, "native", AdMobNativeAdViewFingerprint, AdMobAdLoaderLoadFingerprint)
+            add(sdkCoverage.huawei, "native", HuaweiNativeAdLoadFingerprint)
         }.filter { (_, category) ->
             (category == "rewarded" || category == "shared") && runtimeRewardsEnabled ||
                 runtimeBlockAdsModule == true
@@ -1070,7 +1130,7 @@ val controlAppAdsPatch = bytecodePatch(
         }
 
         if (adsFreeRewards == true || runtimeRewardsEnabled) {
-            applyLatestAdsFreeRewards(detectionLogger, rewardStrategy, instantReward)
+            applyLatestAdsFreeRewards(detectionLogger, rewardStrategy, instantReward, sdkCoverage)
         }
         logHeap(detectionLogger, "after-method-patches")
         // Availability needs a guarded method even when the initial runtime value is false;
@@ -1080,6 +1140,7 @@ val controlAppAdsPatch = bytecodePatch(
                 detectionLogger,
                 rewardStrategy,
                 runtimeRewardsEnabled,
+                sdkCoverage,
             )
         }
 
