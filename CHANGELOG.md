@@ -1,3 +1,10 @@
+## [1.13.0](https://github.com/Zanuaimi/UniPatches/compare/v1.12.0...v1.13.0) (2026-09-10)
+
+### ✨ New Features
+
+* **overlay:** extend runtime configuration and icon parsing ([2ac99b5](https://github.com/Zanuaimi/UniPatches/commit/2ac99b5a8d343bf4f0046e8da504e73cb80d1985))
+* **overlay:** refine built-in preset visuals ([cb1cf3f](https://github.com/Zanuaimi/UniPatches/commit/cb1cf3f453e36db18239444d1a687842ae1b698d))
+
 ## [1.12.0](https://github.com/Zanuaimi/UniPatches/compare/v1.11.1...v1.12.0) (2026-09-09)
 
 ### ✨ New Features
