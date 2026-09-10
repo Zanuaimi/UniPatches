@@ -56,18 +56,23 @@ final class OverlayViews {
 
     /** Builds the legacy icon background while keeping its gradient and outline independent. */
     static Drawable gradientBackground(int first, int second, float angle, int stroke, int strokeWidth, boolean circle) {
-        return new GradientBackground(first, second, angle, stroke, strokeWidth, circle, true);
+        return gradientBackground(first, second, angle, stroke, strokeWidth, circle ? "circle" : "squircle");
+    }
+
+    static Drawable gradientBackground(int first, int second, float angle, int stroke, int strokeWidth,
+                                       String buttonShape) {
+        return new GradientBackground(first, second, angle, stroke, strokeWidth, buttonShape, true);
     }
 
     static Drawable icon(int background1, int background2, float backgroundAngle, boolean backgroundGradient,
                          int outline1, int outline2, float outlineAngle, boolean outlineGradient,
-                         int outlineWidth, boolean circle, String style, String shape,
+                         int outlineWidth, String buttonShape, String style, String shape,
                          int shapeColor1, int shapeColor2, boolean shapeGradient, float shapeAngle,
                          float shapeStrokeWidth, float shapeScale, boolean highlight, boolean shadow,
                          String backgroundStyle, int backgroundColor3, int backgroundColor4,
                          String[] iconParts) {
         return new IconDrawable(background1, background2, backgroundAngle, backgroundGradient,
-                outline1, outline2, outlineAngle, outlineGradient, outlineWidth, circle,
+                outline1, outline2, outlineAngle, outlineGradient, outlineWidth, buttonShape,
                 style, shape, shapeColor1, shapeColor2, shapeGradient, shapeAngle,
                 shapeStrokeWidth, shapeScale, highlight, shadow, backgroundStyle, backgroundColor3, backgroundColor4,
                 iconParts);
@@ -85,7 +90,8 @@ final class OverlayViews {
     static Drawable solidOrGradientBackground(int first, int second, float angle, int stroke,
                                                int strokeWidth, boolean rounded, boolean gradient) {
         if (!gradient) return background(first, stroke, false, strokeWidth, rounded);
-        return new GradientBackground(first, second, angle, stroke, strokeWidth, false, rounded);
+        return new GradientBackground(first, second, angle, stroke, strokeWidth,
+            rounded ? "squircle" : "square", rounded);
     }
 
     static AnimatedOutline animatedOutline(int fillColor, int first, int second, boolean vertical, boolean rainbow,
@@ -186,18 +192,20 @@ final class OverlayViews {
         private final float angle;
         private final int stroke;
         private final int strokeWidth;
-        private final boolean circle;
+        private final String buttonShape;
         private final boolean rounded;
         private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-        GradientBackground(int first, int second, float angle, int stroke, int strokeWidth, boolean circle, boolean rounded) {
+        GradientBackground(int first, int second, float angle, int stroke, int strokeWidth,
+                   String buttonShape, boolean rounded) {
             this.first = first;
             this.second = second;
             this.angle = angle;
             this.stroke = stroke;
             this.strokeWidth = Math.max(1, strokeWidth);
-            this.circle = circle;
+                this.buttonShape = "square".equals(buttonShape) || "squircle".equals(buttonShape)
+                    ? buttonShape : "circle";
             this.rounded = rounded;
             border.setStyle(Paint.Style.STROKE);
             border.setStrokeWidth(this.strokeWidth);
@@ -216,7 +224,9 @@ final class OverlayViews {
                     cx - dx * length / 2f, cy - dy * length / 2f,
                     cx + dx * length / 2f, cy + dy * length / 2f,
                     first, second, Shader.TileMode.CLAMP));
-            float radius = rounded ? (circle ? Math.min(bounds.width(), bounds.height()) / 2f : 24f) : 0f;
+                float radius = !rounded || "square".equals(buttonShape) ? 0f
+                    : ("circle".equals(buttonShape)
+                    ? Math.min(bounds.width(), bounds.height()) / 2f : 24f);
             canvas.drawRoundRect(bounds, radius, radius, fill);
             canvas.drawRoundRect(bounds, radius, radius, border);
         }
@@ -236,17 +246,18 @@ final class OverlayViews {
 
     /** Original vector-like legacy icon renderer used by configurable icon styles. */
     private static final class IconDrawable extends Drawable {
+        private static final float PREVIEW_BODY_SIZE = 376f;
         private final int background1, background2, outline1, outline2, shapeColor1, shapeColor2;
         private final float backgroundAngle, outlineAngle, shapeAngle, shapeStrokeWidth, shapeScale;
-        private final boolean backgroundGradient, outlineGradient, circle, shapeGradient, highlight, shadow;
-        private final String style, shape, backgroundStyle;
+        private final boolean backgroundGradient, outlineGradient, shapeGradient, highlight, shadow;
+        private final String style, shape, buttonShape, backgroundStyle;
         private final int backgroundColor3, backgroundColor4;
         private final String[] iconParts;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         IconDrawable(int background1, int background2, float backgroundAngle, boolean backgroundGradient,
                      int outline1, int outline2, float outlineAngle, boolean outlineGradient,
-                     int outlineWidth, boolean circle, String style, String shape,
+                     int outlineWidth, String buttonShape, String style, String shape,
                      int shapeColor1, int shapeColor2, boolean shapeGradient, float shapeAngle,
                      float shapeStrokeWidth, float shapeScale, boolean highlight, boolean shadow,
                      String backgroundStyle, int backgroundColor3, int backgroundColor4,
@@ -272,7 +283,8 @@ final class OverlayViews {
             this.backgroundColor4 = backgroundColor4;
             this.iconParts = iconParts == null ? new String[0] : iconParts.clone();
             this.outlineWidth = Math.max(0, outlineWidth);
-            this.circle = circle;
+                this.buttonShape = "square".equals(buttonShape) || "squircle".equals(buttonShape)
+                    ? buttonShape : "circle";
             this.style = style == null ? "shape" : style;
             this.shape = shape == null ? "triangle" : shape;
         }
@@ -284,7 +296,9 @@ final class OverlayViews {
             float halfOutline = outlineWidth / 2f;
             RectF body = new RectF(bounds.left + halfOutline, bounds.top + halfOutline,
                     bounds.right - halfOutline, bounds.bottom - halfOutline);
-            float radius = circle ? Math.min(body.width(), body.height()) / 2f : 24f;
+                float radius = "circle".equals(buttonShape)
+                    ? Math.min(body.width(), body.height()) / 2f
+                    : ("squircle".equals(buttonShape) ? 24f : 0f);
             paint.setStyle(Paint.Style.FILL);
             paint.setShader(backgroundGradient ? linear(background1, background2, backgroundAngle, body) : null);
             paint.setColor(background1);
@@ -390,7 +404,7 @@ final class OverlayViews {
                 paint.setColor(part.color1);
                 paint.setShader("gradient".equals(part.fill)
                         ? linear(part.color1, part.color2, part.gradientAngle, area) : null);
-                drawPartShape(canvas, area, part);
+                drawPartShape(canvas, area, body, part);
                 canvas.restoreToCount(save);
             }
             paint.setAlpha(255);
@@ -402,11 +416,12 @@ final class OverlayViews {
             return true;
         }
 
-        private void drawPartShape(Canvas canvas, RectF area, IconPart part) {
+        private void drawPartShape(Canvas canvas, RectF area, RectF body, IconPart part) {
             String shape = part.shape;
             float width = area.width();
             float height = area.height();
-            float stroke = Math.max(1f, part.strokeWidth);
+            float stroke = Math.max(1f, part.strokeWidth
+                    * Math.min(body.width(), body.height()) / PREVIEW_BODY_SIZE);
             Path path = new Path();
             paint.setStrokeCap(Paint.Cap.ROUND);
             paint.setStrokeJoin(Paint.Join.ROUND);

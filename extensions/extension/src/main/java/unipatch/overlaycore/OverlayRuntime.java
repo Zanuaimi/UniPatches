@@ -517,7 +517,7 @@ public final class OverlayRuntime {
                     button.setText("");
                     button.setBackground(OverlayViews.gradientBackground(
                             config.buttonBackground, config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
-                            config.iconGradientAngle, Color.TRANSPARENT, 0, config.shape == 1));
+                            config.iconGradientAngle, Color.TRANSPARENT, 0, buttonShape()));
                 } else if ("parts".equals(config.iconStyle)) {
                     button.setText("");
                     button.setBackground(legacyIconDrawable());
@@ -531,7 +531,7 @@ public final class OverlayRuntime {
                             config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
                             config.iconGradientAngle,
                             config.iconOutline ? config.iconOutlineColor : Color.TRANSPARENT,
-                            config.iconOutline ? config.iconOutlineWidth : 0, config.shape == 1));
+                            config.iconOutline ? config.iconOutlineWidth : 0, buttonShape()));
                 }
             }
             button.setOnClickListener(v -> toggleMenu());
@@ -550,7 +550,7 @@ public final class OverlayRuntime {
                     config.iconOutlineGradientAngle,
                     config.iconOutline && config.iconOutlineGradient,
                     config.iconOutline ? dp(config.iconOutlineWidth) : 0,
-                    config.shape == 1,
+                    config.shape == 1 ? "circle" : (config.shape == 2 ? "squircle" : "square"),
                     config.iconStyle,
                     config.iconShape,
                     config.iconShapeColor1,
@@ -565,6 +565,10 @@ public final class OverlayRuntime {
                     config.iconBackgroundColor3,
                     config.iconBackgroundColor4,
                     config.iconParts);
+        }
+
+        private String buttonShape() {
+            return config.shape == 1 ? "circle" : (config.shape == 2 ? "squircle" : "square");
         }
 
         /** Decodes the image embedded by the patch; user-supplied paths are never needed at runtime. */
@@ -859,7 +863,7 @@ public final class OverlayRuntime {
                     icon.setText("");
                     icon.setBackground(OverlayViews.gradientBackground(
                             config.buttonBackground, config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
-                            config.iconGradientAngle, Color.TRANSPARENT, 0, config.shape == 1));
+                            config.iconGradientAngle, Color.TRANSPARENT, 0, buttonShape()));
                 } else if ("parts".equals(config.iconStyle)) {
                     icon.setText("");
                     icon.setBackground(legacyIconDrawable());
@@ -867,7 +871,7 @@ public final class OverlayRuntime {
                     icon.setBackground(OverlayViews.gradientBackground(
                             config.buttonBackground,
                             config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
-                            config.iconGradientAngle, Color.TRANSPARENT, 0, config.shape == 1));
+                            config.iconGradientAngle, Color.TRANSPARENT, 0, buttonShape()));
                 }
             }
             icon.setClickable(false);
@@ -1237,7 +1241,8 @@ public final class OverlayRuntime {
                 if (choices == null) choices = new String[0];
                 boolean[] values = module.settingsValues();
                 if (values == null) values = new boolean[0];
-                ScrollView scroll = new ScrollView(overlayContext);
+                BoundedScrollView scroll = new BoundedScrollView(overlayContext, settingsChoicesMaxHeight());
+                scroll.setFillViewport(false);
                 LinearLayout choicesLayout = new LinearLayout(overlayContext);
                 choicesLayout.setOrientation(LinearLayout.VERTICAL);
                 for (int i = 0; i < choices.length; i++) {
@@ -1250,9 +1255,7 @@ public final class OverlayRuntime {
                     choicesLayout.addView(check, new LinearLayout.LayoutParams(-1, -2));
                 }
                 scroll.addView(choicesLayout, new ScrollView.LayoutParams(-1, -2));
-                // The card is wrap-content, so a weighted zero-height child can measure as zero
-                // on some OEM layouts. A bounded explicit height keeps long lists scrollable.
-                LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(-1, dp(260));
+                LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(-1, -2);
                 scrollParams.topMargin = dp(8);
                 card.addView(scroll, scrollParams);
                 card.setTag(choicesLayout);
@@ -1520,7 +1523,7 @@ public final class OverlayRuntime {
                     TextView view = (TextView) super.getView(position, convertView, parentView);
                     view.setTextColor(config.controlOutlineColor);
                     view.setTypeface(OverlayViews.typeface(config.menuTextFont, Typeface.NORMAL));
-                    view.setBackgroundColor(config.controlBackground);
+                    view.setBackgroundColor(config.background);
                     view.setPadding(dp(12), dp(8), dp(12), dp(8));
                     return view;
                 }
@@ -1528,7 +1531,7 @@ public final class OverlayRuntime {
                     TextView view = (TextView) super.getDropDownView(position, convertView, parentView);
                     view.setTextColor(config.controlOutlineColor);
                     view.setTypeface(OverlayViews.typeface(config.menuTextFont, Typeface.NORMAL));
-                    view.setBackgroundColor(config.controlBackground);
+                    view.setBackgroundColor(config.background);
                     view.setPadding(dp(12), dp(10), dp(12), dp(10));
                     return view;
                 }
@@ -1538,10 +1541,10 @@ public final class OverlayRuntime {
             // Keep the collapsed control and popup on a distinct control surface so Color 7
             // remains visible against the overlay menu background.
             spinner.setBackground(OverlayViews.themedControlBackground(
-                    config.controlBackground, config.controlOutlineColor, config.outlineWidth, config.controlTheme));
+                    config.background, config.controlOutlineColor, config.outlineWidth, config.controlTheme));
             if (android.os.Build.VERSION.SDK_INT >= 16) {
                 spinner.setPopupBackgroundDrawable(OverlayViews.themedControlBackground(
-                        config.controlBackground, config.controlOutlineColor, config.outlineWidth, config.controlTheme));
+                    config.background, config.controlOutlineColor, config.outlineWidth, config.controlTheme));
             }
             int current = remembered == null ? module.current(activity) : remembered;
             spinner.setSelection(current == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT ? 1
@@ -2117,6 +2120,11 @@ public final class OverlayRuntime {
                     return true;
                 default: return true;
             }
+        }
+
+        private int settingsChoicesMaxHeight() {
+            int displayHeight = activity.getResources().getDisplayMetrics().heightPixels;
+            return Math.max(dp(120), displayHeight - dp(220));
         }
 
         private int dp(int value) { return (int) (value * activity.getResources().getDisplayMetrics().density + .5f); }
