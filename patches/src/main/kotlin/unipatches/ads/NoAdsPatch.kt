@@ -279,7 +279,7 @@ private fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildca
                 val replacement = if (runtimeHooksEnabled) {
                     """
                     const-string v$register, "${escapeSmaliString(value)}"
-                    invoke-static {v$register}, $ADS_POLICY_CLASS->rewriteHost(Ljava/lang/String;)Ljava/lang/String;
+                    invoke-static/range {v$register .. v$register}, $ADS_POLICY_CLASS->rewriteHost(Ljava/lang/String;)Ljava/lang/String;
                     move-result-object v$register
                     """.trimIndent()
                 } else {
