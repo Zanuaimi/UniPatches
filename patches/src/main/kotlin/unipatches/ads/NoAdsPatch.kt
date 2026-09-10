@@ -297,7 +297,7 @@ private fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildca
 
 @Suppress("unused")
 val controlAppAdsPatch = bytecodePatch(
-    name = "Control App Ads Patch (Experimental, Enhanced)",
+    name = "Configure App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )",
     description = """
         A merged ad-control patch based on Nai64's No Ads and Ads Free Rewards patches, plus
         literal-host blocking inspired by Entree and Adobo. Block common ad formats, choose the
@@ -315,11 +315,13 @@ val controlAppAdsPatch = bytecodePatch(
         online and retried. PairIP Firebase cleanup/removal can disable Firebase-backed reward,
         sign-in, billing, and attribution flows, which this patch cannot restore.
 
-        Optional overlay integration is opt-in. To use it, patch Control App Ads together with
-        Universal Overlay or an app-specific overlay, enable “Overlay integration > Runtime policy”,
-        and enable one or more modules below it. The selected modules then appear under “Ad control
-        hook modules” in the overlay; their initial values copy this patch's settings. If no overlay
-        patch is selected, the normal static ad controls still work but there is no runtime menu.
+        This patch includes an optional overlay addon. To use the addon, patch Configure App Ads
+        together with Universal Overlay or an app-specific overlay, enable “Overlay integration >
+        Enable runtime controls”, and select one or more of its three overlay addon modules:
+        “Block Ads”, “Rewards without ads”, and “Block ad/tracking hosts”. The selected modules
+        appear under “Ad control hook modules” in the shared overlay, with initial values copied
+        from this patch's ad settings. If no overlay patch is selected, the normal static ad
+        controls still work but these runtime addon modules are not available.
         Runtime changes last for the current app process and affect only methods and literal hosts
         successfully instrumented by this patch. Its policy is attached to the selected overlay's
         own startup bridge, including a manual Activity override; it does not independently choose

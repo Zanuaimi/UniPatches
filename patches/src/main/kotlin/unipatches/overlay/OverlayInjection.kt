@@ -59,6 +59,30 @@ internal fun injectOverlayBridge(
             ),
         )
     }
+    OverlayPatchRunMarker.publish(context, owner, cloned)
+}
+
+/** Adds app-specific module selection to the bridge previously injected by Universal Overlay. */
+internal fun BytecodePatchContext.injectAppSpecificModules(
+    bridge: OverlayPatchRunMarker.Bridge,
+    profileId: String,
+    selectedModules: String,
+): Boolean {
+    val owner = mutableClassDefByOrNull(bridge.ownerType) ?: return false
+    val method = owner.methods.firstOrNull {
+        it.name == bridge.methodName && it.returnType == bridge.returnType &&
+            it.parameterTypes.map { parameter -> parameter.toString() } == bridge.parameterTypes
+    } ?: return false
+    val base = method.implementation?.registerCount ?: return false
+    val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters + 2)
+    cloned.addInstructionsWithLabels(0, """
+        const-string v$base, "${StartupHooks.escapeSmali(profileId)}"
+        const-string v${base + 1}, "${StartupHooks.escapeSmali(selectedModules)}"
+        invoke-static/range {v$base .. v${base + 1}}, $OVERLAY_RUNTIME_CLASS->configureAppSpecific(Ljava/lang/String;Ljava/lang/String;)V
+    """.trimIndent())
+    owner.methods.remove(method)
+    owner.methods.add(cloned)
+    return true
 }
 
 /** Adds a queued Ads runtime policy beside a bridge injected earlier in this same patching run. */
