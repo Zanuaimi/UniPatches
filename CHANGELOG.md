@@ -1,3 +1,9 @@
+## [1.14.1](https://github.com/Zanuaimi/UniPatches/compare/v1.14.0...v1.14.1) (2026-09-10)
+
+### 🐛 Bug Fixes
+
+* Update Zarchiver icon and update descriptions ([b7cc9b3](https://github.com/Zanuaimi/UniPatches/commit/b7cc9b33a3a106c0ac730dbe0d71362c81edb929))
+
 ## [1.14.0](https://github.com/Zanuaimi/UniPatches/compare/v1.13.0...v1.14.0) (2026-09-10)
 
 ### ✨ New Features
