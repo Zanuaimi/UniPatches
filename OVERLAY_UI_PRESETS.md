@@ -127,7 +127,7 @@ Exports use a versioned format:
 }
 ```
 
-The actual export uses schema version 5 and contains all supported UI and Advanced values. Title, description, repository
+The actual export uses schema version 6 and contains all supported UI and Advanced values. Title, description, repository
 button text, and repository button URL are intentionally absent, as are Modules and Settings to
 Modules values. Unknown fields are ignored, missing fields use the current manual values, and future
 schema versions are rejected safely instead of being applied partially.

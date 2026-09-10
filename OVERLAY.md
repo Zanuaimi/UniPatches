@@ -120,7 +120,7 @@ Choose `Customize appearance > Icon > Type > Multi-parts icon`, then enter one r
 `Advanced > Multi-parts icon editor > Part list`:
 
 ```text
-shape|x|y|width|height|rotation|fill|color1|color2|stroke|opacity|layer|text
+shape|x|y|width|height|rotation|fill|color1|color2|stroke|opacity|layer|text|bold
 ```
 
 Coordinates and dimensions are percentages of the icon area. `x=50` and `y=50` center a part.
@@ -138,13 +138,13 @@ Multi-part chevron example:
 
 ```text
 chevron|50|52|64|72|0|solid|#FFFFFF|#FFFFFF|6|100|0
-invertedTriangle|50|37|36|30|0|gradient|#E651A0|#6564D3|0|100|1
+triangle|50|39|28|22|0|gradient|#E651A0|#6564D3|0|100|1
 ```
 
-The chevron is drawn first, then the inverted triangle above it. Supported part shapes include
-`triangle`, `invertedTriangle`, `circle`, `square`, `roundedRect`, `chevron`, `z`, `line`, `arc`,
-`diamond`, `star`, `heart`, and `text`. The final text field is required for `text` and is trimmed
-to three characters. Built-in presets use this same format and remain
+The chevron is drawn first, then the triangle above it. Supported part shapes include
+`triangle`, `oval`, `circle`, `square`, `roundedRect`, `chevron`, `line`, `arc`, `diamond`, `star`,
+`heart`, and `text`. The final text field is required for `text` and is trimmed to three characters.
+The optional `bold` field accepts `true` or `false` and applies to text parts. Built-in presets use this same format and remain
 fully editable rather than relying on preset-only renderer behavior.
 
 ### App-specific action modules
