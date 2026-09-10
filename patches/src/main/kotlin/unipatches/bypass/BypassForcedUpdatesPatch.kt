@@ -173,7 +173,7 @@ val bypassForcedUpdatesPatch = bytecodePatch(
                     continue
                 }
 
-                val instructions = implementation.instructions.toList()
+                val instructions = implementation.instructions
                 for ((index, instruction) in instructions.withIndex()) {
                     val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference
                         ?: continue

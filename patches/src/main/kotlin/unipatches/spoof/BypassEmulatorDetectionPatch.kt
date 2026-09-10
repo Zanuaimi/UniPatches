@@ -28,7 +28,7 @@ internal fun BytecodePatchContext.foldBuildStringFields(values: Map<String, Stri
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 if (instruction.opcode != Opcode.SGET_OBJECT) continue
                 val reference =
@@ -61,7 +61,7 @@ internal fun BytecodePatchContext.foldBuildGetSerial(value: String): Int {
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
@@ -104,7 +104,7 @@ internal fun BytecodePatchContext.foldSystemPropertyMap(properties: Map<String, 
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
@@ -154,7 +154,7 @@ internal fun BytecodePatchContext.foldBuildMethodResult(methodName: String, valu
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
@@ -197,7 +197,7 @@ internal fun BytecodePatchContext.foldPhoneType(value: Int): Int {
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference

@@ -68,8 +68,8 @@ internal fun BytecodePatchContext.foldSettingsGetterConst(
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            // Snapshot; one-for-one replacements keep indices valid.
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            // Replacements are one-for-one, so instruction indexes remain stable.
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
@@ -184,7 +184,7 @@ internal fun BytecodePatchContext.foldNoArgStringGetter(
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
@@ -234,7 +234,7 @@ internal fun BytecodePatchContext.foldNoArgIntGetter(
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
@@ -288,7 +288,7 @@ internal fun BytecodePatchContext.foldLocaleGetDefault(tag: String): Int {
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
 
             // The rewrite inserts an extra instruction, which would shift every
             // later index. Collect matches first, then apply them in descending
@@ -351,7 +351,7 @@ internal fun BytecodePatchContext.foldStringGetterConst(
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
@@ -397,7 +397,7 @@ internal fun BytecodePatchContext.foldBooleanGetterConst(
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
@@ -447,7 +447,7 @@ internal fun BytecodePatchContext.foldObjectGetterToNull(
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
@@ -496,7 +496,7 @@ internal fun BytecodePatchContext.replaceGetterWithStaticCall(
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
@@ -543,7 +543,7 @@ internal fun BytecodePatchContext.foldStaticStringField(
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            val instructions: List<Instruction> = implementation.instructions.toList()
+            val instructions: List<Instruction> = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 if (instruction.opcode != Opcode.SGET_OBJECT) continue
                 val reference =

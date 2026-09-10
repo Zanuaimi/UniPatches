@@ -38,8 +38,8 @@ internal fun BytecodePatchContext.foldBooleanReturns(
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
-            // Snapshot; one-for-one replacements keep indices valid.
-            val instructions = implementation.instructions.toList()
+            // Replacements are one-for-one, so instruction indexes remain stable.
+            val instructions = implementation.instructions
             for ((index, instruction) in instructions.withIndex()) {
                 val reference =
                     (instruction as? ReferenceInstruction)?.reference as? MethodReference
