@@ -1,3 +1,10 @@
+## [1.15.1](https://github.com/Zanuaimi/UniPatches/compare/v1.15.0...v1.15.1) (2026-09-10)
+
+### 🐛 Bug Fixes
+
+* **overlay:** preserve dropdown outline and popup bounds ([95f0d88](https://github.com/Zanuaimi/UniPatches/commit/95f0d886df1df33133c441f816369d4a08629eb2))
+* **overlay:** restore Lucky action button text ([4fc42f2](https://github.com/Zanuaimi/UniPatches/commit/4fc42f250784f6d89051d16844fc1e0b98f27fa1))
+
 ## [1.15.0](https://github.com/Zanuaimi/UniPatches/compare/v1.14.3...v1.15.0) (2026-09-10)
 
 ### 🐛 Bug Fixes
