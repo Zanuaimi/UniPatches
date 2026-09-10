@@ -1523,7 +1523,7 @@ public final class OverlayRuntime {
                     TextView view = (TextView) super.getView(position, convertView, parentView);
                     view.setTextColor(config.controlOutlineColor);
                     view.setTypeface(OverlayViews.typeface(config.menuTextFont, Typeface.NORMAL));
-                    view.setBackgroundColor(config.background);
+                    view.setBackgroundColor(Color.TRANSPARENT);
                     view.setPadding(dp(12), dp(8), dp(12), dp(8));
                     return view;
                 }
@@ -2123,8 +2123,11 @@ public final class OverlayRuntime {
         }
 
         private int settingsChoicesMaxHeight() {
-            int displayHeight = activity.getResources().getDisplayMetrics().heightPixels;
-            return Math.max(dp(120), displayHeight - dp(220));
+            int availableHeight = root.getHeight();
+            if (availableHeight <= 0) {
+                availableHeight = activity.getResources().getDisplayMetrics().heightPixels;
+            }
+            return Math.max(dp(120), availableHeight - dp(220));
         }
 
         private int dp(int value) { return (int) (value * activity.getResources().getDisplayMetrics().density + .5f); }
@@ -2159,7 +2162,15 @@ public final class OverlayRuntime {
 
         @Override protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
             super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-            setMeasuredDimension(getMeasuredWidth(), Math.min(getMeasuredHeight(), maxHeight));
+            int width = resolveSize(getMeasuredWidth(), widthMeasureSpec);
+            int height = Math.min(getMeasuredHeight(), maxHeight);
+            int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+            if (heightMode == MeasureSpec.EXACTLY) {
+                height = MeasureSpec.getSize(heightMeasureSpec);
+            } else if (heightMode == MeasureSpec.AT_MOST) {
+                height = Math.min(height, MeasureSpec.getSize(heightMeasureSpec));
+            }
+            setMeasuredDimension(width, height);
         }
     }
 
