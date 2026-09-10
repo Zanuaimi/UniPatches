@@ -1,3 +1,9 @@
+## [1.17.1](https://github.com/Zanuaimi/UniPatches/compare/v1.17.0...v1.17.1) (2026-09-10)
+
+### 🐛 Bug Fixes
+
+* **overlay:** update version to v2.4.0 ([c13dd05](https://github.com/Zanuaimi/UniPatches/commit/c13dd05317a6f28ef3c96d57a7da276daeaa10a2))
+
 ## [1.17.0](https://github.com/Zanuaimi/UniPatches/compare/v1.16.0...v1.17.0) (2026-09-10)
 
 ### 🐛 Bug Fixes
