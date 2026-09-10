@@ -35,12 +35,14 @@ const FONT_LABELS = {
   sansBlack: "Sans black",
 };
 const MAX_PARTS = 12;
+const PREVIEW_CANVAS_SIZE = 420;
+const PREVIEW_BODY_SIZE = 376;
 
 const templates = {
   "single-triangle": {
     label: "Blue triangle",
     note: "clean single mark",
-    parts: ["triangle|50|50|55|55|0|solid|#4E97F0|#4E97F0|0|100|0"],
+    parts: ["triangle|50|48|55|55|0|solid|#4E97F0|#4E97F0|0|100|0"],
     appearance: {
       background: "#20252B",
       background2: "#35414C",
@@ -62,7 +64,10 @@ const templates = {
       background2: "#F0E60A",
       backgroundAngle: 90,
       outline: "#000000",
-      outlineWidth: 6,
+      outlineWidth: 2,
+      outline2: "#E651A0",
+      outlineGradient: false,
+      highlight: true,
     },
   },
   revanched: {
@@ -79,15 +84,15 @@ const templates = {
       outline2: "#4E97F0",
       outlineGradient: true,
       outlineAngle: 90,
-      outlineWidth: 6,
+      outlineWidth: 3,
     },
   },
   "z-mark": {
     label: "ZA monogram",
     note: "faceted two-letter mark",
     parts: [
-      "text|40|50|46|70|0|solid|#FFFFFF|#FFFFFF|0|100|0|Z|true|default",
-      "text|60|50|43|70|0|solid|#FFFFFF|#FFFFFF|0|100|1|A|true|default",
+      "text|41|50|45|70|0|solid|#FFFFFF|#FFFFFF|0|100|0|Z|true|default",
+      "text|59|50|45|70|0|solid|#FFFFFF|#FFFFFF|0|100|1|A|true|default",
     ],
     appearance: {
       background: "#5BAA08",
@@ -95,6 +100,7 @@ const templates = {
       background3: "#3D7806",
       background4: "#69B90A",
       outline: "#FFFFFF",
+      outlineWidth: 0,
       style: "faceted",
       buttonShape: "squircle",
     },
@@ -102,7 +108,7 @@ const templates = {
   heart: {
     label: "Heart",
     note: "simple solid shape",
-    parts: ["heart|50|50|65|65|0|gradient|#FF6B77|#D62D67|0|100|0"],
+    parts: ["heart|50|48|60|50|0|gradient|#FF6B77|#D62D67|0|100|0"],
     appearance: {
       background: "#241B24",
       background2: "#3A2534",
@@ -147,6 +153,7 @@ const state = {
   buttonShape: "circle",
   image: null,
 };
+const defaultState = { ...state };
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("iconCanvas");
@@ -174,6 +181,12 @@ function normalizeHex(value, fallback = "#FFFFFF") {
   if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toUpperCase();
   if (/^[0-9a-f]{6}$/i.test(raw)) return `#${raw.toUpperCase()}`;
   return fallback.toUpperCase();
+}
+
+function resetEditorState(overrides = {}) {
+  Object.assign(state, defaultState, overrides);
+  state.parts = [];
+  state.image = null;
 }
 
 function safeColor(value, fallback = "#FFFFFF") {
@@ -310,12 +323,15 @@ function roundedRectPath(x, y, width, height, radius) {
   return path;
 }
 
-function drawShape(part, area) {
+function drawShape(part, area, body) {
   const width = area.width;
   const height = area.height;
   const centerX = area.centerX;
   const centerY = area.centerY;
-  const stroke = Math.max(1, part.stroke);
+  const stroke = Math.max(
+    1,
+    (part.stroke * Math.min(body.width, body.height)) / PREVIEW_BODY_SIZE,
+  );
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   ctx.fillStyle =
@@ -480,17 +496,20 @@ function polygon(points, close) {
 }
 
 function drawPreview() {
-  const size = canvas.width;
-  ctx.clearRect(0, 0, size, size);
+  const buttonSize = clampInt(state.iconSize, 56, 32, 128);
+  const size = buttonSize;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.scale(PREVIEW_CANVAS_SIZE / buttonSize, PREVIEW_CANVAS_SIZE / buttonSize);
   const body = {
-    left: 22,
-    top: 22,
-    width: size - 44,
-    height: size - 44,
+    left: 0,
+    top: 0,
+    width: size,
+    height: size,
     centerX: size / 2,
     centerY: size / 2,
-    right: size - 22,
-    bottom: size - 22,
+    right: size,
+    bottom: size,
   };
   const radius = Math.min(body.width, body.height) / 2;
   ctx.save();
@@ -506,8 +525,8 @@ function drawPreview() {
     state.buttonShape === "circle"
       ? radius
       : state.buttonShape === "squircle"
-        ? Math.min(body.width, body.height) * 0.2
-        : 18;
+        ? 24
+        : 0;
   ctx.beginPath();
   ctx.roundRect(body.left, body.top, body.width, body.height, bodyRadius);
   ctx.fill();
@@ -528,7 +547,7 @@ function drawPreview() {
     ctx.stroke();
   }
   if (state.iconMode === "image" && state.image) {
-    const imageSize = Math.min(body.width, body.height) * 0.78;
+    const imageSize = Math.max(1, Math.min(body.width, body.height) - 8);
     ctx.drawImage(
       state.image,
       body.centerX - imageSize / 2,
@@ -564,13 +583,13 @@ function drawPreview() {
     ctx.translate(area.centerX, area.centerY);
     ctx.rotate((part.rotation * Math.PI) / 180);
     ctx.translate(-area.centerX, -area.centerY);
-    drawShape(part, area);
+    drawShape(part, area, body);
     ctx.restore();
   });
   if (state.iconMode === "text") {
     ctx.save();
     ctx.fillStyle = state.legacyTextColor;
-    ctx.font = `${state.legacyBold ? "700" : "400"} ${Math.max(1, state.legacyTextSize * (size / 56))}px ${
+    ctx.font = `${state.legacyBold ? "700" : "400"} ${Math.max(1, state.legacyTextSize)}px ${
       {
         default: "Arial",
         roboto: "Roboto, Arial",
@@ -606,6 +625,7 @@ function drawPreview() {
     );
     ctx.fill();
   }
+  ctx.restore();
   ctx.restore();
 }
 
@@ -739,7 +759,7 @@ function updatePart(index, input) {
 
 function bindValue(id, key, type = "text") {
   const input = $(id);
-  input.addEventListener("input", () => {
+  const update = () => {
     state[key] =
       type === "number"
         ? Number(input.value)
@@ -749,7 +769,9 @@ function bindValue(id, key, type = "text") {
     syncInputs();
     drawPreview();
     updateStatus("Edited locally");
-  });
+  };
+  input.addEventListener("input", update);
+  input.addEventListener("change", update);
 }
 
 function bindCheckbox(id, key) {
@@ -851,6 +873,7 @@ function applyRows(text) {
 }
 
 function loadTemplate(template) {
+  resetEditorState();
   state.parts = template.parts.map((row) => parseRow(row).part).filter(Boolean);
   Object.assign(state, {
     backgroundAngle: 0,
@@ -1098,11 +1121,12 @@ $("clearPartsButton").addEventListener("click", () => {
   updateStatus("Parts cleared");
 });
 $("newIconButton").addEventListener("click", () => {
-  state.parts = [];
-  state.background = "#20252B";
-  state.background2 = "#35414C";
-  state.outline = "#78C8FF";
-  state.backgroundStyle = "flat";
+  resetEditorState({
+    background: "#20252B",
+    background2: "#35414C",
+    outline: "#78C8FF",
+    backgroundStyle: "flat",
+  });
   syncInputs();
   renderAll();
   updateStatus("New icon");
