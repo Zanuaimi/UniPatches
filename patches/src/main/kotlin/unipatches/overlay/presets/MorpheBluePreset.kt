@@ -7,8 +7,9 @@ internal val morpheBluePreset = OverlayPresetDefinition(
         overlayTextColor = "#55D6BE", buttonTextColor = "#FFFFFF", gradientBackground = true,
         buttonBackground = "#000083", iconBackground2 = "#00AF7C", iconGradientAngle = 30,
         iconOutlineColor = "#FFFFFF", appendDescription = "Inspired by Morphe",
-        controlBackground = "#101820", controlForeground = "#55D6BE",
+        controlBackground = "#55D6BE", controlForeground = "#55D6BE",
         bottomButtonStyle = "text", bottomButtonTextColor = "#55D6BE",
         bottomButtonBackground1 = "#55D6BE", bottomButtonBackground2 = "#55D6BE",
+        menuTextColor7 = "#55D6BE",
     ),
 )
