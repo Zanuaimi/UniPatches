@@ -1,3 +1,10 @@
+## [1.14.0](https://github.com/Zanuaimi/UniPatches/compare/v1.13.0...v1.14.0) (2026-09-10)
+
+### ✨ New Features
+
+* **addons:** integrate HCR and Ads overlays ([d4d5445](https://github.com/Zanuaimi/UniPatches/commit/d4d54458a0ebc5d6f8e8372fd780d2f452661337))
+* **overlay:** expand runtime icon customization ([e4b7510](https://github.com/Zanuaimi/UniPatches/commit/e4b7510cc7d0d7084f478d2bcd2873b339c79d6f))
+
 ## [1.13.0](https://github.com/Zanuaimi/UniPatches/compare/v1.12.0...v1.13.0) (2026-09-10)
 
 ### ✨ New Features

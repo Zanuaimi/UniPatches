@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-10T09:08:34",
-  "description": "## [1.13.0](https://github.com/Zanuaimi/UniPatches/compare/v1.12.0...v1.13.0) (2026-09-10)\n\n### ✨ New Features\n\n* **overlay:** extend runtime configuration and icon parsing ([2ac99b5](https://github.com/Zanuaimi/UniPatches/commit/2ac99b5a8d343bf4f0046e8da504e73cb80d1985))\n* **overlay:** refine built-in preset visuals ([cb1cf3f](https://github.com/Zanuaimi/UniPatches/commit/cb1cf3f453e36db18239444d1a687842ae1b698d))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.13.0/patches-1.13.0.mpp",
+  "created_at": "2026-09-10T16:04:57",
+  "description": "## [1.14.0](https://github.com/Zanuaimi/UniPatches/compare/v1.13.0...v1.14.0) (2026-09-10)\n\n### ✨ New Features\n\n* **addons:** integrate HCR and Ads overlays ([d4d5445](https://github.com/Zanuaimi/UniPatches/commit/d4d54458a0ebc5d6f8e8372fd780d2f452661337))\n* **overlay:** expand runtime icon customization ([e4b7510](https://github.com/Zanuaimi/UniPatches/commit/e4b7510cc7d0d7084f478d2bcd2873b339c79d6f))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.14.0/patches-1.14.0.mpp",
   "signature_download_url": "",
-  "version": "1.13.0"
+  "version": "1.14.0"
 }
