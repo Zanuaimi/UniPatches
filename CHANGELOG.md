@@ -1,3 +1,9 @@
+## [1.16.0](https://github.com/Zanuaimi/UniPatches/compare/v1.15.1...v1.16.0) (2026-09-10)
+
+### ✨ New Features
+
+* **Hill Climb Racing Example:** clarify that app-specific modules are example and does nothing ([57a4802](https://github.com/Zanuaimi/UniPatches/commit/57a4802ce1d1de6b8528a4b08838d6b86039284c))
+
 ## [1.15.1](https://github.com/Zanuaimi/UniPatches/compare/v1.15.0...v1.15.1) (2026-09-10)
 
 ### 🐛 Bug Fixes

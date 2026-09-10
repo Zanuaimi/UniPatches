@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-10T19:20:44",
-  "description": "## [1.15.1](https://github.com/Zanuaimi/UniPatches/compare/v1.15.0...v1.15.1) (2026-09-10)\n\n### 🐛 Bug Fixes\n\n* **overlay:** preserve dropdown outline and popup bounds ([95f0d88](https://github.com/Zanuaimi/UniPatches/commit/95f0d886df1df33133c441f816369d4a08629eb2))\n* **overlay:** restore Lucky action button text ([4fc42f2](https://github.com/Zanuaimi/UniPatches/commit/4fc42f250784f6d89051d16844fc1e0b98f27fa1))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.15.1/patches-1.15.1.mpp",
+  "created_at": "2026-09-10T19:26:47",
+  "description": "## [1.16.0](https://github.com/Zanuaimi/UniPatches/compare/v1.15.1...v1.16.0) (2026-09-10)\n\n### ✨ New Features\n\n* **Hill Climb Racing Example:** clarify that app-specific modules are example and does nothing ([57a4802](https://github.com/Zanuaimi/UniPatches/commit/57a4802ce1d1de6b8528a4b08838d6b86039284c))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.16.0/patches-1.16.0.mpp",
   "signature_download_url": "",
-  "version": "1.15.1"
+  "version": "1.16.0"
 }
