@@ -8,7 +8,10 @@ internal val zArchiverPreset = OverlayPresetDefinition(
         buttonBackground = "#5BAA08", iconBackground2 = "#5BAA08", iconGradientAngle = 0,
         iconOutlineColor = "#FFFFFF", appendDescription = "Inspired by ZArchiver",
         buttonShape = "squircle", iconStyle = "parts",
-        iconParts = listOf("text|50|50|70|70|0|solid|#FFFFFF|#FFFFFF|0|100|0|Z|true"),
+        iconParts = listOf(
+            "text|40|50|46|70|0|solid|#FFFFFF|#FFFFFF|0|100|0|Z|true|default",
+            "text|60|50|43|70|0|solid|#FFFFFF|#FFFFFF|0|100|1|A|true|default",
+        ),
         iconBackgroundStyle = "faceted", iconBackgroundColor3 = "#3D7806", iconBackgroundColor4 = "#69B90A",
         controlBackground = "#666666", controlForeground = "#FFFFFF",
         menuTextColor7 = "#FFFFFF",

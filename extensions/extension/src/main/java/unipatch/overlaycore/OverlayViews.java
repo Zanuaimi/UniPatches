@@ -18,6 +18,18 @@ import android.graphics.RectF;
 
 /** Shared view construction and styling primitives for the overlay controller. */
 final class OverlayViews {
+    static android.graphics.Typeface typeface(String font, int style) {
+        String family;
+        if ("roboto".equals(font)) family = "sans-serif";
+        else if ("sansSerif".equals(font)) family = "sans-serif";
+        else if ("serif".equals(font)) family = "serif";
+        else if ("monospace".equals(font)) family = "monospace";
+        else if ("sansCondensed".equals(font)) family = "sans-serif-condensed";
+        else if ("sansMedium".equals(font)) family = "sans-serif-medium";
+        else if ("sansBlack".equals(font)) family = "sans-serif-black";
+        else family = "sans-serif";
+        return android.graphics.Typeface.create(family, style);
+    }
     private OverlayViews() { }
     static GradientDrawable background(int color, int stroke, boolean circle) {
         return background(color, stroke, circle, 1);
@@ -288,6 +300,7 @@ final class OverlayViews {
             }
 
             if ("parts".equals(style) && iconParts.length > 0) drawParts(canvas, body);
+            else drawShape(canvas, body);
             if (highlight && "parts".equals(style)) {
                 paint.setStyle(Paint.Style.FILL);
                 paint.setShader(null);
@@ -362,7 +375,7 @@ final class OverlayViews {
                 paint.setShader(null);
                 return false;
             }
-            Collections.sort(parts, Comparator.comparingInt(part -> part.layer));
+            Collections.sort(parts, (first, second) -> Integer.compare(first.layer, second.layer));
             for (IconPart part : parts) {
                 float width = body.width() * part.width / 100f;
                 float height = body.height() * part.height / 100f;
@@ -397,10 +410,10 @@ final class OverlayViews {
             Path path = new Path();
             paint.setStrokeCap(Paint.Cap.ROUND);
             paint.setStrokeJoin(Paint.Join.ROUND);
-            if ("oval".equals(shape)) {
+            if ("circle".equals(shape)) {
                 paint.setStyle(Paint.Style.FILL);
                 canvas.drawOval(area, paint);
-            } else if ("circle".equals(shape) || "ring".equals(shape)) {
+            } else if ("ring".equals(shape)) {
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(stroke);
                 canvas.drawOval(area, paint);
@@ -408,12 +421,26 @@ final class OverlayViews {
                 paint.setStyle(Paint.Style.FILL);
                 canvas.drawRoundRect(area, "roundedRect".equals(shape) ? Math.min(width, height) * .18f : 0f,
                         "roundedRect".equals(shape) ? Math.min(width, height) * .18f : 0f, paint);
-            } else if ("chevron".equals(shape)) {
-                path.moveTo(area.left + width * .12f, area.top + height * .18f);
-                path.lineTo(area.centerX(), area.bottom - height * .12f);
-                path.lineTo(area.right - width * .12f, area.top + height * .18f);
+            } else if ("v".equals(shape)) {
+                path.moveTo(area.left + width * .22f, area.top + height * .18f);
+                path.lineTo(area.centerX(), area.bottom - height * .18f);
+                path.lineTo(area.right - width * .22f, area.top + height * .18f);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(stroke);
+                paint.setStrokeCap(Paint.Cap.ROUND);
+                paint.setStrokeJoin(Paint.Join.ROUND);
+                canvas.drawPath(path, paint);
+            } else if ("roundedTriangle".equals(shape)) {
+                float radius = Math.min(width, height) * .14f;
+                path.moveTo(area.left + radius, area.top);
+                path.lineTo(area.right - radius, area.top);
+                path.quadTo(area.right, area.top, area.right - radius * .42f, area.top + radius * .62f);
+                path.lineTo(area.centerX() + radius * .42f, area.bottom - radius * 1.18f);
+                path.quadTo(area.centerX(), area.bottom, area.centerX() - radius * .42f, area.bottom - radius * 1.18f);
+                path.lineTo(area.left + radius * .42f, area.top + radius * .62f);
+                path.quadTo(area.left, area.top, area.left + radius, area.top);
+                path.close();
+                paint.setStyle(Paint.Style.FILL);
                 canvas.drawPath(path, paint);
             } else if ("line".equals(shape)) {
                 paint.setStyle(Paint.Style.STROKE);
@@ -426,7 +453,7 @@ final class OverlayViews {
             } else if ("text".equals(shape)) {
                 paint.setStyle(Paint.Style.FILL);
                 paint.setTextAlign(Paint.Align.CENTER);
-                paint.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT,
+                paint.setTypeface(typeface(part.font,
                     part.bold ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL));
                 paint.setTextSize(Math.max(1f, Math.min(width / Math.max(1, part.text.length()), height) * .82f));
                 Paint.FontMetrics metrics = paint.getFontMetrics();
@@ -461,18 +488,10 @@ final class OverlayViews {
                 path.close();
                 paint.setStyle(Paint.Style.FILL);
                 canvas.drawPath(path, paint);
-            } else if ("z".equals(shape)) {
-                drawFilledZ(canvas, area, paint);
             } else {
-                if ("invertedTriangle".equals(shape)) {
-                    path.moveTo(area.centerX(), area.bottom);
-                    path.lineTo(area.left, area.top);
-                    path.lineTo(area.right, area.top);
-                } else {
-                    path.moveTo(area.centerX(), area.top);
-                    path.lineTo(area.right, area.bottom);
-                    path.lineTo(area.left, area.bottom);
-                }
+                path.moveTo(area.centerX(), area.top);
+                path.lineTo(area.right, area.bottom);
+                path.lineTo(area.left, area.bottom);
                 path.close();
                 paint.setStyle(Paint.Style.FILL);
                 canvas.drawPath(path, paint);
@@ -480,35 +499,23 @@ final class OverlayViews {
             paint.setStyle(Paint.Style.FILL);
         }
 
-        private void drawFilledZ(Canvas canvas, RectF area, Paint target) {
-            float margin = Math.min(area.width(), area.height()) * .14f;
-            float thickness = Math.min(area.width(), area.height()) * .18f;
-            float left = area.left + margin, right = area.right - margin;
-            float top = area.top + margin, bottom = area.bottom - margin;
-            Path path = new Path();
-            path.moveTo(left, top); path.lineTo(right, top); path.lineTo(right, top + thickness);
-            path.lineTo(left + thickness, bottom - thickness); path.lineTo(right, bottom - thickness);
-            path.lineTo(right, bottom); path.lineTo(left, bottom); path.lineTo(left, bottom - thickness);
-            path.lineTo(right - thickness, top + thickness); path.lineTo(left, top + thickness);
-            path.close();
-            target.setStyle(Paint.Style.FILL);
-            canvas.drawPath(path, target);
-        }
 
         private static final class IconPart {
             final String shape, fill, text;
             final float x, y, width, height, rotation, strokeWidth, opacity, gradientAngle;
             final int color1, color2, layer;
             final boolean bold;
+            final String font;
 
             private IconPart(String shape, float x, float y, float width, float height, float rotation,
                              String fill, int color1, int color2, float strokeWidth, float opacity, int layer,
-                             String text, boolean bold) {
+                             String text, boolean bold, String font) {
                 this.shape = shape; this.x = x; this.y = y; this.width = width; this.height = height;
                 this.rotation = rotation; this.fill = fill; this.color1 = color1; this.color2 = color2;
                 this.strokeWidth = strokeWidth; this.opacity = opacity; this.layer = layer;
                 this.text = text;
                 this.bold = bold;
+                this.font = font;
                 // Rotation belongs to the geometry. The canvas transform rotates the fill with
                 // the part, so reusing this value as a separate gradient direction is redundant.
                 this.gradientAngle = 0f;
@@ -517,8 +524,10 @@ final class OverlayViews {
             static IconPart parse(String encoded) {
                 try {
                     String[] fields = encoded.split("\\|", -1);
-                    if (fields.length < 12 || fields.length > 14) return null;
+                    if (fields.length < 12 || fields.length > 15) return null;
                     String shape = fields[0].trim();
+                    boolean legacyChevron = "chevron".equals(shape);
+                    if (legacyChevron) shape = "text";
                     String fill = "gradient".equals(fields[6].trim()) ? "gradient" : "solid";
                     if (!isSupportedShape(shape)) return null;
                     float x = bounded(fields[1], 50f, 0f, 100f);
@@ -531,23 +540,26 @@ final class OverlayViews {
                     float stroke = bounded(fields[9], 3f, 0f, 32f);
                     float opacity = bounded(fields[10], 100f, 0f, 100f);
                     int layer = Math.round(bounded(fields[11], 0f, -32f, 32f));
-                    String text = fields.length >= 13 ? fields[12].trim().replace('|', ' ') : "";
-                    boolean bold = fields.length == 14 && "true".equalsIgnoreCase(fields[13].trim());
+                    String text = legacyChevron ? "V" : (fields.length >= 13 ? fields[12].trim().replace('|', ' ') : "");
+                        boolean bold = legacyChevron || (fields.length >= 14 && "true".equalsIgnoreCase(fields[13].trim()));
+                        String font = fields.length >= 15 ? fields[14].trim() : "default";
+                        if (!"default".equals(font) && !"roboto".equals(font) && !"sansSerif".equals(font)
+                            && !"serif".equals(font) && !"monospace".equals(font)
+                            && !"sansCondensed".equals(font) && !"sansMedium".equals(font)
+                            && !"sansBlack".equals(font)) font = "default";
                     if ("text".equals(shape)) text = text.substring(0, Math.min(3, text.length()));
                     if ("text".equals(shape) && text.isEmpty()) text = "?";
-                    return new IconPart(shape, x, y, width, height, rotation, fill, color1, color2, stroke, opacity, layer, text, bold);
+                    return new IconPart(shape, x, y, width, height, rotation, fill, color1, color2, stroke, opacity, layer, text, bold, font);
                 } catch (RuntimeException ignored) {
                     return null;
                 }
             }
 
             private static boolean isSupportedShape(String shape) {
-                return "triangle".equals(shape) || "invertedTriangle".equals(shape)
-                    || "oval".equals(shape)
-                        || "circle".equals(shape)
+                return "triangle".equals(shape) || "roundedTriangle".equals(shape) || "v".equals(shape)
+                        || "circle".equals(shape) || "ring".equals(shape)
                         || "square".equals(shape) || "roundedRect".equals(shape)
-                        || "chevron".equals(shape)
-                        || "z".equals(shape) || "line".equals(shape)
+                        || "line".equals(shape)
                         || "arc".equals(shape) || "diamond".equals(shape)
                         || "star".equals(shape) || "heart".equals(shape) || "text".equals(shape);
             }
@@ -591,9 +603,16 @@ final class OverlayViews {
                 paint.setShader(shapeGradient ? linear(shapeColor1, shapeColor2, shapeAngle, area) : null);
                 paint.setColor(shapeColor1);
                 Path triangle = new Path();
-                triangle.moveTo(area.centerX(), area.top + size * .28f);
-                triangle.lineTo(area.left + size * .35f, area.top + size * .62f);
-                triangle.lineTo(area.right - size * .35f, area.top + size * .62f);
+                float radius = size * .055f;
+                float triangleTop = area.top + size * .28f;
+                float triangleBottom = area.top + size * .62f;
+                triangle.moveTo(area.left + radius, triangleTop);
+                triangle.lineTo(area.right - radius, triangleTop);
+                triangle.quadTo(area.right, triangleTop, area.right - radius * .42f, triangleTop + radius * .62f);
+                triangle.lineTo(area.centerX() + radius * .42f, triangleBottom - radius * 1.18f);
+                triangle.quadTo(area.centerX(), triangleBottom, area.centerX() - radius * .42f, triangleBottom - radius * 1.18f);
+                triangle.lineTo(area.left + radius * .42f, triangleTop + radius * .62f);
+                triangle.quadTo(area.left, triangleTop, area.left + radius, triangleTop);
                 triangle.close();
                 canvas.drawPath(triangle, paint);
                 return;
@@ -631,48 +650,28 @@ final class OverlayViews {
                 return;
             }
 
-            if ("z".equals(shape)) {
-                paint.setStyle(Paint.Style.FILL);
-                Path z = new Path();
-                float margin = size * .14f;
-                float zTop = area.top + margin;
-                float zBottom = area.bottom - margin;
-                float thickness = size * .18f;
-                float leftEdge = area.left + margin;
-                float rightEdge = area.right - margin;
-                // A centered, filled Z: both horizontal bars have equal thickness and
-                // the diagonal keeps the same visual weight between them.
-                z.moveTo(leftEdge, zTop);
-                z.lineTo(rightEdge, zTop);
-                z.lineTo(rightEdge, zTop + thickness);
-                z.lineTo(leftEdge + thickness, zBottom - thickness);
-                z.lineTo(rightEdge, zBottom - thickness);
-                z.lineTo(rightEdge, zBottom);
-                z.lineTo(leftEdge, zBottom);
-                z.lineTo(leftEdge, zBottom - thickness);
-                z.lineTo(rightEdge - thickness, zTop + thickness);
-                z.lineTo(leftEdge, zTop + thickness);
-                z.close();
-                canvas.drawPath(z, paint);
-                return;
-            }
-
             Path path = new Path();
-            if ("chevron".equals(shape)) {
-                path.moveTo(area.left + size * .18f, area.top + size * .30f);
-                path.lineTo(area.centerX(), area.top + size * .70f);
-                path.lineTo(area.right - size * .18f, area.top + size * .30f);
-                paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(shapeStrokeWidth);
-                canvas.drawPath(path, paint);
+            if ("roundedTriangle".equals(shape)) {
+                float radius = size * .16f;
+                float topPoint = area.top + radius * .35f;
+                float topSide = area.top + radius;
+                float bottomSide = area.bottom - radius;
+                path.moveTo(area.centerX(), topPoint);
+                path.quadTo(area.centerX(), area.top, area.centerX() + radius, topSide);
+                path.lineTo(area.right - radius, bottomSide);
+                path.quadTo(area.right, area.bottom, area.right - radius * .35f, area.bottom);
+                path.lineTo(area.left + radius * .35f, area.bottom);
+                path.quadTo(area.left, area.bottom, area.left + radius, bottomSide);
+                path.lineTo(area.centerX() - radius, topSide);
+                path.quadTo(area.centerX(), area.top, area.centerX(), topPoint);
             } else {
                 path.moveTo(area.centerX(), area.top + size * .12f);
                 path.lineTo(area.right - size * .12f, area.bottom - size * .16f);
                 path.lineTo(area.left + size * .12f, area.bottom - size * .16f);
-                path.close();
-                paint.setStyle(Paint.Style.FILL);
-                canvas.drawPath(path, paint);
             }
+            path.close();
+            paint.setStyle(Paint.Style.FILL);
+            canvas.drawPath(path, paint);
         }
 
         private LinearGradient linear(int first, int second, float angle, RectF area) {

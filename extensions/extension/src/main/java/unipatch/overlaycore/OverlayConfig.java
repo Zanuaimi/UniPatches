@@ -2,6 +2,10 @@ package unipatch.overlaycore;
 
 import android.graphics.Color;
 import android.view.Gravity;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Decodes and validates overlay configuration inside the extension runtime.
@@ -37,6 +41,7 @@ final class OverlayConfig {
     boolean iconOutline, iconBold;
     boolean gradientBackground;
     String iconType, customIconImage;
+    String legacyIconJson;
     String[] iconParts;
     int dragVisibilityDurationSeconds;
     boolean keepAwake, fullscreen, screenshots;
@@ -50,7 +55,7 @@ final class OverlayConfig {
     String controlTheme, bottomButtonStyle, bottomButtonShape, separatorStyle,
             titleIconPlacement, titleAlignment, menuCorners, menuOutlineAnimation,
             openingAnimation, closingAnimation, animationEasing,
-            iconStyle, iconShape, iconBackgroundStyle;
+            iconStyle, iconShape, iconBackgroundStyle, iconTextFont, menuTextFont;
     int controlBackground, controlForeground, controlOutlineColor, bottomButtonTextColor,
             bottomButtonBackground1, bottomButtonBackground2,
             menuTextColor1, menuTextColor2, menuTextColor3, menuTextColor4, menuTextColor5, menuTextColor6,
@@ -185,6 +190,12 @@ final class OverlayConfig {
         c.appSpecificProfile = field(v, offset, 82);
         c.injectionMode = choice(field(v, offset, 83), "universal", "universal", "explicitActivity");
         c.appSpecificModules = field(v, offset, 85);
+        c.iconTextFont = choice(field(v, offset, 87), "default",
+            "default", "roboto", "sansSerif", "serif", "monospace", "sansCondensed", "sansMedium", "sansBlack");
+        c.menuTextFont = choice(field(v, offset, 88), "default",
+            "default", "roboto", "sansSerif", "serif", "monospace", "sansCondensed", "sansMedium", "sansBlack");
+        c.legacyIconJson = field(v, offset, 89);
+        applyLegacyIconJson(c);
         c.appendDescriptionColor = color(field(v, offset, 60), c.menuTextColor3);
         c.showNoModulesWarning = !"0".equals(field(v, offset, 61));
         c.separatorStyle = choice(field(v, offset, 48), "ascii", "ascii", "doubleLine", "background", "singleLine", "inline");
@@ -204,6 +215,94 @@ final class OverlayConfig {
             c.appendDescription = c.appendDescription.substring(0, descriptionRemaining);
         }
         return c;
+    }
+
+    private static void applyLegacyIconJson(OverlayConfig c) {
+        if (c.legacyIconJson == null || c.legacyIconJson.trim().isEmpty()) return;
+        try {
+            JSONObject root = new JSONObject(c.legacyIconJson);
+            if (!"unipatches-legacy-icon".equals(root.optString("format")) || root.optInt("version", -1) != 1) return;
+            JSONObject settings = root.optJSONObject("settings");
+            if (settings == null) return;
+
+            c.buttonSize = integer(settings.optString("iconSize", ""), c.buttonSize, 32, 128);
+            c.opacity = integer(settings.optString("iconOpacity", ""), Math.round(c.opacity * 100f), 10, 100) / 100f;
+            c.gravity = gravity(settings.optString("iconPosition", ""));
+            String buttonShape = settings.optString("buttonShape", "");
+            c.shape = "square".equals(buttonShape) ? 0 : ("squircle".equals(buttonShape) ? 2 : ("circle".equals(buttonShape) ? 1 : c.shape));
+
+            c.buttonBackground = parseJsonColor(settings, "background", c.buttonBackground);
+            c.iconBackground2 = parseJsonColor(settings, "background2", c.iconBackground2);
+            c.iconGradientAngle = jsonInt(settings, "backgroundAngle", c.iconGradientAngle, 0, 360);
+            c.gradientBackground = settings.has("backgroundGradient") && settings.optBoolean("backgroundGradient", c.gradientBackground);
+            c.iconBackgroundStyle = choice(settings.optString("backgroundStyle", c.iconBackgroundStyle), c.iconBackgroundStyle, "flat", "faceted");
+            c.iconOutlineColor = parseJsonColor(settings, "outline", c.iconOutlineColor);
+            c.iconOutlineColor2 = parseJsonColor(settings, "outline2", c.iconOutlineColor2);
+                c.iconOutline = settings.has("outlineEnabled")
+                    ? settings.optBoolean("outlineEnabled", c.iconOutline) : c.iconOutline;
+            c.iconOutlineWidth = jsonInt(settings, "outlineWidth", c.iconOutlineWidth, 1, 8);
+            c.iconOutlineGradient = settings.optBoolean("outlineGradient", c.iconOutlineGradient);
+            c.iconOutlineGradientAngle = jsonInt(settings, "outlineAngle", c.iconOutlineGradientAngle, 0, 360);
+            c.iconHighlight = settings.optBoolean("highlight", c.iconHighlight);
+
+            c.buttonText = limit(settings.optString("legacyText", c.buttonText), 3, c.buttonText);
+            c.iconTextSize = jsonInt(settings, "legacyTextSize", c.iconTextSize, 8, 48);
+            c.iconBold = settings.optBoolean("legacyBold", c.iconBold);
+            c.iconTextFont = choice(settings.optString("legacyTextFont", c.iconTextFont), c.iconTextFont,
+                    "default", "roboto", "sansSerif", "serif", "monospace", "sansCondensed", "sansMedium", "sansBlack");
+            c.buttonTextColor = parseJsonColor(settings, "legacyTextColor", c.buttonTextColor);
+            c.iconShape = choice(settings.optString("legacyShape", c.iconShape), c.iconShape,
+                    "triangle", "roundedTriangle", "circle", "square", "roundedRect", "diamond", "star", "heart");
+            c.iconShapeColor1 = parseJsonColor(settings, "legacyShapeColor1", c.iconShapeColor1);
+            c.iconShapeColor2 = parseJsonColor(settings, "legacyShapeColor2", c.iconShapeColor2);
+            c.iconShapeGradient = settings.optBoolean("legacyShapeGradient", c.iconShapeGradient);
+            c.iconShapeGradientAngle = jsonInt(settings, "legacyShapeAngle", c.iconShapeGradientAngle, 0, 360);
+            c.iconShapeStrokeWidth = jsonInt(settings, "legacyShapeStroke", c.iconShapeStrokeWidth, 1, 12);
+            c.iconShapeScale = jsonInt(settings, "legacyShapeScale", c.iconShapeScale, 20, 100);
+
+            JSONArray parts = settings.optJSONArray("iconParts");
+            String iconMode = settings.optString("iconMode", "");
+            if ("parts".equals(iconMode) && parts != null) {
+                List<String> validParts = new ArrayList<>();
+                for (int i = 0; i < parts.length() && validParts.size() < 12; i++) {
+                    String part = parts.optString(i, "");
+                    if (validIconPart(part)) validParts.add(part);
+                }
+                c.iconParts = validParts.toArray(new String[0]);
+                c.iconStyle = "parts";
+            } else {
+                c.iconStyle = "text";
+            }
+        } catch (Exception ignored) {
+            // Invalid optional JSON must leave the normal payload settings active.
+        }
+    }
+
+    private static int parseJsonColor(JSONObject settings, String name, int fallback) {
+        String value = settings.optString(name, "");
+        return value.matches("#[0-9a-fA-F]{6}") ? color(value, fallback) : fallback;
+    }
+
+        private static boolean validIconPart(String encoded) {
+        if (encoded == null || encoded.length() > 260) return false;
+        String[] fields = encoded.split("\\|", -1);
+        if (fields.length < 12 || fields.length > 15) return false;
+        String shape = fields[0].trim();
+        if (!("triangle".equals(shape) || "roundedTriangle".equals(shape) || "v".equals(shape)
+            || "circle".equals(shape) || "ring".equals(shape) || "square".equals(shape)
+            || "roundedRect".equals(shape) || "line".equals(shape) || "arc".equals(shape)
+            || "diamond".equals(shape) || "star".equals(shape) || "heart".equals(shape)
+            || "text".equals(shape))) return false;
+        if (fields.length >= 14 && !("true".equalsIgnoreCase(fields[13].trim())
+            || "false".equalsIgnoreCase(fields[13].trim()))) return false;
+        return fields.length < 15 || "default".equals(fields[14].trim()) || "roboto".equals(fields[14].trim())
+            || "sansSerif".equals(fields[14].trim()) || "serif".equals(fields[14].trim())
+            || "monospace".equals(fields[14].trim()) || "sansCondensed".equals(fields[14].trim())
+            || "sansMedium".equals(fields[14].trim()) || "sansBlack".equals(fields[14].trim());
+        }
+
+    private static int jsonInt(JSONObject settings, String name, int fallback, int min, int max) {
+        return settings.has(name) ? integer(settings.optString(name, ""), fallback, min, max) : fallback;
     }
 
     private static String choice(String value, String fallback, String... allowed) {
