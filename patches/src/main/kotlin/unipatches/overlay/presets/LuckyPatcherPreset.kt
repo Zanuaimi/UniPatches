@@ -17,10 +17,10 @@ internal val luckyPatcherPreset = OverlayPresetDefinition(
         gradientBackground = true,
         buttonBackground = "#C6B407",
         iconBackground2 = "#F0E60A",
-        iconGradientAngle = 0,
+        iconGradientAngle = 90,
         iconOutline = true,
         iconOutlineColor = "#000000",
-        iconOutlineWidth = 6,
+        iconOutlineWidth = 2,
         iconStyle = "parts",
         iconParts = listOf(
             "circle|35|35|10|16|5|solid|#000000|#000000|0|100|0",
