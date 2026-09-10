@@ -46,7 +46,7 @@ public final class HillClimbRacingExampleProvider implements OverlayAppSpecificM
         @Override public String key() { return key; }
         @Override public String label() { return label; }
         @Override public String description() {
-            return description + " Settings and actions are session-only preview controls.";
+            return description + " This example module does nothing in Hill Climb Racing; it only demonstrates app-specific overlay controls.";
         }
         @Override public boolean supports(Activity activity) {
             return activity != null && "com.fingersoft.hillclimb".equals(activity.getPackageName());
