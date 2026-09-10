@@ -1,3 +1,15 @@
+## [1.17.0](https://github.com/Zanuaimi/UniPatches/compare/v1.16.0...v1.17.0) (2026-09-10)
+
+### 🐛 Bug Fixes
+
+* **ads:** honor SDK coverage in reward hooks ([2c4244c](https://github.com/Zanuaimi/UniPatches/commit/2c4244c811206499223a1ea4f3896bf80e8a9a69))
+* **ads:** make runtime reward controls reversible ([acf5828](https://github.com/Zanuaimi/UniPatches/commit/acf58288cb3939cc1adc8320bf6f825b2a603550))
+* **ads:** separate instant rewards from ad skipping ([8f1ba43](https://github.com/Zanuaimi/UniPatches/commit/8f1ba434c90261d04ab78e625b7dd958cc81fffc))
+
+### ✨ New Features
+
+* **overlay:** add descriptive runtime ad controls ([5ad5c11](https://github.com/Zanuaimi/UniPatches/commit/5ad5c11fc3404ae4b0723d416d48525cd9875641))
+
 ## [1.16.0](https://github.com/Zanuaimi/UniPatches/compare/v1.15.1...v1.16.0) (2026-09-10)
 
 ### ✨ New Features
