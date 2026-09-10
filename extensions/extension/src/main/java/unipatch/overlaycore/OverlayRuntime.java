@@ -1239,6 +1239,8 @@ public final class OverlayRuntime {
                 input = null;
                 String[] choices = module.settingsChoices();
                 if (choices == null) choices = new String[0];
+                String[] descriptions = module.settingsDescriptions();
+                if (descriptions == null) descriptions = new String[0];
                 boolean[] values = module.settingsValues();
                 if (values == null) values = new boolean[0];
                 BoundedScrollView scroll = new BoundedScrollView(overlayContext, settingsChoicesMaxHeight());
@@ -1246,13 +1248,25 @@ public final class OverlayRuntime {
                 LinearLayout choicesLayout = new LinearLayout(overlayContext);
                 choicesLayout.setOrientation(LinearLayout.VERTICAL);
                 for (int i = 0; i < choices.length; i++) {
+                    LinearLayout choiceRow = new LinearLayout(overlayContext);
+                    choiceRow.setOrientation(LinearLayout.VERTICAL);
+                    choiceRow.setPadding(0, dp(3), 0, dp(3));
                     CheckBox check = new CheckBox(overlayContext);
                     check.setText(choices[i]);
                     check.setTextColor(config.menuTextColor2);
                     check.setChecked(i < values.length && values[i]);
                     check.setTag(Integer.valueOf(i));
                     styleCheckBox(check);
-                    choicesLayout.addView(check, new LinearLayout.LayoutParams(-1, -2));
+                    choiceRow.addView(check, new LinearLayout.LayoutParams(-1, -2));
+                    if (i < descriptions.length && descriptions[i] != null && !descriptions[i].trim().isEmpty()) {
+                        TextView description = text(descriptions[i], 12, config.menuTextColor3);
+                        description.setMaxLines(2);
+                        description.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                        description.setPadding(dp(48), 0, dp(8), 0);
+                        choiceRow.addView(description, new LinearLayout.LayoutParams(-1, -2));
+                    }
+                    choiceRow.setTag(check);
+                    choicesLayout.addView(choiceRow, new LinearLayout.LayoutParams(-1, -2));
                 }
                 scroll.addView(choicesLayout, new ScrollView.LayoutParams(-1, -2));
                 LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(-1, -2);
@@ -1276,7 +1290,7 @@ public final class OverlayRuntime {
                     } else {
                         LinearLayout choicesLayout = (LinearLayout) card.getTag();
                         boolean[] values = new boolean[choicesLayout.getChildCount()];
-                        for (int i = 0; i < values.length; i++) values[i] = ((CheckBox) choicesLayout.getChildAt(i)).isChecked();
+                        for (int i = 0; i < values.length; i++) values[i] = ((CheckBox) choicesLayout.getChildAt(i).getTag()).isChecked();
                         module.applySettings(values);
                         applied = true;
                     }

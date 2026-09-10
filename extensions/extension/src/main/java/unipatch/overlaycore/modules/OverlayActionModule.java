@@ -24,6 +24,7 @@ public abstract class OverlayActionModule extends OverlayAppSpecificModule {
      */
     public String settingsTitle() { return label() + " settings"; }
     public String[] settingsChoices() { return new String[0]; }
+    public String[] settingsDescriptions() { return new String[0]; }
     public boolean[] settingsValues() { return new boolean[0]; }
     public void applySettings(boolean[] values) { }
     public String settingsTextValue() { return null; }
