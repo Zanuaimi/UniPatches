@@ -461,34 +461,45 @@ private fun BytecodePatchContext.applyAdMobRewardedStrategy(logger: Logger, useM
     classDefForEach { classDef ->
         val tl = classDef.type.lowercase()
         if (tl.contains("okhttp") || tl.contains("androidx") || tl.contains("com/google/android/gms/ads/rewarded")) return@classDefForEach
-        val mutableClass = try { mutableClassDefBy(classDef) } catch (_: Exception) { return@classDefForEach }
-        for (method in mutableClass.methods) {
-            val impl = method.implementation ?: continue
-            val instructions = impl.instructions.toList()
-            for ((index, insn) in instructions.withIndex()) {
-                val ref = (insn as? com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction)?.reference as? com.android.tools.smali.dexlib2.iface.reference.MethodReference ?: continue
-                if (ref.definingClass != "Lcom/google/android/gms/ads/rewarded/RewardedAd;" || ref.name != "show" || ref.returnType != "V") continue
-                if (ref.parameterTypes.size != 2 || ref.parameterTypes[1] != "Lcom/google/android/gms/ads/OnUserEarnedRewardListener;") continue
-                // Found call site: RewardedAd.show(Activity, OnUserEarnedRewardListener)
-                // Replace it with direct reward: if p2 != null, p2.onUserEarnedReward(null)
-                try {
-                    // Determine registers for Activity and listener (35c or 3rc)
-                    val (activityReg, listenerReg) = when (insn) {
+        val matches = classDef.methods.mapNotNull { method ->
+            val instructionMatches = mutableListOf<Pair<Int, Int>>()
+            method.implementation?.instructions?.forEachIndexed { index, insn ->
+                val ref = (insn as? com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction)?.reference as? com.android.tools.smali.dexlib2.iface.reference.MethodReference
+                    ?: return@forEachIndexed
+                if (ref.definingClass != "Lcom/google/android/gms/ads/rewarded/RewardedAd;" || ref.name != "show" || ref.returnType != "V") return@forEachIndexed
+                if (ref.parameterTypes.size != 2 || ref.parameterTypes[1] != "Lcom/google/android/gms/ads/OnUserEarnedRewardListener;") return@forEachIndexed
+                val listenerRegister = when (insn) {
                         is com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction35c -> {
                             // invoke-virtual {v0, v1, v2}, RewardedAd.show
                             // v0 = this (RewardedAd), v1 = Activity, v2 = listener
                             // Need to parse: for 35c, registerCount, registers C/D/E etc.
                             // For show with 3 regs (this, activity, listener), C=this, D=activity, E=listener
-                            if (insn.registerCount < 3) continue
-                            Pair(insn.registerD, insn.registerE)
+                            if (insn.registerCount < 3) return@forEachIndexed
+                            insn.registerE
                         }
                         is com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction3rc -> {
                             // invoke-virtual/range {v0..v2}
                             val start = insn.startRegister
-                            Pair(start + 1, start + 2)
+                            start + 2
                         }
-                        else -> continue
+                        else -> return@forEachIndexed
                     }
+                instructionMatches += index to listenerRegister
+            }
+            if (instructionMatches.isEmpty()) null else method to instructionMatches
+        }
+        if (matches.isEmpty()) return@classDefForEach
+        val mutableClass = try { mutableClassDefBy(classDef) } catch (_: Exception) { return@classDefForEach }
+        matches.forEach { (immutableMethod, instructionMatches) ->
+            val method = mutableClass.methods.firstOrNull {
+                it.name == immutableMethod.name &&
+                    it.returnType == immutableMethod.returnType &&
+                    it.parameterTypes == immutableMethod.parameterTypes
+            } ?: return@forEach
+            instructionMatches.asReversed().forEach { (index, listenerReg) ->
+                // Found call site: RewardedAd.show(Activity, OnUserEarnedRewardListener)
+                // Replace it with direct reward: if p2 != null, p2.onUserEarnedReward(null)
+                try {
                     method.addInstructions(index, """
                         if-eqz v$listenerReg, :morphe_admob_skip_$index
                         const/4 v0, 0x0

@@ -11,6 +11,7 @@ import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.reference.StringReference
+import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import java.util.logging.Logger
 import helpers.ads.*
 import helpers.bytecode.*
@@ -21,6 +22,146 @@ private val logger = Logger.getLogger("unipatches.ads.NoAdsPatch")
 private const val ADS_POLICY_CLASS = "Lunipatch/overlaycore/AdsRuntimePolicy;"
 private var runtimeHooksEnabled = false
 private var runtimeCategoryByFingerprint: Map<Fingerprint, String> = emptyMap()
+
+private enum class AdsFallbackKind {
+    VOID,
+    RETURN_FALSE,
+}
+
+private data class AdsFallbackKey(
+    val name: String,
+    val returnType: String,
+    val parameterTypes: List<String>,
+    val target: String?,
+)
+
+private data class AdsFallbackOperation(
+    val kind: AdsFallbackKind,
+    val fingerprint: Fingerprint,
+    val key: AdsFallbackKey,
+)
+
+private data class AdsFallbackMatch(
+    val classType: String,
+    val methodName: String,
+    val returnType: String,
+    val parameterTypes: List<String>,
+)
+
+private val adsFallbackOperations = mutableListOf<AdsFallbackOperation>()
+private val adsFallbackMutableClasses = mutableMapOf<String, MutableClass>()
+
+private fun resetAdsFallbackIndex() {
+    adsFallbackOperations.clear()
+    adsFallbackMutableClasses.clear()
+}
+
+private fun isAdsDefiningClass(type: String, target: String?): Boolean =
+    target == null || type.contains("ads") || type.contains("applovin") ||
+        type.contains("ironsource") || type.contains("unity3d") || type.contains("vungle") ||
+        type.contains("facebook") || type.contains("bytedance") ||
+        type.contains("google/android/gms/ads") || type.contains("huawei") ||
+        type.contains("mytarget") || type.contains("yandex") || type.contains("startapp") ||
+        type.contains("mopub") || type.contains("chartboost") || type.contains("inmobi") ||
+        type == target
+
+private fun BytecodePatchContext.flushAdsFallbackOperations(logger: Logger): Int {
+    if (adsFallbackOperations.isEmpty()) return 0
+    val operationsByKey = adsFallbackOperations.groupBy { it.key }
+    val matchesByKey = operationsByKey.keys.associateWith { mutableListOf<AdsFallbackMatch>() }
+    classDefForEach { classDef ->
+        classDef.methods.forEach { method ->
+            if (method.implementation == null) return@forEach
+            operationsByKey.forEach { (key, _) ->
+                if (method.name != key.name || method.returnType != key.returnType) return@forEach
+                if (method.parameterTypes.size != key.parameterTypes.size ||
+                    method.parameterTypes.indices.any { index -> method.parameterTypes[index].toString() != key.parameterTypes[index] }
+                ) return@forEach
+                if (!isAdsDefiningClass(method.definingClass, key.target)) {
+                    val hasAdsReference = method.implementation!!.instructions.any { instruction ->
+                        (instruction as? ReferenceInstruction)?.reference?.toString()?.contains("ads", ignoreCase = true) == true
+                    }
+                    if (!hasAdsReference) return@forEach
+                }
+                matchesByKey.getValue(key) += AdsFallbackMatch(
+                    classType = classDef.type,
+                    methodName = method.name,
+                    returnType = method.returnType,
+                    parameterTypes = method.parameterTypes.map { it.toString() },
+                )
+            }
+        }
+    }
+
+    var patched = 0
+    val operationsByClass = adsFallbackOperations.groupBy { it.key }
+    matchesByKey.forEach { (key, matches) ->
+        val operations = operationsByClass.getValue(key)
+        matches.groupBy { it.classType }.forEach { (classType, classMatches) ->
+            val mutableClass = cachedAdsMutableClass(classType) ?: return@forEach
+            classMatches.forEach { match ->
+                val mutableMethod = mutableClass.methods.firstOrNull {
+                    it.name == match.methodName && it.returnType == match.returnType &&
+                        it.parameterTypes.map { parameter -> parameter.toString() } == match.parameterTypes
+                } ?: return@forEach
+                if (mutableMethod.implementation == null) return@forEach
+                operations.forEach { operation ->
+                    val runtimeCategory = runtimeCategoryByFingerprint[operation.fingerprint]
+                    when (operation.kind) {
+                        AdsFallbackKind.VOID -> {
+                            if (runtimeCategory != null) {
+                                val guard = runtimeGuard(runtimeCategory) ?: return@forEach
+                                if (mutableMethod.implementation!!.registerCount - mutableMethod.numberOfParameterRegisters < 1) return@forEach
+                                mutableMethod.addInstructions(0, guard)
+                            } else {
+                                mutableMethod.addInstructions(0, "return-void")
+                            }
+                            patched++
+                        }
+                        AdsFallbackKind.RETURN_FALSE -> {
+                            if (mutableMethod.returnType != "Z" || mutableMethod.implementation!!.registerCount < 1) {
+                                logger.warning("No Ads: skipping ${operation.fingerprint.name} in ${mutableMethod.definingClass}: boolean method has no usable register")
+                                return@forEach
+                            }
+                            if (runtimeCategory != null) {
+                                val guard = runtimeGuard(runtimeCategory) ?: return@forEach
+                                if (mutableMethod.implementation!!.registerCount - mutableMethod.numberOfParameterRegisters < 1) return@forEach
+                                mutableMethod.addInstructions(0, guard.replace("return-void", "const/4 v0, 0x0\nreturn v0"))
+                            } else {
+                                mutableMethod.addInstructions(0, "const/4 v0, 0x0\nreturn v0")
+                            }
+                            patched++
+                        }
+                    }
+                }
+            }
+        }
+    }
+    adsFallbackOperations.forEach { operation ->
+        if (patched > 0) logger.info("No Ads: applied queued ${operation.kind.name.lowercase()} fallback operations")
+    }
+    return patched
+}
+
+private fun enqueueAdsFallbackOperation(
+    kind: AdsFallbackKind,
+    fingerprint: Fingerprint,
+    name: String,
+    returnType: String,
+    parameterTypes: List<String>,
+    target: String?,
+) {
+    adsFallbackOperations += AdsFallbackOperation(
+        kind = kind,
+        fingerprint = fingerprint,
+        key = AdsFallbackKey(name, returnType, parameterTypes, target),
+    )
+}
+
+private fun BytecodePatchContext.cachedAdsMutableClass(classType: String): MutableClass? {
+    adsFallbackMutableClasses[classType]?.let { return it }
+    return mutableClassDefByOrNull(classType)?.also { adsFallbackMutableClasses[classType] = it }
+}
 
 private fun runtimeGuard(category: String): String? {
     if (!runtimeHooksEnabled) return null
@@ -93,40 +234,15 @@ private fun BytecodePatchContext.patchVoid(fingerprint: Fingerprint): Int {
         return 0
     }
 
-    var patched = 0
-    classDefForEach { classDef ->
-        for (m in classDef.methods) {
-            if (m.name != name) continue
-            if (m.returnType != ret) continue
-            if (m.parameterTypes.map { it.toString() } != params) continue
-            if (m.implementation == null) continue
-            if (target != null) {
-                val def = m.definingClass
-                // Tightened ad check: handle obfuscated packages (e.g., a.b.c) by also checking
-                // method name and string pool for ad-related keywords
-                val isAd = def.contains("ads") || def.contains("applovin") || def.contains("ironsource") || def.contains("unity3d") || def.contains("vungle") || def.contains("facebook") || def.contains("bytedance") || def.contains("google/android/gms/ads") || def.contains("huawei") || def.contains("mytarget") || def.contains("yandex") || def.contains("startapp") || def.contains("mopub") || def.contains("chartboost") || def.contains("inmobi") || def == target ||
-                    m.implementation!!.instructions.any { insn ->
-                        (insn as? ReferenceInstruction)?.reference?.toString()?.contains("ads", ignoreCase = true) == true
-                    }
-                if (!isAd) continue
-            }
-            val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
-            val mutableMethod = mutableClass.methods.find { it.name == name && it.returnType == ret && it.parameterTypes.map { p -> p.toString() } == params } ?: return@classDefForEach
-            if (mutableMethod.implementation == null) return@classDefForEach
-            val runtimeCategory = runtimeCategoryByFingerprint[fingerprint]
-            if (runtimeCategory != null) {
-                val guard = runtimeGuard(runtimeCategory) ?: continue
-                if (mutableMethod.implementation!!.registerCount - mutableMethod.numberOfParameterRegisters < 1) continue
-                mutableMethod.addInstructions(0, guard)
-                patched++
-                continue
-            }
-            mutableMethod.addInstructions(0, "return-void")
-            patched++
-        }
-    }
-    if (patched > 0) logger.info("No Ads: blocked $name (${patched} impl(s)) via scan")
-    return patched
+    enqueueAdsFallbackOperation(
+        kind = AdsFallbackKind.VOID,
+        fingerprint = fingerprint,
+        name = name,
+        returnType = ret,
+        parameterTypes = params,
+        target = target,
+    )
+    return 0
 }
 
 private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int {
@@ -152,43 +268,15 @@ private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int
     }
     if (target != null && params.isEmpty() && name == "show") return 0
 
-    var patched = 0
-    classDefForEach { classDef ->
-        for (m in classDef.methods) {
-            if (m.name != name) continue
-            if (m.returnType != ret) continue
-            if (m.parameterTypes.map { it.toString() } != params) continue
-            if (m.implementation == null) continue
-            if (target != null) {
-                val def = m.definingClass
-                val isAd = def.contains("ads") || def.contains("applovin") || def.contains("ironsource") || def.contains("unity3d") || def.contains("vungle") || def.contains("facebook") || def.contains("bytedance") || def.contains("google/android/gms/ads") || def.contains("huawei") || def.contains("mytarget") || def.contains("yandex") || def.contains("startapp") || def.contains("mopub") || def.contains("chartboost") || def.contains("inmobi") || def == target ||
-                    m.implementation!!.instructions.any { insn ->
-                        (insn as? ReferenceInstruction)?.reference?.toString()?.contains("ads", ignoreCase = true) == true
-                    }
-                if (!isAd) continue
-            }
-            val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
-            val mutableMethod = mutableClass.methods.find { it.name == name && it.returnType == ret && it.parameterTypes.map { p -> p.toString() } == params } ?: return@classDefForEach
-            if (mutableMethod.implementation == null) return@classDefForEach
-            val runtimeCategory = runtimeCategoryByFingerprint[fingerprint]
-            if (runtimeCategory != null) {
-                val guard = runtimeGuard(runtimeCategory) ?: continue
-                val dynamic = guard.replace("return-void", "const/4 v0, 0x0\nreturn v0")
-                if (mutableMethod.implementation!!.registerCount - mutableMethod.numberOfParameterRegisters < 1) continue
-                mutableMethod.addInstructions(0, dynamic)
-                patched++
-                continue
-            }
-            if (mutableMethod.returnType != "Z" || (mutableMethod.implementation?.registerCount ?: 0) < 1) {
-                logger.warning("No Ads: skipping $name in ${mutableMethod.definingClass}: boolean method has no usable register")
-                return@classDefForEach
-            }
-            mutableMethod.addInstructions(0, "const/4 v0, 0x0\nreturn v0")
-            patched++
-        }
-    }
-    if (patched > 0) logger.info("No Ads: forced $name -> false (${patched} impl(s)) via scan")
-    return patched
+    enqueueAdsFallbackOperation(
+        kind = AdsFallbackKind.RETURN_FALSE,
+        fingerprint = fingerprint,
+        name = name,
+        returnType = ret,
+        parameterTypes = params,
+        target = target,
+    )
+    return 0
 }
 
 private fun BytecodePatchContext.patchWith(fingerprint: Fingerprint, smali: String): Int {
@@ -246,6 +334,17 @@ private val peterLoweHosts = setOf(
     "spylog.com", "hitbox.com", "counter.hitslink.com", "stats.wp.com",
 )
 
+private fun logHeap(logger: Logger, phase: String) {
+    if (System.getProperty("unipatches.heapDiagnostics") != "true") return
+    val runtime = Runtime.getRuntime()
+    val used = runtime.totalMemory() - runtime.freeMemory()
+    logger.info(
+        "Control App Ads heap [$phase]: used=${used / 1024 / 1024}MiB " +
+            "committed=${runtime.totalMemory() / 1024 / 1024}MiB " +
+            "max=${runtime.maxMemory() / 1024 / 1024}MiB",
+    )
+}
+
 private fun extractHost(value: String): String? {
     val candidate = value.substringAfter("://", value).substringBefore('/').substringBefore(':').trim('.').lowercase()
     return candidate.takeIf { it.length in 3..253 && it.count { char -> char == '.' } >= 1 &&
@@ -268,14 +367,27 @@ private fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildca
     if (hosts.isEmpty()) return 0
     var replacements = 0
     classDefForEach { classDef ->
-        val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
-        mutableClass.methods.forEach { method ->
-            val instructions = method.implementation?.instructions?.toList() ?: return@forEach
-            instructions.forEachIndexed { index, instruction ->
+        val matches = classDef.methods.mapNotNull { method ->
+            val instructionMatches = mutableListOf<Triple<Int, Int, String>>()
+            method.implementation?.instructions?.forEachIndexed { index, instruction ->
                 val value = ((instruction as? ReferenceInstruction)?.reference as? StringReference)?.string ?: return@forEachIndexed
                 val host = extractHost(value) ?: return@forEachIndexed
                 if (hosts.none { blocked -> host == blocked || (wildcard && host.endsWith(".$blocked")) }) return@forEachIndexed
                 val register = (instruction as? OneRegisterInstruction)?.registerA ?: return@forEachIndexed
+                instructionMatches += Triple(index, register, value)
+            }
+            if (instructionMatches.isEmpty()) null else method to instructionMatches
+        }
+        if (matches.isEmpty()) return@classDefForEach
+        val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
+        matches.forEach { (immutableMethod, instructionMatches) ->
+            val method = mutableClass.methods.firstOrNull {
+                it.name == immutableMethod.name &&
+                    it.returnType == immutableMethod.returnType &&
+                    it.parameterTypes == immutableMethod.parameterTypes
+            } ?: return@forEach
+            instructionMatches.asReversed().forEach { (index, register, value) ->
+                val host = extractHost(value) ?: return@forEach
                 val replacement = if (runtimeHooksEnabled) {
                     """
                     const-string v$register, "${escapeSmaliString(value)}"
@@ -435,6 +547,8 @@ val controlAppAdsPatch = bytecodePatch(
 
     execute {
         val detectionLogger = Logger.getLogger(this::class.java.name)
+        resetAdsFallbackIndex()
+        logHeap(detectionLogger, "start")
 
         // Apply preset logic
         var effectiveBlockInterstitials = when (preset) {
@@ -890,14 +1004,29 @@ val controlAppAdsPatch = bytecodePatch(
             totalPatched += patchReturnFalse(MaxRewardedAdIsReadyFingerprint)
         }
 
+        totalPatched += flushAdsFallbackOperations(detectionLogger)
+
         // Generic audio DAI ads (Klassik Radio, etc.)  -  adsIdentityToken, cuepoints.
         if (broadHeuristics == true) classDefForEach { classDef ->
             val tl = classDef.type.lowercase()
             if (!tl.contains("song") && !tl.contains("station") && !tl.contains("stream") && !tl.contains("ad")) return@classDefForEach
             if (tl.contains("okhttp") || tl.contains("androidx")) return@classDefForEach
+            val matchingMethods = classDef.methods.filter { method ->
+                val name = method.name.lowercase()
+                method.implementation != null &&
+                    (name.contains("adsidentitytoken") || name.contains("adsresponse") ||
+                        name.contains("adsduration") || name.contains("cuepoints") || name.contains("adsid"))
+            }
+            if (matchingMethods.isEmpty()) return@classDefForEach
             try {
                 val mutableClass = mutableClassDefBy(classDef)
-                for (method in mutableClass.methods) {
+                for (method in mutableClass.methods.filter { candidate ->
+                    matchingMethods.any {
+                        it.name == candidate.name &&
+                            it.returnType == candidate.returnType &&
+                            it.parameterTypes == candidate.parameterTypes
+                    }
+                }) {
                     val n = method.name.lowercase()
                     val isAdToken = n.contains("adsidentitytoken") || n.contains("adsresponse") || n.contains("adsduration") || n.contains("cuepoints") || n.contains("adsid")
                     if (!isAdToken) continue
@@ -921,6 +1050,7 @@ val controlAppAdsPatch = bytecodePatch(
         if (adsFreeRewards == true) {
             applyLatestAdsFreeRewards(detectionLogger, rewardStrategy, instantReward)
         }
+        logHeap(detectionLogger, "after-method-patches")
         // Availability needs a guarded method even when the initial runtime value is false;
         // otherwise the overlay checkbox could never enable it after patching.
         if ((adsFreeRewards == true && fakeAdAvailability == true) ||
@@ -973,6 +1103,8 @@ val controlAppAdsPatch = bytecodePatch(
             }
         }
         totalPatched += redirectLiteralHosts(filterHosts, wildcardHosts == true, detectionLogger)
+        logHeap(detectionLogger, "after-host-rewrites")
+        resetAdsFallbackIndex()
 
         if (totalPatched == 0) {
             detectionLogger.warning("Control App Ads: no selected literal host or patchable ad method was found. The app may use an unsupported SDK, dynamically generated endpoints, or encrypted configuration.")
