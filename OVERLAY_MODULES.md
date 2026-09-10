@@ -109,7 +109,8 @@ Configuration fields are positional and Base64 encoded. When adding fields:
 - preserve decoding for older versions;
 - validate bounded numeric values and enum strings before serialization.
 
-The current configuration payload uses schema version 1 for the current UniPatches overlay patch.
+The current configuration payload remains schema version 1 because new values are appended to the
+existing versioned positional payload and the decoder supplies safe defaults for older payloads.
 The patch release name can change independently from this wire-format schema. It includes
 the current UI fields alongside background transparency, split menu text colors, control styling,
 separator styling, menu geometry, and animation settings.

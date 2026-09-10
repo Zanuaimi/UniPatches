@@ -46,7 +46,7 @@ private fun generatePatchList(version: String, patches: Set<Patch<*>>) {
             name = patch.name!!,
             description = patch.description,
             default = patch.default,
-            dependencies = patch.dependencies.map { it.javaClass.simpleName },
+            dependencies = patch.dependencies.mapNotNull { it.name },
             // Map each Compatibility to a JsonCompatibility object with full metadata.
             // Patches with null compatiblePackages are universal (apply to any app).
             compatiblePackages = patch.compatibility?.map { compat ->

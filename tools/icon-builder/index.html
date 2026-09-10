@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UniPatches Legacy Icon Builder</title>
+    <meta
+      name="description"
+      content="Local-only multi-part legacy icon builder for UniPatches overlay icons."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">LOCAL TOOL / MULTI-PARTS ICONS</p>
+          <h1>Legacy Icon Builder</h1>
+          <p class="lede">
+            Compose, inspect, and export the exact pipe-separated icon rows used
+            by the UniPatches overlay runtime.
+          </p>
+        </div>
+        <div class="privacy-mark">
+          <span class="privacy-dot"></span>Runs entirely in this browser
+        </div>
+      </header>
+
+      <section class="toolbar" aria-label="File actions">
+        <button
+          class="button button-primary"
+          id="newIconButton"
+          type="button"
+          title="Reset the builder to a new icon"
+        >
+          New icon
+        </button>
+        <button
+          class="button"
+          id="importRowsButton"
+          type="button"
+          title="Import multipart icon rows from a text file"
+        >
+          Import parts
+        </button>
+        <button
+          class="button"
+          id="importJsonButton"
+          type="button"
+          title="Import complete icon-builder editor JSON"
+        >
+          Import editor JSON
+        </button>
+        <button
+          class="button"
+          id="exportRowsButton"
+          type="button"
+          title="Copy the current multipart icon rows"
+        >
+          Copy parts
+        </button>
+        <button
+          class="button"
+          id="downloadRowsButton"
+          type="button"
+          title="Download the current multipart icon rows as text"
+        >
+          Download parts .txt
+        </button>
+        <button
+          class="button"
+          id="downloadJsonButton"
+          type="button"
+          title="Download the complete icon-builder editor JSON"
+        >
+          Download editor JSON
+        </button>
+        <button
+          class="button"
+          id="importLegacyJsonButton"
+          type="button"
+          title="Import legacy icon settings JSON for Universal Overlay"
+        >
+          Import legacy icon JSON
+        </button>
+        <button
+          class="button"
+          id="downloadLegacyJsonButton"
+          type="button"
+          title="Export legacy icon settings JSON for Universal Overlay"
+        >
+          Export legacy icon JSON
+        </button>
+        <button
+          class="button theme-toggle"
+          id="themeToggle"
+          type="button"
+          title="Switch between light and dark builder themes"
+          aria-pressed="false"
+        >
+          Dark mode
+        </button>
+        <input
+          id="rowsFileInput"
+          type="file"
+          accept=".txt,.csv,text/plain"
+          hidden
+        />
+        <input
+          id="jsonFileInput"
+          type="file"
+          accept=".json,application/json"
+          hidden
+        />
+        <input
+          id="legacyJsonFileInput"
+          type="file"
+          accept=".json,application/json"
+          hidden
+        />
+        <span class="toolbar-status" id="toolbarStatus" role="status"
+          >Ready</span
+        >
+      </section>
+
+      <section class="workspace">
+        <aside class="sidebar">
+          <section class="panel panel-compact">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">STARTING POINT</p>
+                <h2>Templates</h2>
+              </div>
+            </div>
+            <div class="template-grid" id="templateGrid"></div>
+          </section>
+
+          <section class="panel panel-compact">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">ICON SURFACE</p>
+                <h2>Appearance</h2>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label class="field field-wide"
+                >Icon mode
+                <select id="iconMode">
+                  <option value="parts">Multi-parts icon</option>
+                  <option value="text">Legacy text / shape icon</option>
+                  <option value="image">Local image preview</option>
+                </select>
+              </label>
+              <label class="field field-wide"
+                >Background color
+                <span class="color-input"
+                  ><input
+                    id="backgroundColor"
+                    type="color"
+                    value="#20252b" /><input
+                    id="backgroundColorText"
+                    type="text"
+                    value="#20252B"
+                    spellcheck="false"
+                /></span>
+              </label>
+              <label class="field field-wide"
+                >Background color 2
+                <span class="color-input"
+                  ><input
+                    id="backgroundColor2"
+                    type="color"
+                    value="#35414c" /><input
+                    id="backgroundColor2Text"
+                    type="text"
+                    value="#35414C"
+                    spellcheck="false"
+                /></span>
+              </label>
+              <label class="field"
+                >Gradient angle
+                <span class="unit-input"
+                  ><input
+                    id="backgroundAngle"
+                    type="number"
+                    min="-360"
+                    max="360"
+                    value="0"
+                  /><small>deg</small></span
+                ></label
+              >
+              <label class="toggle"
+                ><input id="backgroundGradient" type="checkbox" checked /><span
+                  >Gradient background</span
+                ></label
+              >
+              <label class="field field-wide"
+                >Background style
+                <select id="backgroundStyle">
+                  <option value="flat">Flat</option>
+                  <option value="faceted">Faceted layers</option>
+                </select>
+              </label>
+              <label class="field field-wide"
+                >Overlay menu text font
+                <select id="menuTextFont">
+                  <option value="default">Default (Android)</option>
+                  <option value="roboto">Roboto</option>
+                  <option value="sansSerif">Sans serif</option>
+                  <option value="serif">Serif</option>
+                  <option value="monospace">Monospace</option>
+                  <option value="sansCondensed">Sans condensed</option>
+                  <option value="sansMedium">Sans medium</option>
+                  <option value="sansBlack">Sans black</option>
+                </select>
+              </label>
+              <label class="field"
+                >Outline width
+                <span class="unit-input"
+                  ><input
+                    id="outlineWidth"
+                    type="number"
+                    min="0"
+                    max="12"
+                    value="2"
+                  /><small>dp</small></span
+                ></label
+              >
+              <label class="field field-wide"
+                >Outline color
+                <span class="color-input"
+                  ><input
+                    id="outlineColor"
+                    type="color"
+                    value="#78c8ff" /><input
+                    id="outlineColorText"
+                    type="text"
+                    value="#78C8FF"
+                    spellcheck="false"
+                /></span>
+              </label>
+              <label class="toggle"
+                ><input id="outlineGradient" type="checkbox" /><span
+                  >Gradient outline</span
+                ></label
+              >
+              <label class="field field-wide"
+                >Outline color 2
+                <span class="color-input"
+                  ><input
+                    id="outlineColor2"
+                    type="color"
+                    value="#e651a0" /><input
+                    id="outlineColor2Text"
+                    type="text"
+                    value="#E651A0"
+                    spellcheck="false"
+                /></span>
+              </label>
+              <label class="field"
+                >Outline angle
+                <span class="unit-input"
+                  ><input
+                    id="outlineAngle"
+                    type="number"
+                    min="-360"
+                    max="360"
+                    value="0"
+                  /><small>deg</small></span
+                ></label
+              >
+              <label class="toggle"
+                ><input id="highlight" type="checkbox" /><span
+                  >Gloss highlight</span
+                ></label
+              >
+            </div>
+          </section>
+
+          <section class="panel panel-compact">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">LEGACY MODE</p>
+                <h2>Text icon</h2>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label class="field field-wide"
+                >Text
+                <input id="legacyText" type="text" maxlength="3" value="U"
+              /></label>
+              <label class="field"
+                >Text size
+                <span class="unit-input"
+                  ><input
+                    id="legacyTextSize"
+                    type="number"
+                    min="8"
+                    max="48"
+                    value="18"
+                  /><small>sp</small></span
+                ></label
+              >
+              <label class="toggle"
+                ><input id="legacyBold" type="checkbox" checked /><span
+                  >Bold text</span
+                ></label
+              >
+              <label class="field field-wide"
+                >Text icon font
+                <select id="legacyTextFont">
+                  <option value="default">Default (Android)</option>
+                  <option value="roboto">Roboto</option>
+                  <option value="sansSerif">Sans serif</option>
+                  <option value="serif">Serif</option>
+                  <option value="monospace">Monospace</option>
+                  <option value="sansCondensed">Sans condensed</option>
+                  <option value="sansMedium">Sans medium</option>
+                  <option value="sansBlack">Sans black</option>
+                </select>
+              </label>
+              <label class="field field-wide"
+                >Text color
+                <span class="color-input"
+                  ><input
+                    id="legacyTextColor"
+                    type="color"
+                    value="#ffffff" /><input
+                    id="legacyTextColorText"
+                    type="text"
+                    value="#FFFFFF"
+                    spellcheck="false"
+                /></span>
+              </label>
+              <label class="field field-wide"
+                >Legacy shape
+                <select id="legacyShape">
+                  <option value="triangle">Triangle</option>
+                  <option value="roundedTriangle">
+                    Triangle with rounded corners
+                  </option>
+                  <option value="circle">Circle</option>
+                  <option value="square">Square</option>
+                  <option value="roundedRect">Rounded rectangle</option>
+                  <option value="diamond">Diamond</option>
+                  <option value="star">Star</option>
+                  <option value="heart">Heart</option>
+                </select>
+              </label>
+              <label class="field field-wide"
+                >Legacy shape color 1
+                <span class="color-input"
+                  ><input
+                    id="legacyShapeColor1"
+                    type="color"
+                    value="#FFFFFF" /><input
+                    id="legacyShapeColor1Text"
+                    type="text"
+                    value="#FFFFFF"
+                    spellcheck="false"
+                /></span>
+              </label>
+              <label class="field field-wide"
+                >Legacy shape color 2
+                <span class="color-input"
+                  ><input
+                    id="legacyShapeColor2"
+                    type="color"
+                    value="#FFFFFF" /><input
+                    id="legacyShapeColor2Text"
+                    type="text"
+                    value="#FFFFFF"
+                    spellcheck="false"
+                /></span>
+              </label>
+              <label class="toggle"
+                ><input id="legacyShapeGradient" type="checkbox" /><span
+                  >Legacy shape gradient</span
+                ></label
+              >
+              <label class="field"
+                >Shape angle
+                <span class="unit-input"
+                  ><input
+                    id="legacyShapeAngle"
+                    type="number"
+                    min="-360"
+                    max="360"
+                    value="0"
+                  /><small>deg</small></span
+                ></label
+              >
+              <label class="field"
+                >Shape stroke
+                <span class="unit-input"
+                  ><input
+                    id="legacyShapeStroke"
+                    type="number"
+                    min="0"
+                    max="32"
+                    value="3"
+                  /><small>dp</small></span
+                ></label
+              >
+              <label class="field"
+                >Shape scale
+                <span class="unit-input"
+                  ><input
+                    id="legacyShapeScale"
+                    type="number"
+                    min="20"
+                    max="100"
+                    value="70"
+                  /><small>%</small></span
+                ></label
+              >
+              <label class="field"
+                >Icon size
+                <span class="unit-input"
+                  ><input
+                    id="iconSize"
+                    type="number"
+                    min="32"
+                    max="128"
+                    value="56"
+                  /><small>dp</small></span
+                ></label
+              >
+              <label class="field"
+                >Idle opacity
+                <span class="unit-input"
+                  ><input
+                    id="iconOpacity"
+                    type="number"
+                    min="10"
+                    max="100"
+                    value="55"
+                  /><small>%</small></span
+                ></label
+              >
+              <label class="field"
+                >Drag visibility
+                <span class="unit-input"
+                  ><input
+                    id="dragVisibility"
+                    type="number"
+                    min="1"
+                    max="10"
+                    value="2"
+                  /><small>sec</small></span
+                ></label
+              >
+              <label class="field field-wide"
+                >Initial position
+                <select id="iconPosition">
+                  <option value="topLeft">Top left</option>
+                  <option value="topMiddle">Top middle</option>
+                  <option value="topRight" selected>Top right</option>
+                  <option value="centerLeft">Center left</option>
+                  <option value="centerRight">Center right</option>
+                  <option value="bottomLeft">Bottom left</option>
+                  <option value="bottomMiddle">Bottom middle</option>
+                  <option value="bottomRight">Bottom right</option>
+                </select>
+              </label>
+              <label class="field field-wide"
+                >Button shape
+                <select id="buttonShape">
+                  <option value="circle">Circle</option>
+                  <option value="squircle">Squircle</option>
+                  <option value="square">Square</option>
+                </select>
+              </label>
+              <label class="field field-wide"
+                >Local image
+                <input
+                  id="imageInput"
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                />
+              </label>
+            </div>
+          </section>
+        </aside>
+
+        <section class="canvas-column">
+          <div class="preview-panel panel">
+            <div class="panel-heading preview-heading">
+              <div>
+                <p class="section-kicker">LIVE PREVIEW</p>
+                <h2>Runtime icon</h2>
+              </div>
+              <div class="preview-meta">
+                <span id="partCount">0 parts</span
+                ><span id="invalidCount">0 invalid</span>
+              </div>
+            </div>
+            <div class="preview-stage" id="previewStage">
+              <canvas
+                id="iconCanvas"
+                width="420"
+                height="420"
+                aria-label="Icon preview"
+              ></canvas>
+              <div class="preview-caption">
+                The preview uses the same 0–100 coordinates, layer order,
+                opacity, stroke, and supported shapes as the Android renderer.
+              </div>
+            </div>
+          </div>
+
+          <section class="panel parts-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">BUILDING BLOCKS</p>
+                <h2>Multi-part rows</h2>
+              </div>
+              <div class="parts-actions">
+                <button
+                  class="icon-button"
+                  id="addPartButton"
+                  type="button"
+                  title="Add a part"
+                >
+                  +</button
+                ><button
+                  class="icon-button"
+                  id="clearPartsButton"
+                  type="button"
+                  title="Clear all parts"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div class="parts-list" id="partsList"></div>
+            <div class="empty-state" id="emptyState">
+              No parts yet. Add a shape or choose a template to begin.
+            </div>
+          </section>
+
+          <section class="panel raw-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">COMPATIBILITY VIEW</p>
+                <h2>Import and edit rows</h2>
+              </div>
+              <button class="text-button" id="applyRawButton" type="button">
+                Apply rows
+              </button>
+            </div>
+            <textarea
+              id="rawRows"
+              spellcheck="false"
+              aria-label="Pipe-separated icon rows"
+            ></textarea>
+            <p class="helper">
+              One part per line. Format:
+              <code
+                >shape|position-x|position-y|scale-w|scale-h|rotation|fill|color1|color2|stroke|opacity|layer|text|bold|font</code
+              >
+            </p>
+          </section>
+        </section>
+      </section>
+
+      <footer class="footer">
+        <span
+          >Supported shapes: triangle, roundedTriangle, circle, ring, square,
+          roundedRect, line, arc, diamond, star, heart, text.</span
+        ><span>Nothing is uploaded.</span>
+      </footer>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>

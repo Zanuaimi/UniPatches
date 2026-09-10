@@ -24,9 +24,9 @@ are exceptions and always remain from the visible Morphe settings.
 
 ## Importing a preset
 
-Import is available only when `Quick setup > 1. Choose preset` is set to `Custom (UniPatches defaults)`.
+Import is available only when `Quick setup > Preset selection` is set to `Custom (UniPatches defaults)`.
 
-1. Use `Advanced > Import / export > Import UI preset` to choose an existing `.json` file.
+1. Use `Quick setup > Import / export UI presets > Import UI preset` to choose an existing `.json` file.
 2. Patch the APK.
 3. The imported values override the visible Morphe UI settings for that patch run.
 
@@ -35,7 +35,7 @@ the patch is running. If the path is empty, unreadable, malformed, unsupported, 
 values, the patch falls back to the visible Morphe settings. Older unversioned presets and older
 `#AARRGGBB` color values are migrated when possible.
 
-`Quick setup > 3. Optional icon image > Local image` takes priority over the Base64 or HTTPS input
+`Quick setup > Optional icon image > Local image` takes priority over the Base64 or HTTPS input
 when valid. The Base64 or HTTPS input accepts a data URI, raw Base64, URL-safe Base64, or HTTPS image
 URL. If the local image is empty or invalid, that input is tried. When both are empty, the text or
 Multi-parts icon is used; a non-empty but invalid image leaves a plain icon background so image input
@@ -45,8 +45,8 @@ never falls through to a different icon design.
 
 Export is available only in Custom mode.
 
-1. Set `Advanced > Import / export > Export UI preset` to an existing writable folder.
-2. Optionally change `Advanced > Import / export > Export file name`.
+1. Set `Quick setup > Import / export UI presets > Export UI preset` to an existing writable folder.
+2. Optionally change `Quick setup > Import / export UI presets > Export file name`.
 3. Patch the APK.
 4. The final effective UI settings are written after the patch work completes.
 
@@ -66,7 +66,7 @@ Exports use a versioned format:
 ```json
 {
   "format": "unipatches-universal-overlay-preset",
-  "version": 5,
+  "version": 6,
   "settings": {
     "appendDescription": "",
     "descriptionAlignment": "center",
@@ -76,7 +76,9 @@ Exports use a versioned format:
     "outlineColor": "#FF5656",
     "textColor": "#FF5656",
     "iconText": "U",
+    "iconTextFont": "default",
     "iconTextSize": 18,
+    "menuTextFont": "default",
     "controlTheme": "modern",
     "controlBackground": "#300000",
     "controlForeground": "#FF5656",

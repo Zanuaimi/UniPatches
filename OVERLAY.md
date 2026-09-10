@@ -120,7 +120,7 @@ Choose `Customize appearance > Icon > Type > Multi-parts icon`, then enter one r
 `Advanced > Multi-parts icon editor > Part list`:
 
 ```text
-shape|x|y|width|height|rotation|fill|color1|color2|stroke|opacity|layer|text|bold
+shape|x|y|width|height|rotation|fill|color1|color2|stroke|opacity|layer|text|bold|font
 ```
 
 Coordinates and dimensions are percentages of the icon area. `x=50` and `y=50` center a part.
@@ -134,17 +134,19 @@ Single-part example:
 triangle|50|50|55|55|0|solid|#4E97F0|#4E97F0|0|100|0
 ```
 
-Multi-part chevron example:
+Multi-part bold V example:
 
 ```text
-chevron|50|52|64|72|0|solid|#FFFFFF|#FFFFFF|6|100|0
-triangle|50|39|28|22|0|gradient|#E651A0|#6564D3|0|100|1
+text|50|54|57|67|0|solid|#FFFFFF|#FFFFFF|0|100|0|V|true
+roundedTriangle|50|45|25|26|0|gradient|#E651A0|#6564D3|0|100|1
 ```
 
-The chevron is drawn first, then the triangle above it. Supported part shapes include
-`triangle`, `oval`, `circle`, `square`, `roundedRect`, `chevron`, `line`, `arc`, `diamond`, `star`,
+The bold V is drawn first, then the triangle above it. Supported part shapes include
+`triangle`, `roundedTriangle`, `v`, `circle`, `ring`, `square`, `roundedRect`, `line`, `arc`, `diamond`, `star`,
 `heart`, and `text`. The final text field is required for `text` and is trimmed to three characters.
-The optional `bold` field accepts `true` or `false` and applies to text parts. Built-in presets use this same format and remain
+The optional `bold` field accepts `true` or `false` and applies to text parts. The optional `font` field accepts
+`default`, `roboto`, `sansSerif`, `serif`, `monospace`, `sansCondensed`, `sansMedium`, or `sansBlack`.
+Built-in presets use this same format and remain
 fully editable rather than relying on preset-only renderer behavior.
 
 ### App-specific action modules
@@ -154,19 +156,30 @@ one-shot action button, and a session value below the module description. Its se
 the overlay surface and accent colors. A module provider must identify its profile and reject
 Activities that are not its target app.
 
-`Hill Climb Racing Overlay Example (Experimental)` demonstrates this API with mock-only currency
-number fields and vehicle, stage, and garage checkbox lists. The example is deliberately limited to
-session-local preview state: it does not inspect or modify game data, purchases, save files, or
-bytecode. App-specific patches must not be selected together with `UniPatches Universal Overlay
-Patch`, because both patches install the shared overlay bridge.
+`Hill Climb Racing Example Overlay Addon` is an app-specific companion to
+`UniPatches Universal Overlay Patch`. Universal Overlay owns the complete shared configuration,
+startup Activity/Application bridge, icon settings, statistics, Activity controls, hooks, monitors,
+animations, and integrated modules. The HCR companion runs after Universal Overlay, requires its
+temporary bridge marker, and only selects the mock-only currency number fields plus vehicle, stage,
+and garage checkbox lists. These modules are deliberately limited to session-local preview state:
+they do not inspect or modify game data, purchases, save files, or bytecode. All six HCR module
+switches are enabled by default and can be disabled independently.
 
-`Control App Ads Patch` can optionally expose the same policy through the shared core. Enable its
-overlay integration and choose the runtime modules in the Ads Control settings, then select either
-Universal Overlay or an app-specific overlay patch. The complete user flow is:
+Select both patches when building the HCR example. HCR does not install a second overlay runtime;
+it adds its selected app-specific profile and modules to the Universal bridge recorded during the
+same patch run. If Universal did not inject a bridge, HCR fails instead of producing a partial
+overlay patch.
 
-1. Select `Control App Ads Patch` and one overlay patch. Do not select Universal Overlay together
-   with an app-specific overlay patch, because both install the same shared overlay bridge.
-2. In Control App Ads, enable `Overlay integration > Enable runtime controls`.
+`Configure App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` includes an optional overlay
+addon. Its three overlay addon modules are `Block Ads`, `Rewards without ads`, and `Block ad/tracking
+hosts`. They expose session-local runtime controls through the shared overlay and start with values
+copied from the Ads patch settings. Enable the addon and choose its modules in the Ads settings,
+then select Universal Overlay or an app-specific overlay patch. The complete user flow is:
+
+1. Select `Configure App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` and `UniPatches Universal Overlay Patch`, or select the HCR
+   companion together with Universal Overlay when building the HCR example. App-specific companions
+   add modules to Universal; they do not install a second shared overlay bridge.
+2. In Configure App Ads, enable `Overlay integration > Enable runtime controls`.
 3. Under `Overlay integration > Runtime controls`, enable `Block Ads`, `Rewards without ads`,
    and/or `Block ad/tracking hosts`. These module switches are disabled by default. The Rewards
    without ads runtime control also requires `Rewards without ads > Enable`.
