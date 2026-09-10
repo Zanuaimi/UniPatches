@@ -397,7 +397,10 @@ final class OverlayViews {
             Path path = new Path();
             paint.setStrokeCap(Paint.Cap.ROUND);
             paint.setStrokeJoin(Paint.Join.ROUND);
-            if ("circle".equals(shape) || "ring".equals(shape)) {
+            if ("oval".equals(shape)) {
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawOval(area, paint);
+            } else if ("circle".equals(shape) || "ring".equals(shape)) {
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(stroke);
                 canvas.drawOval(area, paint);
@@ -423,7 +426,8 @@ final class OverlayViews {
             } else if ("text".equals(shape)) {
                 paint.setStyle(Paint.Style.FILL);
                 paint.setTextAlign(Paint.Align.CENTER);
-                paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                paint.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT,
+                    part.bold ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL));
                 paint.setTextSize(Math.max(1f, Math.min(width / Math.max(1, part.text.length()), height) * .82f));
                 Paint.FontMetrics metrics = paint.getFontMetrics();
                 float baseline = area.centerY() - (metrics.ascent + metrics.descent) / 2f;
@@ -495,13 +499,16 @@ final class OverlayViews {
             final String shape, fill, text;
             final float x, y, width, height, rotation, strokeWidth, opacity, gradientAngle;
             final int color1, color2, layer;
+            final boolean bold;
 
             private IconPart(String shape, float x, float y, float width, float height, float rotation,
-                             String fill, int color1, int color2, float strokeWidth, float opacity, int layer, String text) {
+                             String fill, int color1, int color2, float strokeWidth, float opacity, int layer,
+                             String text, boolean bold) {
                 this.shape = shape; this.x = x; this.y = y; this.width = width; this.height = height;
                 this.rotation = rotation; this.fill = fill; this.color1 = color1; this.color2 = color2;
                 this.strokeWidth = strokeWidth; this.opacity = opacity; this.layer = layer;
                 this.text = text;
+                this.bold = bold;
                 // Rotation belongs to the geometry. The canvas transform rotates the fill with
                 // the part, so reusing this value as a separate gradient direction is redundant.
                 this.gradientAngle = 0f;
@@ -510,7 +517,7 @@ final class OverlayViews {
             static IconPart parse(String encoded) {
                 try {
                     String[] fields = encoded.split("\\|", -1);
-                    if (fields.length < 12 || fields.length > 13) return null;
+                    if (fields.length < 12 || fields.length > 14) return null;
                     String shape = fields[0].trim();
                     String fill = "gradient".equals(fields[6].trim()) ? "gradient" : "solid";
                     if (!isSupportedShape(shape)) return null;
@@ -524,10 +531,11 @@ final class OverlayViews {
                     float stroke = bounded(fields[9], 3f, 0f, 32f);
                     float opacity = bounded(fields[10], 100f, 0f, 100f);
                     int layer = Math.round(bounded(fields[11], 0f, -32f, 32f));
-                    String text = fields.length == 13 ? fields[12].trim().replace('|', ' ') : "";
+                    String text = fields.length >= 13 ? fields[12].trim().replace('|', ' ') : "";
+                    boolean bold = fields.length == 14 && "true".equalsIgnoreCase(fields[13].trim());
                     if ("text".equals(shape)) text = text.substring(0, Math.min(3, text.length()));
                     if ("text".equals(shape) && text.isEmpty()) text = "?";
-                    return new IconPart(shape, x, y, width, height, rotation, fill, color1, color2, stroke, opacity, layer, text);
+                    return new IconPart(shape, x, y, width, height, rotation, fill, color1, color2, stroke, opacity, layer, text, bold);
                 } catch (RuntimeException ignored) {
                     return null;
                 }
@@ -535,6 +543,7 @@ final class OverlayViews {
 
             private static boolean isSupportedShape(String shape) {
                 return "triangle".equals(shape) || "invertedTriangle".equals(shape)
+                    || "oval".equals(shape)
                         || "circle".equals(shape)
                         || "square".equals(shape) || "roundedRect".equals(shape)
                         || "chevron".equals(shape)

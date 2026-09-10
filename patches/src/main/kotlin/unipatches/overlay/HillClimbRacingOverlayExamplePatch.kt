@@ -84,7 +84,7 @@ val hillClimbRacingOverlayExamplePatch = bytecodePatch(
             commonFields = hillClimbRacingDefaults(),
             profileId = HCR_PROFILE,
             injectionMode = OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE,
-            trailingFields = listOf("", selectedModules),
+            trailingFields = listOf("", selectedModules, "#78C8FF"),
         )
         val adsRuntimePolicy = OverlayAdsRuntimeIntegration.pendingPolicy()
         val target = StartupHooks.resolvedLauncherActivityDescriptor?.let(::mutableClassDefByOrNull)

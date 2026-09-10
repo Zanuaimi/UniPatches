@@ -294,7 +294,6 @@ public final class OverlayRuntime {
         private float startX;
         private float startY;
         private boolean dragged;
-        private String pendingInlineSectionLabel;
         private final Runnable dragVisibilityFade;
 
         Controller(Activity activity, OverlayConfig config) {
@@ -932,28 +931,28 @@ public final class OverlayRuntime {
             }
             if (hasStatistics) {
                 addSectionLabel(modules, "Statistic modules");
-                if (config.deviceInformation) addStatisticSafely(modules, () -> new DeviceInformationModule(activity));
-                if (config.fps) addStatisticSafely(modules, FpsModule::new);
-                if (config.deviceTemperature) addStatisticSafely(modules, () -> new DeviceTemperatureModule(activity, config.temperatureFormat));
-                if (config.systemTime) addStatisticSafely(modules, () -> new SystemTimeModule(config.timeFormat));
-                if (config.sessionTime) addStatisticSafely(modules, () -> new SessionTimeModule(sessionStartElapsed));
-                if (config.batteryStatus) addStatisticSafely(modules, () -> new BatteryStatusModule(activity));
-                if (config.appMemory) addStatisticSafely(modules, () -> new AppMemoryModule(activity));
-                if (config.networkStatus) addStatisticSafely(modules, () -> new NetworkStatusModule(activity));
+                if (config.deviceInformation) addStatisticSafely(modules, () -> new DeviceInformationModule(activity), "Statistic modules");
+                if (config.fps) addStatisticSafely(modules, FpsModule::new, "Statistic modules");
+                if (config.deviceTemperature) addStatisticSafely(modules, () -> new DeviceTemperatureModule(activity, config.temperatureFormat), "Statistic modules");
+                if (config.systemTime) addStatisticSafely(modules, () -> new SystemTimeModule(config.timeFormat), "Statistic modules");
+                if (config.sessionTime) addStatisticSafely(modules, () -> new SessionTimeModule(sessionStartElapsed), "Statistic modules");
+                if (config.batteryStatus) addStatisticSafely(modules, () -> new BatteryStatusModule(activity), "Statistic modules");
+                if (config.appMemory) addStatisticSafely(modules, () -> new AppMemoryModule(activity), "Statistic modules");
+                if (config.networkStatus) addStatisticSafely(modules, () -> new NetworkStatusModule(activity), "Statistic modules");
             }
             if (hasActivity) {
                 addSectionLabel(modules, "Activity modules");
-                if (config.keepAwake) addActivityModuleSafely(modules, KeepAwakeModule::new);
-                if (config.fullscreen) addActivityModuleSafely(modules, FullscreenModule::new);
-                if (config.screenshots) addActivityModuleSafely(modules, ScreenshotsModule::new);
-                if (config.appBrightness) addActivityModuleSafely(modules, AppBrightnessModule::new);
-                if (config.rotationMode) addActivityModuleSafely(modules, RotationModeModule::new);
-                if (config.appAudioMute) addActivityModuleSafely(modules, AppAudioMuteModule::new);
+                if (config.keepAwake) addActivityModuleSafely(modules, KeepAwakeModule::new, "Activity modules");
+                if (config.fullscreen) addActivityModuleSafely(modules, FullscreenModule::new, "Activity modules");
+                if (config.screenshots) addActivityModuleSafely(modules, ScreenshotsModule::new, "Activity modules");
+                if (config.appBrightness) addActivityModuleSafely(modules, AppBrightnessModule::new, "Activity modules");
+                if (config.rotationMode) addActivityModuleSafely(modules, RotationModeModule::new, "Activity modules");
+                if (config.appAudioMute) addActivityModuleSafely(modules, AppAudioMuteModule::new, "Activity modules");
             }
             if (hasHooks) {
                 addSectionLabel(modules, "Hook modules");
-                if (config.disableHaptics) addHookModuleSafely(modules, DisableHapticsModule::new);
-                if (config.disableAnimations) addHookModuleSafely(modules, DisableAnimationsModule::new);
+                if (config.disableHaptics) addHookModuleSafely(modules, DisableHapticsModule::new, "Hook modules");
+                if (config.disableAnimations) addHookModuleSafely(modules, DisableAnimationsModule::new, "Hook modules");
             }
             addAppSpecificModules(modules);
             addIntegratedModules(modules);
@@ -999,7 +998,7 @@ public final class OverlayRuntime {
                     if (selectedModules.isEmpty()) return;
                     addSectionLabel(parent, "App-specific modules");
                     for (OverlayAppSpecificModule module : selectedModules) {
-                        addAppSpecificModuleSafely(parent, () -> module);
+                        addAppSpecificModuleSafely(parent, () -> module, "App-specific modules");
                     }
                 } catch (RuntimeException ignored) {
                     // Target-specific code must not prevent universal modules from rendering.
@@ -1008,39 +1007,39 @@ public final class OverlayRuntime {
             }
         }
 
-        private void addActivityModuleSafely(LinearLayout parent, ActivityModuleFactory factory) {
+        private void addActivityModuleSafely(LinearLayout parent, ActivityModuleFactory factory, String section) {
             try {
-                addActivityModule(parent, factory.create());
+            addActivityModule(parent, factory.create(), section);
             } catch (RuntimeException ignored) {
                 // A module constructor or UI setup failure must not hide other modules.
             }
         }
 
-        private void addStatisticSafely(LinearLayout parent, StatisticModuleFactory factory) {
+        private void addStatisticSafely(LinearLayout parent, StatisticModuleFactory factory, String section) {
             try {
-                addStatistic(parent, factory.create());
+            addStatistic(parent, factory.create(), section);
             } catch (RuntimeException ignored) {
                 // A module constructor or UI setup failure must not hide other modules.
             }
         }
 
-        private void addHookModuleSafely(LinearLayout parent, HookModuleFactory factory) {
+        private void addHookModuleSafely(LinearLayout parent, HookModuleFactory factory, String section) {
             try {
-                addHookModule(parent, factory.create());
+            addHookModule(parent, factory.create(), section);
             } catch (RuntimeException ignored) {
                 // A hook constructor or UI setup failure must not hide other modules.
             }
         }
 
-        private void addAppSpecificModuleSafely(LinearLayout parent, AppSpecificModuleFactory factory) {
+        private void addAppSpecificModuleSafely(LinearLayout parent, AppSpecificModuleFactory factory, String section) {
             try {
-                addAppSpecificModule(parent, factory.create());
+            addAppSpecificModule(parent, factory.create(), section);
             } catch (RuntimeException ignored) {
                 // A target-specific constructor or UI setup failure must not hide other modules.
             }
         }
 
-        private void addAppSpecificModule(LinearLayout controls, OverlayAppSpecificModule module) {
+        private void addAppSpecificModule(LinearLayout controls, OverlayAppSpecificModule module, String section) {
             final boolean initial;
             try {
                 Boolean remembered = APP_SPECIFIC_STATES.get(module.key());
@@ -1055,10 +1054,10 @@ public final class OverlayRuntime {
             }
             appSpecificModules.add(module);
             if (module instanceof OverlayActionModule) {
-                addAppSpecificActionModule(controls, (OverlayActionModule) module, initial);
+                addAppSpecificActionModule(controls, (OverlayActionModule) module, initial, section);
                 return;
             }
-            addControlRow(controls, module, initial, checked -> {
+            addControlRow(controls, module, initial, section, checked -> {
                 try {
                     boolean applied = module.setEnabled(activity, checked, originalWindowFlags, originalSystemUi);
                     APP_SPECIFIC_STATES.put(module.key(), applied && checked);
@@ -1078,7 +1077,7 @@ public final class OverlayRuntime {
             return false;
         }
 
-        private void addAppSpecificActionModule(LinearLayout parent, OverlayActionModule module, boolean initial) {
+        private void addAppSpecificActionModule(LinearLayout parent, OverlayActionModule module, boolean initial, String section) {
             LinearLayout row = new LinearLayout(overlayContext);
             row.setOrientation(LinearLayout.VERTICAL);
             row.setPadding(0, dp(6), 0, dp(6));
@@ -1087,7 +1086,7 @@ public final class OverlayRuntime {
             header.setOrientation(LinearLayout.HORIZONTAL);
             header.setGravity(Gravity.CENTER_VERTICAL);
             header.setBaselineAligned(false);
-            TextView title = text(moduleTitleText(module.label()), 16, config.menuTextColor2);
+            TextView title = text(moduleTitleText(module.label(), section), 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             header.addView(title, new LinearLayout.LayoutParams(0, -2, 1f));
 
@@ -1280,18 +1279,18 @@ public final class OverlayRuntime {
                     List<OverlayAppSpecificModule> modules = provider.create(activity);
                     if (modules == null || modules.isEmpty()) return;
                     addSectionLabel(parent, "Ad control hook modules");
-                    for (OverlayAppSpecificModule module : modules) addAppSpecificModuleSafely(parent, () -> module);
+                    for (OverlayAppSpecificModule module : modules) addAppSpecificModuleSafely(parent, () -> module, "Ad control hook modules");
                 } catch (RuntimeException ignored) { }
                 return;
             }
         }
 
         private TextView moduleButton(String label) {
-            TextView button = text(label, 12, config.outline);
+            TextView button = text(label, 12, config.controlOutlineColor);
             button.setGravity(Gravity.CENTER);
             button.setPadding(dp(8), dp(4), dp(8), dp(4));
             button.setBackground(OverlayViews.themedControlBackground(
-                    config.background, config.outline, config.outlineWidth, config.controlTheme));
+                    config.background, config.controlOutlineColor, config.outlineWidth, config.controlTheme));
             button.setClickable(true);
             return button;
         }
@@ -1299,7 +1298,6 @@ public final class OverlayRuntime {
         private void addSectionLabel(LinearLayout parent, String label) {
             int separatorColor = config.menuTextColor6;
             if ("inline".equals(config.separatorStyle)) {
-                pendingInlineSectionLabel = label;
                 return;
             }
             if ("doubleLine".equals(config.separatorStyle)) {
@@ -1346,13 +1344,13 @@ public final class OverlayRuntime {
             parent.addView(separator, params);
         }
 
-        private void addActivityModule(LinearLayout controls, OverlayActivityModule feature) {
+        private void addActivityModule(LinearLayout controls, OverlayActivityModule feature, String section) {
             if (feature instanceof AppBrightnessModule) {
-                addBrightnessModule(controls, (AppBrightnessModule) feature);
+                addBrightnessModule(controls, (AppBrightnessModule) feature, section);
                 return;
             }
             if (feature instanceof RotationModeModule) {
-                addRotationModule(controls, (RotationModeModule) feature);
+                addRotationModule(controls, (RotationModeModule) feature, section);
                 return;
             }
             final boolean initial;
@@ -1367,7 +1365,7 @@ public final class OverlayRuntime {
                 return;
             }
             activityModules.add(feature);
-            addControlRow(controls, feature, initial, checked -> {
+            addControlRow(controls, feature, initial, section, checked -> {
                 try {
                     boolean applied = feature.setEnabled(activity, checked, originalWindowFlags, originalSystemUi);
                     rememberState(feature.key(), applied && checked);
@@ -1380,7 +1378,7 @@ public final class OverlayRuntime {
             });
         }
 
-        private void addHookModule(LinearLayout controls, OverlayHookModule hook) {
+        private void addHookModule(LinearLayout controls, OverlayHookModule hook, String section) {
             final boolean initial;
             try {
                 Boolean remembered = HOOK_STATES.get(hook.key());
@@ -1394,7 +1392,7 @@ public final class OverlayRuntime {
                 return;
             }
             hookModules.add(hook);
-            addControlRow(controls, hook, initial, checked -> {
+            addControlRow(controls, hook, initial, section, checked -> {
                 try {
                     boolean applied = hook.setEnabled(activity, checked, originalWindowFlags, originalSystemUi);
                     HOOK_STATES.put(hook.key(), applied && checked);
@@ -1406,13 +1404,13 @@ public final class OverlayRuntime {
             });
         }
 
-        private void addBrightnessModule(LinearLayout parent, AppBrightnessModule module) {
+        private void addBrightnessModule(LinearLayout parent, AppBrightnessModule module, String section) {
             activityModules.add(module);
             module.initiallyEnabled(activity, originalWindowFlags, originalSystemUi);
             module.bindDimLayer(brightnessDimLayer);
             Float remembered = appBrightnessState;
             if (remembered != null) module.apply(activity, remembered);
-            LinearLayout row = moduleRow(module.label(), module.description());
+            LinearLayout row = moduleRow(module.label(), module.description(), section);
             SeekBar slider = new SeekBar(overlayContext);
             slider.setMax(100);
             slider.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
@@ -1435,25 +1433,25 @@ public final class OverlayRuntime {
             parent.addView(row, new LinearLayout.LayoutParams(-1, -2));
         }
 
-        private void addRotationModule(LinearLayout parent, RotationModeModule module) {
+        private void addRotationModule(LinearLayout parent, RotationModeModule module, String section) {
             activityModules.add(module);
             module.initiallyEnabled(activity, originalWindowFlags, originalSystemUi);
             Integer remembered = rotationModeState;
             if (remembered != null) module.apply(activity, remembered);
-            LinearLayout row = moduleRow(module.label(), module.description());
+            LinearLayout row = moduleRow(module.label(), module.description(), section);
             Spinner spinner = new Spinner(overlayContext);
             String[] labels = {"System", "Portrait", "Landscape"};
             ArrayAdapter<String> adapter = new ArrayAdapter<String>(overlayContext, android.R.layout.simple_spinner_item, labels) {
                 @Override public View getView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getView(position, convertView, parentView);
-                    view.setTextColor(config.outline);
+                    view.setTextColor(config.controlOutlineColor);
                     view.setBackgroundColor(config.background);
                     view.setPadding(dp(12), dp(8), dp(12), dp(8));
                     return view;
                 }
                 @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parentView) {
                     TextView view = (TextView) super.getDropDownView(position, convertView, parentView);
-                    view.setTextColor(config.outline);
+                    view.setTextColor(config.controlOutlineColor);
                     view.setBackgroundColor(config.background);
                     view.setPadding(dp(12), dp(10), dp(12), dp(10));
                     return view;
@@ -1465,10 +1463,10 @@ public final class OverlayRuntime {
             // The platform Spinner outline can otherwise become a large black rectangle outside
             // the panel, especially when a preset uses a dark control background.
             spinner.setBackground(OverlayViews.themedControlBackground(
-                    config.background, config.outline, config.outlineWidth, config.controlTheme));
+                    config.background, config.controlOutlineColor, config.outlineWidth, config.controlTheme));
             if (android.os.Build.VERSION.SDK_INT >= 16) {
                 spinner.setPopupBackgroundDrawable(OverlayViews.themedControlBackground(
-                        config.background, config.outline, config.outlineWidth, config.controlTheme));
+                        config.background, config.controlOutlineColor, config.outlineWidth, config.controlTheme));
             }
             int current = remembered == null ? module.current(activity) : remembered;
             spinner.setSelection(current == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT ? 1
@@ -1490,11 +1488,11 @@ public final class OverlayRuntime {
             parent.addView(row, new LinearLayout.LayoutParams(-1, -2));
         }
 
-        private LinearLayout moduleRow(String label, String details) {
+        private LinearLayout moduleRow(String label, String details, String section) {
             LinearLayout row = new LinearLayout(overlayContext);
             row.setOrientation(LinearLayout.VERTICAL);
             row.setPadding(0, dp(6), 0, dp(6));
-            TextView title = text(moduleTitleText(label), 16, config.menuTextColor2);
+            TextView title = text(moduleTitleText(label, section), 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             row.addView(title, new LinearLayout.LayoutParams(-1, -2));
             TextView description = text(details, 13, config.menuTextColor3);
@@ -1503,7 +1501,7 @@ public final class OverlayRuntime {
             return row;
         }
 
-        private void addStatistic(LinearLayout parent, OverlayStatisticModule module) {
+        private void addStatistic(LinearLayout parent, OverlayStatisticModule module, String section) {
             String key = module.key();
             String label = module.label();
             String description = module.description();
@@ -1516,7 +1514,7 @@ public final class OverlayRuntime {
 
             LinearLayout copy = new LinearLayout(overlayContext);
             copy.setOrientation(LinearLayout.VERTICAL);
-            TextView title = text(moduleTitleText(label), 16, config.menuTextColor2);
+            TextView title = text(moduleTitleText(label, section), 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             copy.addView(title, new LinearLayout.LayoutParams(-1, -2));
             TextView details = text(description, 13, config.menuTextColor3);
@@ -1645,7 +1643,7 @@ public final class OverlayRuntime {
             }
         }
 
-        private void addControlRow(LinearLayout parent, OverlayModule feature, boolean initial, final Toggle toggle) {
+        private void addControlRow(LinearLayout parent, OverlayModule feature, boolean initial, String section, final Toggle toggle) {
             LinearLayout row = new LinearLayout(overlayContext);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1654,7 +1652,7 @@ public final class OverlayRuntime {
 
             LinearLayout copy = new LinearLayout(overlayContext);
             copy.setOrientation(LinearLayout.VERTICAL);
-            TextView title = text(moduleTitleText(feature.label()), 16, config.menuTextColor2);
+            TextView title = text(moduleTitleText(feature.label(), section), 16, config.menuTextColor2);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             copy.addView(title, new LinearLayout.LayoutParams(-1, -2));
             TextView description = text(feature.description(), 13, config.menuTextColor3);
@@ -1688,13 +1686,12 @@ public final class OverlayRuntime {
             parent.addView(row, new LinearLayout.LayoutParams(-1, -2));
         }
 
-        private CharSequence moduleTitleText(String label) {
-            if (pendingInlineSectionLabel == null) return label;
-            String suffix = "  •  " + pendingInlineSectionLabel;
+        private CharSequence moduleTitleText(String label, String section) {
+            if (!"inline".equals(config.separatorStyle) || section == null) return label;
+            String suffix = "  •  " + section;
             SpannableString result = new SpannableString(label + suffix);
             result.setSpan(new ForegroundColorSpan(config.menuTextColor6), label.length(), result.length(),
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            pendingInlineSectionLabel = null;
             return result;
         }
 

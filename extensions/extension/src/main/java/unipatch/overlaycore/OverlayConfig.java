@@ -51,7 +51,7 @@ final class OverlayConfig {
             titleIconPlacement, titleAlignment, menuCorners, menuOutlineAnimation,
             openingAnimation, closingAnimation, animationEasing,
             iconStyle, iconShape, iconBackgroundStyle;
-    int controlBackground, controlForeground, bottomButtonTextColor,
+    int controlBackground, controlForeground, controlOutlineColor, bottomButtonTextColor,
             bottomButtonBackground1, bottomButtonBackground2,
             menuTextColor1, menuTextColor2, menuTextColor3, menuTextColor4, menuTextColor5, menuTextColor6,
             outlineAnimationSpeed, animationDuration, appendDescriptionColor, separatorBackgroundColor,
@@ -147,6 +147,7 @@ final class OverlayConfig {
         c.controlTheme = choice(field(v, offset, 34), "modern", "legacy", "modern", "monet");
         c.controlBackground = color(field(v, offset, 35), 0xFF300000);
         c.controlForeground = color(field(v, offset, 36), 0xFFFF5656);
+        c.controlOutlineColor = color(field(v, offset, 86), c.outline);
         c.bottomButtonStyle = choice(field(v, offset, 37), "text", "text", "solid", "gradient");
         c.bottomButtonShape = choice(field(v, offset, 38), "square", "square", "squircle");
         c.bottomButtonPadding = "1".equals(field(v, offset, 39));
