@@ -507,17 +507,19 @@ val universalOverlayPatch = bytecodePatch(
         are excluded and disabled by default. Monitor modules show information, Activity modules control
         the current Activity, and Hook modules make best-effort changes to app behavior. Text is the
         default legacy icon; an optional image replaces it completely, while the advanced Multi-parts editor
-        supports custom drawn icons. This is experimental
-        and may not work on all apps. UI presets can save and reuse supported appearance and advanced icon
+        supports custom drawn icons, and can be conveniently made in Icon Builder local website in UniPatches repo.
+        
+        This is an experimental patch and may not work on all apps. UI presets can save and reuse supported appearance and advanced icon
         settings. The title, description, repository button text, and repository button URL remain
         controlled by the visible Morphe settings. Module selections and module behavior are excluded
-        because hook and module combinations can be app-specific. If Control App Ads is patched
-        with its optional runtime policy enabled, its selected ad-control modules appear here
+        because hook and module combinations can be app-specific. 
+        
+        If Control App Ads is patched with its optional runtime policy enabled, its selected ad-control modules appear here
         automatically; Universal Overlay does not patch ad SDKs by itself. When both patches are
         selected, Control App Ads attaches its runtime policy to this overlay's exact startup bridge,
         including an explicit Activity override, instead of selecting a separate Activity.
 
-        Attribution: the idea and initial work for this Universal Overlay Patch are from Zanuaimi / Noobite.
+        Attribution: The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.
     """.trimIndent(),
     default = false,
 ) {
