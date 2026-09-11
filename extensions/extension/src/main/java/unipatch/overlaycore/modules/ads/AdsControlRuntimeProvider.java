@@ -119,7 +119,7 @@ public final class AdsControlRuntimeProvider implements OverlayAppSpecificModule
     private static final class HostsModule extends OverlayAppSpecificModule {
         @Override public String key() { return "adsRuntimeHosts"; }
         @Override public String label() { return "Block Ads / Tracking Hosts"; }
-        @Override public String description() { return "Enable or disable policy-aware host blocking for literal endpoints instrumented by Control App Ads. Credits to Adobo and Entree for original Block tracking hosts patch."; }
+        @Override public String description() { return "Enable or disable policy-aware host blocking for literal endpoints instrumented by Control App Ads. Starts disabled so app startup and essential endpoints are not blocked before you opt in. Credits to Adobo and Entree for original Block tracking hosts patch."; }
         @Override public boolean supports(Activity activity) { return activity != null; }
         @Override protected boolean readEnabled(Activity a, int f, int u) { return AdsRuntimePolicy.hostsEnabled(); }
         @Override protected void applyEnabled(Activity a, int f, int u) { AdsRuntimePolicy.setHostsEnabled(true); }

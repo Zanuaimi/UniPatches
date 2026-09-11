@@ -443,8 +443,9 @@ val controlAppAdsPatch = bytecodePatch(
         together with Universal Overlay, enable “Overlay integration >
         Enable runtime controls”, and select one or more of its three overlay addon modules:
         “Block Ads”, “Rewards without ads”, and “Block ad/tracking hosts”. The selected modules
-        appear under “Ad control hook modules” in Universal Overlay, with initial values copied
-        from this patch's ad settings. Universal Overlay is required for the runtime policy to be
+        appear under “Ad control hook modules” in Universal Overlay. Rewards without ads appears
+        only when its patch-time option is enabled, and host blocking starts disabled for startup
+        safety. Universal Overlay is required for the runtime policy to be
         installed; if it is not selected, the normal static ad controls still work but these
         runtime addon modules are not available.
         Runtime changes last for the current app process and affect only methods and literal hosts
@@ -553,9 +554,9 @@ val controlAppAdsPatch = bytecodePatch(
     val wildcardHosts by booleanOption(title = "Host filters > Match subdomains", default = true, key = "adsFilterWildcardHosts", description = "When enabled, an entry such as example.com also redirects ads.example.com and other subdomains. Disable for exact-host matching only.")
     val customFilterHosts by stringsOption(title = "Host filters > Custom host entries", default = emptyList(), key = "adsCustomFilterHosts", description = "Optional domains, URLs, or hosts-file lines to redirect. Add one per row, for example ads.example.com or 0.0.0.0 tracker.example.com. Entries match subdomains while Match subdomains is enabled.")
     val runtimeHookModules by booleanOption(title = "Overlay integration > Enable runtime controls", default = false, key = "adsRuntimeHookModules", description = "Optional. Enable this and one or more controls below, then select Universal Overlay in the same patch operation. The controls appear in Universal Overlay; they are session-only and affect only methods and literal hosts instrumented by this patch. Without Universal Overlay, the runtime policy is not installed.")
-    val runtimeBlockAdsModule by booleanOption(title = "Overlay integration > Runtime controls > Block Ads", default = false, key = "adsRuntimeBlockAdsModule", description = "Add one Block Ads settings control to the overlay. It starts with this patch's effective ad-format choices and can change instrumented SDK methods while the app is running. Requires Enable runtime controls.")
-    val runtimeRewardsModule by booleanOption(title = "Overlay integration > Runtime controls > Rewards without ads", default = false, key = "adsRuntimeRewardsModule", description = "Add one Rewards without ads settings control to Universal Overlay. Its initial checkbox values mirror Rewards without ads when that patch-time option is enabled; the runtime control remains available when it is disabled. Requires Enable runtime controls and Universal Overlay; unsupported and native reward paths remain unchanged.")
-    val runtimeHostsModule by booleanOption(title = "Overlay integration > Runtime controls > Block ad/tracking hosts", default = false, key = "adsRuntimeHostsModule", description = "Add one host-blocking checkbox to the overlay. It controls literal hosts instrumented by this patch, not encrypted or dynamically generated requests. Requires Enable runtime controls.")
+    val runtimeBlockAdsModule by booleanOption(title = "Overlay integration > Runtime controls > Block Ads", default = false, key = "adsRuntimeBlockAdsModule", description = "Add one Block Ads settings control to the overlay. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths. Requires Enable runtime controls.")
+    val runtimeRewardsModule by booleanOption(title = "Overlay integration > Runtime controls > Rewards without ads", default = false, key = "adsRuntimeRewardsModule", description = "Add one Rewards without ads settings control to Universal Overlay. Enable Rewards without ads in this patch as well; the runtime module then controls its safely instrumented reward paths. Requires Enable runtime controls and Universal Overlay; unsupported and native reward paths remain unchanged.")
+    val runtimeHostsModule by booleanOption(title = "Overlay integration > Runtime controls > Block ad/tracking hosts", default = false, key = "adsRuntimeHostsModule", description = "Add one host-blocking checkbox to the overlay. It starts disabled for startup safety and controls literal hosts instrumented by this patch after you opt in; encrypted or dynamically generated requests remain unchanged. Requires Enable runtime controls.")
     val broadHeuristics by booleanOption(title = "Advanced > Heuristic matching > Enable broad audio-ad heuristics", default = false, key = "adsBroadAudioHeuristics", description = "Normal SDK coverage changes only exact, known ad-SDK methods. Enable this only when an audio or radio app still plays inserted ads after normal controls find nothing: it additionally looks for stream-like classes and ad-metadata methods such as adsIdentityToken, adsResponse, adsDuration, adsId, or cuepoints, then returns empty metadata so detected server-inserted audio ad breaks may be skipped. It does not block every audio ad, visual ad, network request, or unknown SDK. Because it matches names rather than an exact fingerprint, unrelated playback or stream code can match and break app features; disabled by default.")
 
     execute {
@@ -612,7 +613,9 @@ val controlAppAdsPatch = bytecodePatch(
             (if (effectiveBlockNative) 32 else 0)
 
         runtimeHooksEnabled = runtimeHookModules == true
-        val runtimeRewardsEnabled = runtimeHooksEnabled && runtimeRewardsModule == true
+        // Runtime reward controls need the underlying reward hooks. Keep the runtime
+        // module unavailable when Ads Free Rewards was not selected for patching.
+        val runtimeRewardsEnabled = runtimeHooksEnabled && runtimeRewardsModule == true && adsFreeRewards == true
         runtimeHostsEnabled = runtimeHooksEnabled && runtimeHostsModule == true
         adsFreeRewardsRuntimeGuardEnabled = runtimeRewardsEnabled
         val sdkCoverage = AdsSdkCoverage(
@@ -724,18 +727,10 @@ val controlAppAdsPatch = bytecodePatch(
                 runtimeBlockAdsModule == true
         } else emptyMap()
 
-        // Runtime block controls need every mapped method instrumented, even when its initial
-        // compile-time default is allow. The injected guard preserves that initial policy.
-        if (runtimeHooksEnabled && runtimeBlockAdsModule == true) {
-            effectiveBlockInterstitials = true
-            effectiveBlockBanners = true
-            effectiveBlockAppOpen = true
-            effectiveBlockMRec = true
-            effectiveBlockRewarded = true
-            effectiveBlockNative = true
-        }
-        // The rewards module needs the same guarded show paths even when the initial policy
-        // allows rewarded ads. Its initial runtime state still mirrors Ads Free Rewards.
+        // Runtime block controls guard the formats selected for static patching. Do not
+        // force every format on here: that would also activate preload and initialization
+        // paths that are unsafe to intercept during app startup.
+        // The rewards module needs the same guarded show paths when Ads Free Rewards is enabled.
         if (runtimeRewardsEnabled) {
             effectiveBlockRewarded = true
         }
@@ -1158,7 +1153,7 @@ val controlAppAdsPatch = bytecodePatch(
         if (runtimeHooksEnabled) {
             val moduleMask = buildSet {
                 if (runtimeBlockAdsModule == true) add("block")
-                if (runtimeRewardsModule == true) add("rewards")
+                if (runtimeRewardsEnabled) add("rewards")
                 if (runtimeHostsModule == true) add("hosts")
             }.let { selected ->
                 (if ("block" in selected) 1 else 0) or
@@ -1170,7 +1165,9 @@ val controlAppAdsPatch = bytecodePatch(
                 if (adsFreeRewards == true) "1" else "0",
                 if (adsFreeRewards == true && instantReward == true) "1" else "0",
                 if (adsFreeRewards == true && fakeAdAvailability == true) "1" else "0",
-                if (runtimeHostsModule == true && filterHosts.isNotEmpty()) "1" else "0",
+                // Runtime host blocking is opt-in after startup. Static host filters remain
+                // controlled by their patch-time settings.
+                "0",
                 if (wildcardHosts == true) "1" else "0",
                 filterHosts.sorted().joinToString(","),
             ).joinToString("|")
