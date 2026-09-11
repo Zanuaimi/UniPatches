@@ -19,6 +19,7 @@ val patchListGeneratorClasspath = configurations.create("patchListGeneratorClass
 
 dependencies {
     implementation(libs.gson)
+    testImplementation("junit:junit:4.13.2")
     patchListGeneratorClasspath(libs.gson)
 }
 
