@@ -1,3 +1,9 @@
+## [1.17.4](https://github.com/Zanuaimi/UniPatches/compare/v1.17.3...v1.17.4) (2026-09-11)
+
+### 🐛 Bug Fixes
+
+* **ads:** keep runtime rewards startup-safe ([8d46ce9](https://github.com/Zanuaimi/UniPatches/commit/8d46ce9206585dd38730829da8a540ea00e02fc9))
+
 ## [1.17.3](https://github.com/Zanuaimi/UniPatches/compare/v1.17.2...v1.17.3) (2026-09-11)
 
 ### 🐛 Bug Fixes

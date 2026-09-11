@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-11T19:43:27",
-  "description": "## [1.17.3](https://github.com/Zanuaimi/UniPatches/compare/v1.17.2...v1.17.3) (2026-09-11)\n\n### 🐛 Bug Fixes\n\n* **ads:** expose rewards control in overlay ([0842968](https://github.com/Zanuaimi/UniPatches/commit/0842968c8863790dd448892e990893519e304634))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.17.3/patches-1.17.3.mpp",
+  "created_at": "2026-09-11T20:48:14",
+  "description": "## [1.17.4](https://github.com/Zanuaimi/UniPatches/compare/v1.17.3...v1.17.4) (2026-09-11)\n\n### 🐛 Bug Fixes\n\n* **ads:** keep runtime rewards startup-safe ([8d46ce9](https://github.com/Zanuaimi/UniPatches/commit/8d46ce9206585dd38730829da8a540ea00e02fc9))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.17.4/patches-1.17.4.mpp",
   "signature_download_url": "",
-  "version": "1.17.3"
+  "version": "1.17.4"
 }
