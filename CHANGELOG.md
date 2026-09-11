@@ -1,3 +1,10 @@
+## [1.17.2](https://github.com/Zanuaimi/UniPatches/compare/v1.17.1...v1.17.2) (2026-09-11)
+
+### 🐛 Bug Fixes
+
+* dismiss overlay settings with Back ([253ab3a](https://github.com/Zanuaimi/UniPatches/commit/253ab3aba524deaf33487216aef6503a11585a9d))
+* harden Configure App Ads runtime controls ([82a9b4a](https://github.com/Zanuaimi/UniPatches/commit/82a9b4ad47efe18922823c3510abf381aecb6b85))
+
 ## [1.17.1](https://github.com/Zanuaimi/UniPatches/compare/v1.17.0...v1.17.1) (2026-09-10)
 
 ### 🐛 Bug Fixes
