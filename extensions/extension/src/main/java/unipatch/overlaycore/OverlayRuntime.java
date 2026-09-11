@@ -332,6 +332,12 @@ public final class OverlayRuntime {
             root.setFocusableInTouchMode(true);
             root.setOnKeyListener((view, keyCode, event) -> {
                 if (keyCode == android.view.KeyEvent.KEYCODE_BACK
+                        && event.getAction() == android.view.KeyEvent.ACTION_UP
+                        && !settingsPopupLayers.isEmpty()) {
+                    dismissSettingsPopupsImmediately();
+                    return true;
+                }
+                if (keyCode == android.view.KeyEvent.KEYCODE_BACK
                         && event.getAction() == android.view.KeyEvent.ACTION_UP && menuVisible) {
                     closeMenu();
                     return true;
