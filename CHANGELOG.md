@@ -1,3 +1,9 @@
+## [1.17.3](https://github.com/Zanuaimi/UniPatches/compare/v1.17.2...v1.17.3) (2026-09-11)
+
+### 🐛 Bug Fixes
+
+* **ads:** expose rewards control in overlay ([0842968](https://github.com/Zanuaimi/UniPatches/commit/0842968c8863790dd448892e990893519e304634))
+
 ## [1.17.2](https://github.com/Zanuaimi/UniPatches/compare/v1.17.1...v1.17.2) (2026-09-11)
 
 ### 🐛 Bug Fixes
