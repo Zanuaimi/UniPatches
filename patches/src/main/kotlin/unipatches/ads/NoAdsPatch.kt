@@ -732,11 +732,9 @@ val controlAppAdsPatch = bytecodePatch(
 
         // Runtime block controls guard the formats selected for static patching. Do not
         // force every format on here: that would also activate preload and initialization
-        // paths that are unsafe to intercept during app startup.
-        // The rewards module needs the same guarded show paths when Ads Free Rewards is enabled.
-        if (runtimeRewardsEnabled) {
-            effectiveBlockRewarded = true
-        }
+        // paths that are unsafe to intercept during app startup. Runtime Rewards uses its
+        // guarded reward hooks below and must not enable the broad static rewarded-blocking
+        // branches, which can prevent an app from completing startup.
 
         val hasMaxUnity = sdkMax == true && (ShowInterstitialFingerprint.methodOrNull != null ||
             ShowAppOpenAdFingerprint.methodOrNull != null ||
@@ -1072,7 +1070,8 @@ val controlAppAdsPatch = bytecodePatch(
             totalPatched += patchVoid(MintegralInterstitialShowFingerprint)
         }
 
-        // Hide rewarded UI when rewarded blocked (inverse of Ads Free Rewards fake true)
+        // Hide rewarded UI only when rewarded ads were explicitly blocked by the static policy
+        // (inverse of Ads Free Rewards fake true).
         if (effectiveBlockRewarded) {
             totalPatched += patchReturnFalse(UnityAdsAdvertisementIsReadyFingerprint)
             totalPatched += patchReturnFalse(UnityAdsAdvertisementIsReadyPlacementFingerprint)
