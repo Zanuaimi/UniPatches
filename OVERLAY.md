@@ -171,7 +171,7 @@ same patch run. If Universal did not inject a bridge, HCR fails instead of produ
 overlay patch.
 
 `Configure App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` includes an optional overlay
-addon. Its three overlay addon modules are `Block Ads`, `Rewards without ads`, and `Block ad/tracking
+addon. Its three overlay addon modules are `Block Ads`, `Ads Free Rewards`, and `Block ad/tracking
 hosts`. They expose session-local runtime controls through the shared overlay and start with values
 copied from the Ads patch settings. Enable the addon and choose its modules in the Ads settings,
 then select Universal Overlay or an app-specific overlay patch. The complete user flow is:
@@ -180,23 +180,28 @@ then select Universal Overlay or an app-specific overlay patch. The complete use
    companion together with Universal Overlay when building the HCR example. App-specific companions
    add modules to Universal; they do not install a second shared overlay bridge.
 2. In Configure App Ads, enable `Overlay integration > Enable runtime controls`.
-3. Under `Overlay integration > Runtime controls`, enable `Block Ads`, `Rewards without ads`,
-   and/or `Block ad/tracking hosts`. These module switches are disabled by default. The Rewards
-   without ads runtime control also requires `Rewards without ads > Enable`.
+3. Under `Overlay integration > Runtime controls`, enable `Block Ads`, `Ads Free Rewards`,
+   and/or `Block ad/tracking hosts`. These module switches are disabled by default. The runtime
+   Rewards module does not require a separate master option; its three controls mirror the
+   `Ads Free Rewards` patch settings initially.
 4. Patch the APK. Control App Ads initializes the session policy from its ordinary settings during
-   Application startup; the overlay reads that policy when its menu opens. The two patches do not
-   depend on patch ordering.
+   Application startup, and the overlay reads that policy when its menu opens. The two patches do
+   not depend on patch ordering. If runtime controls are enabled without selecting any runtime
+   module, the request is logged and normal permanent patching is used instead.
 5. Open the overlay. A section named `Ad control hook modules` appears only when the policy was
    initialized and at least one runtime module was selected. Use its Settings popup or checkbox to
    change the policy for the current app process.
 
-The runtime module is an optional bridge, not a second ad patch. Its initial format, reward, and
-host values copy Control App Ads, while later changes are session-local and reset when the process
-restarts. Only SDK methods, availability checks, and literal hosts successfully instrumented by
-Control App Ads can respond; native, encrypted, dynamically generated, or unsupported paths remain
-unchanged. If no overlay patch is selected, Control App Ads still applies its normal static changes,
-but no runtime menu can be displayed. The Ads Free Rewards module can change matched availability
-and policy guards, but it cannot create a missing SDK-specific reward callback.
+The runtime module is an optional bridge, not a second ad patch. When runtime controls are enabled
+with at least one selected module, static behavior is replaced by guarded instrumentation and the
+initial control values mirror the corresponding Configure App Ads settings. Later changes are
+session-local and reset when the process restarts. If runtime controls are enabled without modules,
+the patch falls back to ordinary permanent behavior and logs that decision. Only SDK methods,
+availability checks, and literal hosts successfully instrumented by Control App Ads can respond;
+native, encrypted, dynamically generated, or unsupported paths remain unchanged. If no overlay patch
+is selected, Control App Ads still applies its normal static changes, but no runtime menu can be
+displayed. The Ads Free Rewards module can change matched availability and policy guards, but it
+cannot create a missing SDK-specific reward callback.
 
 The patch-time handoff is implemented by `OverlayAdsRuntimeIntegration.kt`. Control App Ads queues
 its serialized policy, and the selected overlay consumes it at the same bridge target. If the overlay
