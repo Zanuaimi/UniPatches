@@ -12,6 +12,7 @@ import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.reference.StringReference
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
+import java.util.Locale
 import java.util.logging.Logger
 import helpers.ads.*
 import helpers.bytecode.*
@@ -49,12 +50,21 @@ private data class AdsFallbackMatch(
     val parameterTypes: List<String>,
 )
 
+private data class AdsGuardMethodKey(
+    val classType: String,
+    val methodName: String,
+    val returnType: String,
+    val parameterTypes: List<String>,
+)
+
 private val adsFallbackOperations = mutableListOf<AdsFallbackOperation>()
 private val adsFallbackMutableClasses = mutableMapOf<String, MutableClass>()
+private val runtimeGuardedMethods = mutableSetOf<AdsGuardMethodKey>()
 
 private fun resetAdsFallbackIndex() {
     adsFallbackOperations.clear()
     adsFallbackMutableClasses.clear()
+    runtimeGuardedMethods.clear()
 }
 
 private val knownAdsPackagePrefixes = listOf(
@@ -80,23 +90,42 @@ private val knownAdsPackagePrefixes = listOf(
     "net/pubnative/",
 )
 
+private val excludedNonAdPackagePrefixes = listOf(
+    "com/mbridge/msdk/playercommon/",
+    "com/google/android/exoplayer2/",
+    "androidx/media3/",
+    "com/unity3d/services/store/",
+    "com/android/billingclient/",
+    "com/android/vending/billing/",
+)
+
 private fun normalizedClassPath(type: String): String = type
     .removePrefix("L")
     .removeSuffix(";")
-    .lowercase()
+    .lowercase(Locale.ROOT)
 
 internal fun isKnownAdsClass(type: String): Boolean {
     val path = normalizedClassPath(type)
-    return knownAdsPackagePrefixes.any(path::startsWith)
+    return knownAdsPackagePrefixes.any(path::startsWith) &&
+        excludedNonAdPackagePrefixes.none(path::startsWith)
 }
 
 internal fun isAdsDefiningClass(type: String, target: String?): Boolean =
     (target != null && type == target) || (target == null && isKnownAdsClass(type))
 
 internal fun hasKnownAdsReference(reference: String): Boolean =
-    knownAdsPackagePrefixes.any { prefix ->
-        normalizedClassPath(reference).contains(prefix)
-    }
+    excludedNonAdPackagePrefixes.none { prefix -> normalizedClassPath(reference).contains(prefix) } &&
+        knownAdsPackagePrefixes.any { prefix ->
+            normalizedClassPath(reference).contains(prefix)
+        }
+
+private fun guardMethodKey(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) =
+    AdsGuardMethodKey(
+        classType = method.definingClass,
+        methodName = method.name,
+        returnType = method.returnType,
+        parameterTypes = method.parameterTypes.map { it.toString() },
+    )
 
 private fun hasRuntimePolicyGuard(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod): Boolean =
     method.implementation?.instructions?.any { instruction ->
@@ -150,11 +179,14 @@ private fun BytecodePatchContext.flushAdsFallbackOperations(logger: Logger): Int
                 val operation = operations.firstOrNull { runtimeCategoryByFingerprint[it.fingerprint] != null }
                     ?: operations.firstOrNull()
                     ?: return@forEach
-                if (runtimeCategoryByFingerprint[operation.fingerprint] != null && hasRuntimePolicyGuard(mutableMethod)) {
+                val runtimeCategory = runtimeCategoryByFingerprint[operation.fingerprint]
+                val methodKey = guardMethodKey(mutableMethod)
+                if (runtimeCategory != null &&
+                    (methodKey in runtimeGuardedMethods || hasRuntimePolicyGuard(mutableMethod))
+                ) {
                     logger.warning("No Ads: skipped duplicate runtime guard in ${mutableMethod.definingClass}->${mutableMethod.name}")
                     return@forEach
                 }
-                val runtimeCategory = runtimeCategoryByFingerprint[operation.fingerprint]
                 when (operation.kind) {
                     AdsFallbackKind.VOID -> {
                         if (runtimeCategory != null) {
@@ -164,6 +196,7 @@ private fun BytecodePatchContext.flushAdsFallbackOperations(logger: Logger): Int
                         } else {
                             mutableMethod.addInstructions(0, "return-void")
                         }
+                        if (runtimeCategory != null) runtimeGuardedMethods += methodKey
                         patched++
                     }
                     AdsFallbackKind.RETURN_FALSE -> {
@@ -178,6 +211,7 @@ private fun BytecodePatchContext.flushAdsFallbackOperations(logger: Logger): Int
                         } else {
                             mutableMethod.addInstructions(0, "const/4 v0, 0x0\nreturn v0")
                         }
+                        if (runtimeCategory != null) runtimeGuardedMethods += methodKey
                         patched++
                     }
                 }
@@ -218,6 +252,7 @@ private fun runtimeGuard(category: String): String? {
         "appOpen" -> "shouldBlockAppOpen"
         "mrec" -> "shouldBlockMrec"
         "rewarded" -> "shouldBlockRewarded"
+        "rewardedAvailability" -> "shouldBlockRewardedFormat"
         "native" -> "shouldBlockNative"
         "shared" -> return """
             invoke-static {}, $ADS_POLICY_CLASS->shouldBlockInterstitials()Z
@@ -253,7 +288,10 @@ private fun BytecodePatchContext.injectOrSkip(
         return 0
     }
     val effectiveInstructions = runtimeCategoryByFingerprint[fingerprint]?.let { runtimeGuard(it) } ?: instructions
-    if (effectiveInstructions.contains("AdsRuntimePolicy;->") && hasRuntimePolicyGuard(method)) {
+    val methodKey = guardMethodKey(method)
+    if (effectiveInstructions.contains("AdsRuntimePolicy;->") &&
+        (methodKey in runtimeGuardedMethods || hasRuntimePolicyGuard(method))
+    ) {
         logger.warning("No Ads: skipped duplicate runtime guard in ${method.definingClass}->${method.name}")
         return 0
     }
@@ -264,6 +302,7 @@ private fun BytecodePatchContext.injectOrSkip(
         return 0
     }
     method.addInstructions(0, effectiveInstructions)
+    if (effectiveInstructions.contains("AdsRuntimePolicy;->")) runtimeGuardedMethods += methodKey
     return 1
 }
 
@@ -771,9 +810,8 @@ val controlAppAdsPatch = bytecodePatch(
                 StartAppAdShowFingerprint, MoPubInterstitialShowFingerprint, ChartboostShowInterstitialFingerprint,
                 InMobiInterstitialShowFingerprint, MintegralInterstitialShowFingerprint,
             )
-            add(sdkCoverage.max, "appOpen", ShowAppOpenAdFingerprint, MaxAppOpenAdShowAdFingerprint,
-                MaxAppOpenAdIsReadyFingerprint,
-            )
+            add(sdkCoverage.max, "appOpen", ShowAppOpenAdFingerprint, MaxAppOpenAdShowAdFingerprint)
+            add(sdkCoverage.max, "appOpen", MaxAppOpenAdIsReadyFingerprint)
             add(sdkCoverage.adMob, "appOpen",
                 AdMobAppOpenShowFingerprint, AdMobAppOpenLoadFingerprint,
             )
@@ -786,22 +824,24 @@ val controlAppAdsPatch = bytecodePatch(
             add(sdkCoverage.appLovin, "banners", AppLovinAdViewLoadNextAdFingerprint)
             add(sdkCoverage.max, "mrec", ShowMRecFingerprint, StartMRecAutoRefreshFingerprint)
             add(sdkCoverage.appLovin, "mrec", StartMRecAutoRefreshFingerprint)
-            add(sdkCoverage.max, "rewarded", ShowRewardedAdFingerprint, MaxRewardedAdShowAdFingerprint,
-                MaxRewardedAdIsReadyFingerprint, IsRewardedAdReadyFingerprint,
-            )
+            add(sdkCoverage.max, "rewarded", ShowRewardedAdFingerprint, MaxRewardedAdShowAdFingerprint)
+            add(sdkCoverage.max, "rewardedAvailability", MaxRewardedAdIsReadyFingerprint, IsRewardedAdReadyFingerprint)
             add(sdkCoverage.adMob, "rewarded",
                 AdMobRewardedShowFingerprint, AdMobLegacyRewardedVideoShowFingerprint,
             )
-            add(sdkCoverage.unity, "rewarded",
-                UnityRewardedAdShowFingerprint, UnityAdsAdvertisementIsReadyFingerprint,
-                UnityAdsAdvertisementIsReadyPlacementFingerprint, UnityAdsSdkIsReadyFingerprint,
+            add(sdkCoverage.unity, "rewarded", UnityRewardedAdShowFingerprint)
+            add(sdkCoverage.unity, "rewardedAvailability",
+                UnityAdsAdvertisementIsReadyFingerprint, UnityAdsAdvertisementIsReadyPlacementFingerprint,
+                UnityAdsSdkIsReadyFingerprint,
             )
             add(sdkCoverage.ironSource, "rewarded",
                 IronSourceShowDemandOnlyRewardedVideoFingerprint, IronSourceShowRewardedVideoFingerprint,
-                IronSourceIsRewardedVideoAvailableFingerprint, LevelPlayRewardedAdIsReadyFingerprint,
-                IronSourceUnityRewardedAdIsReadyFingerprint,
                 IronSourceShowRewardedVideoActivityFingerprint, IronSourceShowRewardedVideoActivityPlacementFingerprint,
                 IronSourceShowRewardedVideoPlacementFingerprint,
+            )
+            add(sdkCoverage.ironSource, "rewardedAvailability",
+                IronSourceIsRewardedVideoAvailableFingerprint, LevelPlayRewardedAdIsReadyFingerprint,
+                IronSourceUnityRewardedAdIsReadyFingerprint,
             )
             add(sdkCoverage.appLovin, "rewarded",
                 AppLovinIncentivizedShow4ListenerFingerprint, AppLovinIncentivizedShow5ListenerFingerprint,
@@ -815,7 +855,8 @@ val controlAppAdsPatch = bytecodePatch(
             add(sdkCoverage.yandex, "rewarded",
                 YandexRewardedAdLoadFingerprint, YandexUnityRewardedWrapperShowFingerprint,
             )
-            add(sdkCoverage.huawei, "rewarded", HuaweiRewardAdIsLoadedFingerprint, HuaweiRewardAdShowFingerprint)
+            add(sdkCoverage.huawei, "rewarded", HuaweiRewardAdShowFingerprint)
+            add(sdkCoverage.huawei, "rewardedAvailability", HuaweiRewardAdIsLoadedFingerprint)
             add(sdkCoverage.other, "rewarded", InMobiRewardedShowFingerprint)
             add(sdkCoverage.ironSource, "shared", IronSourceLevelPlayFullScreenShowAdFingerprint)
             add(sdkCoverage.unity, "shared", UnityAdsV4Show3ArgFingerprint, UnityAdsV4Show4ArgFingerprint)

@@ -74,8 +74,11 @@ public final class AdsRuntimePolicy {
     public static synchronized boolean shouldBlockAppOpen() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 4) != 0; }
     public static synchronized boolean shouldBlockMrec() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 8) != 0; }
     public static synchronized boolean shouldBlockRewarded() {
-        return (hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 16) != 0) ||
-                shouldSkipRewarded();
+        return shouldBlockRewardedFormat() || shouldSkipRewarded();
+    }
+    /** Format blocking only. Rewarded readiness must not be disabled merely because skipping is enabled. */
+    public static synchronized boolean shouldBlockRewardedFormat() {
+        return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 16) != 0;
     }
     public static synchronized boolean shouldBlockNative() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 32) != 0; }
     public static synchronized boolean shouldSkipRewarded() { return hasModule(MODULE_REWARDS) && skipRewarded; }
