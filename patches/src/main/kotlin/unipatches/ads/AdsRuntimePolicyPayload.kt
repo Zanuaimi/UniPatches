@@ -1,6 +1,13 @@
 package unipatches.ads
 
 /** Pure helpers for the Control App Ads to Overlay runtime-policy exchange. */
+internal fun isAdsRuntimePolicyActive(
+    runtimeControlsRequested: Boolean,
+    blockAdsModule: Boolean,
+    rewardsModule: Boolean,
+    hostsModule: Boolean,
+): Boolean = runtimeControlsRequested && (blockAdsModule || rewardsModule || hostsModule)
+
 internal fun isAdsRuntimeRewardsEnabled(
     runtimeHooksEnabled: Boolean,
     runtimeRewardsModule: Boolean,
@@ -21,7 +28,7 @@ internal fun buildAdsRuntimeModuleMask(
 internal fun serializeAdsRuntimePolicy(
     moduleMask: Int,
     blockedFormats: Int,
-    adsFreeRewardsEnabled: Boolean,
+    skipRewardedAdsEnabled: Boolean,
     instantRewardEnabled: Boolean,
     fakeAvailabilityEnabled: Boolean,
     wildcardHostsEnabled: Boolean,
@@ -30,9 +37,9 @@ internal fun serializeAdsRuntimePolicy(
     "1",
     moduleMask.toString(),
     blockedFormats.toString(),
-    if (adsFreeRewardsEnabled) "1" else "0",
-    if (adsFreeRewardsEnabled && instantRewardEnabled) "1" else "0",
-    if (adsFreeRewardsEnabled && fakeAvailabilityEnabled) "1" else "0",
+    if (skipRewardedAdsEnabled) "1" else "0",
+    if (instantRewardEnabled) "1" else "0",
+    if (fakeAvailabilityEnabled) "1" else "0",
     "0",
     if (wildcardHostsEnabled) "1" else "0",
     hosts.sorted().joinToString(","),
