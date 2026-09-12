@@ -1,3 +1,9 @@
+## [1.20.0](https://github.com/Zanuaimi/UniPatches/compare/v1.19.0...v1.20.0) (2026-09-12)
+
+### ✨ New Features
+
+* **unipatches:** Categorized patches ([bd8bdbb](https://github.com/Zanuaimi/UniPatches/commit/bd8bdbbe0b535e589407abd16d49b4a3f160e6ed))
+
 ## [1.19.0](https://github.com/Zanuaimi/UniPatches/compare/v1.18.0...v1.19.0) (2026-09-12)
 
 ### 🐛 Bug Fixes
