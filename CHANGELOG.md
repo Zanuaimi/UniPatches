@@ -1,3 +1,14 @@
+## [1.18.0](https://github.com/Zanuaimi/UniPatches/compare/v1.17.4...v1.18.0) (2026-09-12)
+
+### 🐛 Bug Fixes
+
+* **docs:** align ads runtime guidance ([0daff87](https://github.com/Zanuaimi/UniPatches/commit/0daff8760ac50515d0fd2aa43d28a21aca70aeec))
+* **tests:** cover ads runtime defaults ([9ced2e8](https://github.com/Zanuaimi/UniPatches/commit/9ced2e8e4d60bec39453ba4779a92858ff784118))
+
+### ✨ New Features
+
+* **ads:** rework rewards runtime controls ([8bff967](https://github.com/Zanuaimi/UniPatches/commit/8bff967a38edf74b13ba270a33372687bd63c5e8))
+
 ## [1.17.4](https://github.com/Zanuaimi/UniPatches/compare/v1.17.3...v1.17.4) (2026-09-11)
 
 ### 🐛 Bug Fixes
