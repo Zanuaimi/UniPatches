@@ -8,10 +8,16 @@ internal fun isAdsRuntimePolicyActive(
     hostsModule: Boolean,
 ): Boolean = runtimeControlsRequested && (blockAdsModule || rewardsModule || hostsModule)
 
+internal fun isAdsRuntimeModuleEnabled(
+    runtimeHooksEnabled: Boolean,
+    masterEnabled: Boolean,
+    moduleSelected: Boolean,
+): Boolean = runtimeHooksEnabled && masterEnabled && moduleSelected
+
 internal fun isAdsRuntimeRewardsEnabled(
     runtimeHooksEnabled: Boolean,
     runtimeRewardsModule: Boolean,
-): Boolean = runtimeHooksEnabled && runtimeRewardsModule
+): Boolean = isAdsRuntimeModuleEnabled(runtimeHooksEnabled, true, runtimeRewardsModule)
 
 internal fun buildAdsRuntimeModuleMask(
     runtimeHooksEnabled: Boolean,
@@ -31,6 +37,7 @@ internal fun serializeAdsRuntimePolicy(
     skipRewardedAdsEnabled: Boolean,
     instantRewardEnabled: Boolean,
     fakeAvailabilityEnabled: Boolean,
+    hostsEnabled: Boolean,
     wildcardHostsEnabled: Boolean,
     hosts: List<String>,
 ): String = listOf(
@@ -40,7 +47,7 @@ internal fun serializeAdsRuntimePolicy(
     if (skipRewardedAdsEnabled) "1" else "0",
     if (instantRewardEnabled) "1" else "0",
     if (fakeAvailabilityEnabled) "1" else "0",
-    "0",
+    if (hostsEnabled) "1" else "0",
     if (wildcardHostsEnabled) "1" else "0",
     hosts.sorted().joinToString(","),
 ).joinToString("|")

@@ -41,5 +41,12 @@ public class AdsRuntimePolicyTest {
         AdsRuntimePolicy.configure("1|not-an-int|0|0|0|0|0|0|");
         assertFalse(AdsRuntimePolicy.isIntegrated());
         assertFalse(AdsRuntimePolicy.hasAnyModule());
+
+        AdsRuntimePolicy.configure("1|8|0|0|0|0|0|0|");
+        assertFalse(AdsRuntimePolicy.isIntegrated());
+        AdsRuntimePolicy.configure("1|1|64|0|0|0|0|0|");
+        assertFalse(AdsRuntimePolicy.isIntegrated());
+        AdsRuntimePolicy.configure("1|1|0|2|0|0|0|0|");
+        assertFalse(AdsRuntimePolicy.isIntegrated());
     }
 }

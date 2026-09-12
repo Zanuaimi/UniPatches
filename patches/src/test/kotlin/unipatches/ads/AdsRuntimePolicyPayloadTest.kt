@@ -27,19 +27,40 @@ class AdsRuntimePolicyPayloadTest {
     }
 
     @Test
+    fun genericReadinessFallbackDoesNotMatchBillingClasses() {
+        assertEquals(false, isAdsDefiningClass(
+            "Lcom/unity3d/services/store/gpbl/bridges/billingclient/common/BillingClientBridgeCommon;",
+            null,
+        ))
+        assertEquals(true, isAdsDefiningClass("Lcom/unity3d/ads/Advertisement;", null))
+        assertEquals(false, isAdsDefiningClass(
+            "Lcom/google/android/exoplayer2/source/ads/ServerSideAdInsertionMediaSource\$SampleStreamImpl;",
+            null,
+        ))
+        assertEquals(false, hasKnownAdsReference(
+            "Landroidx/media3/exoplayer/source/ads/ServerSideAdInsertionMediaSource\$SampleStreamImpl;->isReady()Z",
+        ))
+        assertEquals(true, hasKnownAdsReference(
+            "Lcom/google/android/gms/ads/AdView;->isLoading()Z",
+        ))
+    }
+
+    @Test
     fun disabledRewardsAddonDoesNotEnableRuntimeRewards() {
         assertEquals(false, isAdsRuntimeRewardsEnabled(true, false))
         assertEquals(false, isAdsRuntimeRewardsEnabled(false, true))
         assertEquals(true, isAdsRuntimeRewardsEnabled(true, true))
+        assertEquals(false, isAdsRuntimeModuleEnabled(true, false, true))
+        assertEquals(true, isAdsRuntimeModuleEnabled(true, true, true))
     }
 
     @Test
     fun rewardsAddonSerializesModuleBitTwo() {
-        assertEquals("1|2|0|0|1|1|0|0|", serializeAdsRuntimePolicy(2, 0, false, true, true, false, emptyList()))
+        assertEquals("1|2|0|0|1|1|0|0|", serializeAdsRuntimePolicy(2, 0, false, true, true, false, false, emptyList()))
     }
 
     @Test
     fun hostListSerializationIsStableAndSorted() {
-        assertEquals("1|7|16|1|1|1|0|1|a.example,z.example", serializeAdsRuntimePolicy(7, 16, true, true, true, true, listOf("z.example", "a.example")))
+        assertEquals("1|7|16|1|1|1|1|1|a.example,z.example", serializeAdsRuntimePolicy(7, 16, true, true, true, true, true, listOf("z.example", "a.example")))
     }
 }

@@ -38,8 +38,15 @@ public final class AdsRuntimePolicy {
         String[] values = encoded.split("\\|", -1);
         if (values.length < 9 || !"1".equals(values[0])) return;
         try {
-            modules = Integer.parseInt(values[1]);
-            blockedFormats = Integer.parseInt(values[2]);
+            int parsedModules = Integer.parseInt(values[1]);
+            int parsedBlockedFormats = Integer.parseInt(values[2]);
+            if (parsedModules < 0 || (parsedModules & ~7) != 0 ||
+                    parsedBlockedFormats < 0 || (parsedBlockedFormats & ~63) != 0) return;
+            if (!isBooleanField(values[3]) || !isBooleanField(values[4]) ||
+                    !isBooleanField(values[5]) || !isBooleanField(values[6]) ||
+                    !isBooleanField(values[7])) return;
+            modules = parsedModules;
+            blockedFormats = parsedBlockedFormats;
             skipRewarded = "1".equals(values[3]);
             grantReward = "1".equals(values[4]);
             fakeAvailability = "1".equals(values[5]);
@@ -53,6 +60,10 @@ public final class AdsRuntimePolicy {
         } catch (RuntimeException ignored) {
             integrated = false;
         }
+    }
+
+    private static boolean isBooleanField(String value) {
+        return "0".equals(value) || "1".equals(value);
     }
 
     public static synchronized boolean isIntegrated() { return integrated; }
