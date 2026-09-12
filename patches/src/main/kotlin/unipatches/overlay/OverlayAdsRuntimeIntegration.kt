@@ -1,7 +1,7 @@
 package unipatches.overlay
 
 /**
- * Patch-process handoff for optional Control App Ads runtime controls.
+ * Patch-process coordination for optional Control App Ads runtime controls.
  *
  * Control App Ads executes before overlay patches, so it queues the policy here. The overlay that
  * actually installs the shared runtime consumes it and emits the configure call adjacent to its

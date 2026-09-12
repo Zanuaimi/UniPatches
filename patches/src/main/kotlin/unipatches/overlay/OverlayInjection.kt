@@ -26,14 +26,15 @@ internal fun injectOverlayBridge(
     val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters + temporaryCount)
     val receiver = cloned.p0Register
     val type = if (application) "Landroid/app/Application;" else "Landroid/app/Activity;"
-    val index = if (application) 0 else {
-        val instructions = cloned.implementation?.instructions
-        val superIndex = instructions?.indexOfFirst {
-            val text = it.toString()
-            text.contains("invoke-super") && text.contains("->onCreate(")
-        } ?: -1
-        if (superIndex >= 0) superIndex + 1 else maxOf(0, (instructions?.size ?: 0) - 1)
-    }
+    val instructions = cloned.implementation?.instructions
+    val superIndex = instructions?.indexOfFirst {
+        val text = it.toString()
+        text.contains("invoke-super") && text.contains("->onCreate(")
+    } ?: -1
+    // Application.onCreate must complete framework and SDK initialization before policy-aware
+    // hooks become active. Activity injection already follows its superclass call for the same
+    // reason. If no superclass call can be found, append at the end as a safe fallback.
+    val index = if (superIndex >= 0) superIndex + 1 else maxOf(0, (instructions?.size ?: 0) - 1)
     val adsPolicy = adsRuntimePolicy?.let { policy ->
         """
         const-string v${temporaryBase + 2}, "${StartupHooks.escapeSmali(policy)}"
