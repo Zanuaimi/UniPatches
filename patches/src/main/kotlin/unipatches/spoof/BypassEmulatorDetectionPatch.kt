@@ -301,6 +301,8 @@ val bypassEmulatorDetectionPatch = bytecodePatch(
     """.trimIndent(),
     default = false,
 ) {
+    // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
+    try { category("Bypass Emulator Detection") } catch (_: NoSuchMethodError) {}
     val profile by stringOption(
         title = "Quick setup > Device profile to imitate",
         default = "pixel6",

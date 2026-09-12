@@ -44,6 +44,7 @@ private fun generatePatchList(version: String, patches: Set<Patch<*>>) {
     val patchesMap = patches.sortedBy { it.name }.map { patch ->
         JsonPatch(
             name = patch.name!!,
+            category = patch.category,
             description = patch.description,
             default = patch.default,
             dependencies = patch.dependencies.mapNotNull { it.name },
@@ -106,6 +107,7 @@ private fun generatePatchList(version: String, patches: Set<Patch<*>>) {
 @Suppress("unused")
 private class JsonPatch(
     val name: String? = null,
+    val category: String? = null,
     val description: String? = null,
     val default: Boolean = true,
     val dependencies: List<String>,

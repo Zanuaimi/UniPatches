@@ -57,6 +57,8 @@ val customAppDisplayPatch = bytecodePatch(
     """.trimIndent(),
     default = false,
 ) {
+    // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
+    try { category("Custom App Display Enhanced") } catch (_: NoSuchMethodError) {}
     dependsOn(StartupHooks.resolveRealApplicationPatch)
     val scalingMode by stringOption(
         title = "Quick setup > Display scaling > Mode",

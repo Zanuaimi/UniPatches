@@ -130,6 +130,8 @@ val bypassForcedUpdatesPatch = bytecodePatch(
     """.trimIndent(),
     default = false,
 ) {
+    // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
+    try { category("Bypass Forced Updates") } catch (_: NoSuchMethodError) {}
     val bypassUpdateGate by booleanOption(
         key = "bypassUpdateGate",
         default = true,

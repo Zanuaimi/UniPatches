@@ -24,6 +24,8 @@ val hillClimbRacingOverlayExamplePatch = bytecodePatch(
         Module settings and Preview actions are session-only; this example addon never reads or changes currencies, vehicles, stages, garage state, purchases, save files, or game bytecode.""".trimMargin(),
     default = false,
 ) {
+    // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
+    try { category("Hill Climb Racing Example Overlay") } catch (_: NoSuchMethodError) {}
     extendWith("extensions/extension.mpe")
     compatibleWith(
         Compatibility(

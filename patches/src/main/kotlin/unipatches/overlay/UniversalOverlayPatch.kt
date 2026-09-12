@@ -523,6 +523,8 @@ val universalOverlayPatch = bytecodePatch(
     """.trimIndent(),
     default = false,
 ) {
+    // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
+    try { category("★ Universal Overlay") } catch (_: NoSuchMethodError) {}
     // Keep the extension DEX as the runtime boundary; generated Smali should only start it and
     // must not contain overlay UI or feature implementation.
     extendWith("extensions/extension.mpe")

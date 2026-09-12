@@ -86,7 +86,7 @@ It contributes `Block Ads`, `Ads Free Rewards`, and `Block Ads / Tracking Hosts`
 `Ad control hook modules` section when `AdsRuntimePolicy` is integrated and contains the matching
 module bit.
 
-The Configure App Ads patch queues the positional policy and the overlay patch attaches it to the
+The Control App Ads patch queues the positional policy and the overlay patch attaches it to the
 same Application or Activity bridge. The policy uses these module bits: Block Ads = 1, Ads Free
 Rewards = 2, and Block Ads / Tracking Hosts = 4. The first two runtime modules also require their
 corresponding Ads master settings. The host module requires runtime policy only; its initial

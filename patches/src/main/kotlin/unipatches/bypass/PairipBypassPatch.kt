@@ -106,6 +106,8 @@ val pairipBypassPatch = bytecodePatch(
     """.trimIndent(),
     default = false,
 ) {
+    // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
+    try { category("PairIP Bypass Enhanced") } catch (_: NoSuchMethodError) {}
     val automaticStrategySelection by booleanOption(
         key = "automaticStrategySelection",
         default = true,

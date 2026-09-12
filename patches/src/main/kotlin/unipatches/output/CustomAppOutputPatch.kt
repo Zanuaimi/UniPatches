@@ -50,6 +50,8 @@ val customAppOutputPatch = resourcePatch(
     """.trimIndent(),
     default = false,
 ) {
+    // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
+    try { category("Custom App Output Enhanced") } catch (_: NoSuchMethodError) {}
     val cloneEnabled by booleanOption(
         title = "Advanced > Clone for side-by-side install > Enable",
         default = false,

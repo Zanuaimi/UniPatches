@@ -471,7 +471,7 @@ private fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildca
 
 @Suppress("unused")
 val controlAppAdsPatch = bytecodePatch(
-    name = "Configure App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )",
+    name = "Control App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )",
     description = """
         A merged ad-control patch based on Nai64's No Ads and Ads Free Rewards patches, plus
         literal-host blocking inspired by Entree and Adobo. Block common ad formats, choose the
@@ -489,7 +489,7 @@ val controlAppAdsPatch = bytecodePatch(
         online and retried. PairIP Firebase cleanup/removal can disable Firebase-backed reward,
         sign-in, billing, and attribution flows, which this patch cannot restore.
 
-        This patch includes an optional Universal Overlay addon. To use the addon, patch Configure App Ads
+        This patch includes an optional Universal Overlay addon. To use the addon, patch Control App Ads
         together with Universal Overlay, enable “Overlay integration >
         Enable runtime controls”, and select one or more of its three overlay addon modules:
         “Block Ads”, “Ads Free Rewards”, and “Block ad/tracking hosts”. The selected modules
@@ -507,6 +507,8 @@ val controlAppAdsPatch = bytecodePatch(
     """.trimIndent(),
     default = false,
 ) {
+    // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
+    try { category("Control App Ads Enhanced") } catch (_: NoSuchMethodError) {}
     extendWith("extensions/extension.mpe")
 
     val enableNoAds by booleanOption(

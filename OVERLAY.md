@@ -170,7 +170,7 @@ it adds its selected app-specific profile and modules to the Universal bridge re
 same patch run. If Universal did not inject a bridge, HCR fails instead of producing a partial
 overlay patch.
 
-`Configure App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` includes an optional overlay
+`Control App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` includes an optional overlay
 addon. Its three overlay addon modules are `Block Ads`, `Ads Free Rewards`, and `Block Ads / Tracking
 hosts`. They expose session-local runtime controls through the shared overlay and start with values
 copied from the Ads patch settings. The Ads patch has separate `Enable No Ads`, `Enable Ads Free
@@ -179,10 +179,10 @@ whether their matching runtime modules are exposed. The host module only require
 while its master controls its initial enabled state. Enable the addon and choose its modules in the Ads settings,
 then select Universal Overlay or an app-specific overlay patch. The complete user flow is:
 
-1. Select `Configure App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` and `UniPatches Universal Overlay Patch`, or select the HCR
+1. Select `Control App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` and `UniPatches Universal Overlay Patch`, or select the HCR
    companion together with Universal Overlay when building the HCR example. App-specific companions
    add modules to Universal; they do not install a second shared overlay bridge.
-2. In Configure App Ads, enable `Overlay integration > Enable runtime controls`.
+2. In Control App Ads, enable `Overlay integration > Enable runtime controls`.
 3. Under `Overlay integration > Runtime controls`, enable `Block Ads`, `Ads Free Rewards`,
    and/or `Block Ads / Tracking Hosts`. These module switches are disabled by default. `Block Ads`
    requires `Enable No Ads`, and `Ads Free Rewards` requires `Enable Ads Free Rewards`; disabling
@@ -199,7 +199,7 @@ then select Universal Overlay or an app-specific overlay patch. The complete use
 
 The runtime module is an optional bridge, not a second ad patch. When runtime controls are enabled
 with at least one selected module, static behavior is replaced by guarded instrumentation for the
-selected capabilities and the initial control values mirror the corresponding Configure App Ads
+selected capabilities and the initial control values mirror the corresponding Control App Ads
 settings. The selected runtime module controls which instrumented paths are policy-aware; unrelated
 SDK initialization and unsupported paths retain their original behavior. Later changes are
 session-local and reset when the process restarts. If runtime controls are enabled without modules,

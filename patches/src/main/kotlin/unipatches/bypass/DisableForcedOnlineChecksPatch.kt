@@ -86,6 +86,8 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
     """.trimIndent(),
     default = false,
 ) {
+    // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
+    try { category("Bypass Forced Online Checks") } catch (_: NoSuchMethodError) {}
     val autoMode by booleanOption(
         key = "autoMode",
         title = "Quick setup > Automatic engine detection",
