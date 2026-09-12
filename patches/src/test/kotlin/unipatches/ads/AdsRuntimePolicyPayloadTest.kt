@@ -40,6 +40,15 @@ class AdsRuntimePolicyPayloadTest {
         assertEquals(false, hasKnownAdsReference(
             "Landroidx/media3/exoplayer/source/ads/ServerSideAdInsertionMediaSource\$SampleStreamImpl;->isReady()Z",
         ))
+        assertEquals(false, isKnownAdsClass(
+            "Lcom/mbridge/msdk/playercommon/exoplayer2/source/SingleSampleMediaPeriod\$SampleStreamImpl;",
+        ))
+        assertEquals(false, hasKnownAdsReference(
+            "Lcom/mbridge/msdk/playercommon/exoplayer2/source/SingleSampleMediaPeriod\$SampleStreamImpl;->isReady()Z",
+        ))
+        assertEquals(false, isKnownAdsClass(
+            "Lcom/unity3d/services/store/gpbl/bridges/billingclient/common/BillingClientBridgeCommon;",
+        ))
         assertEquals(true, hasKnownAdsReference(
             "Lcom/google/android/gms/ads/AdView;->isLoading()Z",
         ))
