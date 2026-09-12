@@ -14,8 +14,9 @@ only selects a catalog value, applies Custom/import precedence, and serializes t
 Preset definitions are build-time data and do not belong in the extension runtime.
 
 The extension runtime starts from OverlayRuntime and owns lifecycle registration,
-Activity controllers, view attachment, state restoration, update scheduling, and failure isolation.
-It is shared by ordinary Android apps, Unity games, Godot games, and apps with multiple Activities.
+Activity controllers, view attachment, state restoration, update scheduling, provider registration,
+and failure isolation. It is shared by ordinary Android apps, Unity games, Godot games, and apps
+with multiple Activities.
 
 Use the matching base class:
 
@@ -75,6 +76,26 @@ public final class ExampleGameProvider implements OverlayAppSpecificModuleProvid
 For an app-specific patch, set the shared configuration profile ID and use the
 `explicitActivity` injection mode. The explicit target is attempted first; the universal strategy
 is a fallback only when the target Activity or its `onCreate` method cannot be found.
+
+## Integrated runtime providers
+
+Integrated providers are registered by `OverlayRuntime` and are driven by process-local state rather
+than ordinary Universal Overlay module-selection fields. The current Ads provider is
+`modules/ads/AdsControlRuntimeProvider.java`, registered under the `adsControlRuntime` profile.
+It contributes `Block Ads`, `Ads Free Rewards`, and `Block Ads / Tracking Hosts` to the
+`Ad control hook modules` section when `AdsRuntimePolicy` is integrated and contains the matching
+module bit.
+
+The Configure App Ads patch queues the positional policy and the overlay patch attaches it to the
+same Application or Activity bridge. The policy uses these module bits: Block Ads = 1, Ads Free
+Rewards = 2, and Block Ads / Tracking Hosts = 4. The first two runtime modules also require their
+corresponding Ads master settings. The host module requires runtime policy only; its initial
+checkbox value comes from the `Enable Block Ads / Tracking Hosts` master setting.
+
+Integrated modules must remain safe when absent, malformed, unsupported by the current Activity,
+or partially configured. Their provider should return an empty list instead of throwing, and the
+runtime must isolate provider and module failures from universal modules. Session settings belong in
+`OverlaySessionState`; they must not be persisted in Android storage.
 
 ## Statistic modules
 
