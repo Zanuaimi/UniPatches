@@ -756,7 +756,7 @@ public final class OverlayRuntime {
                     config.background, config.outline, false, config.outlineWidth,
                     !"square".equals(config.menuCorners)));
             FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
-                    Math.max(dp(1), Math.min(dp(560), activity.getResources().getDisplayMetrics().widthPixels - dp(40))),
+                    boundedOverlayPanelWidth(),
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     Gravity.CENTER);
             panelParams.setMargins(dp(20), dp(20), dp(20), dp(20));
@@ -831,6 +831,12 @@ public final class OverlayRuntime {
             addAction(actions, "Close menu", v -> closeMenu());
             addAction(actions, "Fully close", v -> showCloseConfirmation());
             return menu;
+        }
+
+        /** Keep centered content usable on wide landscape displays as well as phones. */
+        private int boundedOverlayPanelWidth() {
+            int availableWidth = activity.getResources().getDisplayMetrics().widthPixels - dp(40);
+            return Math.max(dp(1), Math.min(dp(560), availableWidth));
         }
 
         private void styleModuleScrollBar(ScrollView scroll) {
@@ -1313,7 +1319,8 @@ public final class OverlayRuntime {
                 if (onApplied != null) onApplied.run();
                 dismissModuleSettingsPopup(layer, card);
             });
-            FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER);
+            FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(
+                    boundedOverlayPanelWidth(), -2, Gravity.CENTER);
             cardParams.setMargins(dp(20), dp(20), dp(20), dp(20));
             layer.addView(card, cardParams);
             layer.setAlpha(0f);
