@@ -31,6 +31,21 @@ internal fun buildAdsRuntimeModuleMask(
         (if (hostsEnabled) 4 else 0)
 }
 
+/** Converts the six independent patch-time ad-format switches to policy bits. */
+internal fun buildAdsBlockedFormatsMask(
+    blockInterstitials: Boolean,
+    blockBanners: Boolean,
+    blockAppOpen: Boolean,
+    blockMRec: Boolean,
+    blockRewarded: Boolean,
+    blockNative: Boolean,
+): Int = (if (blockInterstitials) 1 else 0) or
+    (if (blockBanners) 2 else 0) or
+    (if (blockAppOpen) 4 else 0) or
+    (if (blockMRec) 8 else 0) or
+    (if (blockRewarded) 16 else 0) or
+    (if (blockNative) 32 else 0)
+
 internal fun serializeAdsRuntimePolicy(
     moduleMask: Int,
     blockedFormats: Int,

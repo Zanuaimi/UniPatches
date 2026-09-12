@@ -500,7 +500,7 @@ private fun validate(
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v2.4.4 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v2.4.5 (Experimental)",
     description = """
         A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual
         preset, select the overlay modules you want, optionally supply an icon image, then patch. Modules

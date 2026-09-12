@@ -21,7 +21,11 @@ internal data class AdsSdkCoverage(
     val pangle: Boolean = true,
     val huawei: Boolean = true,
     val yandex: Boolean = true,
-    val other: Boolean = true,
+    val startApp: Boolean = true,
+    val moPub: Boolean = true,
+    val chartboost: Boolean = true,
+    val inMobi: Boolean = true,
+    val mintegral: Boolean = true,
 )
 
 private fun guardedPolicyBlock(policyMethod: String, instructions: String, originalLabel: String): String {
@@ -134,7 +138,6 @@ internal fun BytecodePatchContext.forceAdAvailability(
     }
 
     val auto = rewardStrategy == "auto"
-    val useMax = sdkCoverage.max && (auto || rewardStrategy == "max")
     val useUnity = sdkCoverage.unity && (auto || rewardStrategy == "unityAds")
     val useIronSource = sdkCoverage.ironSource && (auto || rewardStrategy == "ironSource")
     val useRustore = sdkCoverage.yandex && (auto || rewardStrategy == "rustore")
@@ -147,22 +150,16 @@ internal fun BytecodePatchContext.forceAdAvailability(
     }
     if (useIronSource) {
         patchIsReady("ironSource isRewardedVideoAvailable()", IronSourceIsRewardedVideoAvailableFingerprint)
-        patchIsReady("ironSource isInterstitialReady()", IronSourceIsInterstitialReadyFingerprint)
-    }
-    if (useMax) {
-        patchIsReady("AppLovin MAX InterstitialAd.isReady()", MaxInterstitialAdIsReadyFingerprint)
-        patchIsReady("AppLovin MAX AppOpenAd.isReady()", MaxAppOpenAdIsReadyFingerprint)
     }
     if (useRustore) {
         patchIsReady("Yandex/MyTarget rewarded mediation isLoaded()", YandexMyTargetRewardedIsLoadedFingerprint)
-        patchIsReady("Yandex/MyTarget interstitial mediation isLoaded()", YandexMyTargetInterstitialIsLoadedFingerprint)
     }
     if (useHuawei) patchIsReady("Huawei Ads Kit RewardAd.isLoaded()", HuaweiRewardAdIsLoadedFingerprint)
-    if (auto) patchIsReady("InMobi isReady()", InMobiIsReadyFingerprint)
+    if (auto && sdkCoverage.inMobi) patchIsReady("InMobi isReady()", InMobiIsReadyFingerprint)
     return patched
 }
 
-private fun BytecodePatchContext.applyAdsFreeRewardsV1190(
+internal fun BytecodePatchContext.applyAdsFreeRewards(
     logger: Logger,
     rewardStrategy: String?,
     instantReward: Boolean?,
@@ -193,8 +190,8 @@ private fun BytecodePatchContext.applyAdsFreeRewardsV1190(
     val hasHuawei = HuaweiRewardAdIsLoadedFingerprint.methodOrNull != null &&
         HuaweiRewardAdShowFingerprint.methodOrNull != null
     val hasAdMob = AdMobRewardedShowFingerprint.methodOrNull != null
-    val hasInMobi = InMobiInterstitialShowFingerprint.methodOrNull != null || InMobiRewardedShowFingerprint.methodOrNull != null
-    val hasInMobiRewarded = InMobiRewardedShowFingerprint.methodOrNull != null
+    val hasInMobi = sdkCoverage.inMobi && (InMobiInterstitialShowFingerprint.methodOrNull != null || InMobiRewardedShowFingerprint.methodOrNull != null)
+    val hasInMobiRewarded = sdkCoverage.inMobi && InMobiRewardedShowFingerprint.methodOrNull != null
     val hasIronSourceAds = IronSourceAdsRewardedShowFingerprint.methodOrNull != null ||
         IronSourceAdsRewardedShowPreciseFingerprint.methodOrNull != null
     val hasMads = MadsWrapperShowAdFingerprint.methodOrNull != null &&
@@ -241,7 +238,7 @@ private fun BytecodePatchContext.applyAdsFreeRewardsV1190(
     }
     applyMaxUnityStrategy(logger, useMax, instantReward)
     applyNativeMaxStrategy(logger, useMax, instantReward)
-    applyInMobiRewardedStrategy(logger, auto && sdkCoverage.other, instantReward)
+    applyInMobiRewardedStrategy(logger, auto && sdkCoverage.inMobi, instantReward)
     applyIronSourceAdsStrategy(logger, useIronSource, instantReward)
     applyIronSourceAdsWrapperStrategy(logger, useIronSource, instantReward)
     applyMadsStrategy(logger, useIronSource, instantReward)
@@ -314,12 +311,12 @@ private fun BytecodePatchContext.applyYandexWrapperStrategy(logger: Logger) {
 }
 
 private fun BytecodePatchContext.applyInMobiRewardedStrategy(logger: Logger, useAutoFallback: Boolean, instantReward: Boolean?) {
-    // These fingerprints belong to the InMobi adapter used by MAX. Do not
-    // modify it when MAX has been disabled by the selected reward strategy.
+    // This fingerprint belongs to the InMobi adapter used by MAX. Do not modify
+    // it when MAX has been disabled by the selected reward strategy.
     if (!useAutoFallback || (instantReward != true && !adsFreeRewardsRuntimeGuardEnabled)) return
-    // InMobi mediated via AppLovin MAX - patching the show to instantly reward covers both interstitial and rewarded
-    // Use the rewarded fingerprint if available, otherwise fallback to interstitial
-    val target = InMobiRewardedShowFingerprint.methodOrNull ?: InMobiInterstitialShowFingerprint.methodOrNull ?: return
+    // Only patch the explicit rewarded entry point. Falling back to an interstitial method can
+    // suppress unrelated startup ads and entangle reward and interstitial control flow.
+    val target = InMobiRewardedShowFingerprint.methodOrNull ?: return
     try {
         target.addInstructions(0, guardedInstantReward("""
             return-void
@@ -679,59 +676,3 @@ private fun BytecodePatchContext.applyUnityAdsV4Strategy(logger: Logger, useUnit
         logger.info("Ads Free Rewards: Unity Ads v4 patch succeeded (4-arg show)")
     }
 }
-
-// Historical snapshots - each version is a frozen copy.
-// Newer entries delegate to the current implementation for now; future
-// bundle releases can diverge them with version-specific fixes.
-private fun BytecodePatchContext.applyAdsFreeRewardsV1200(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.20.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-private fun BytecodePatchContext.applyAdsFreeRewardsV1210(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.21.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-private fun BytecodePatchContext.applyAdsFreeRewardsV1220(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.22.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-private fun BytecodePatchContext.applyAdsFreeRewardsV1300(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.30.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-private fun BytecodePatchContext.applyAdsFreeRewardsV1310(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.31.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-private fun BytecodePatchContext.applyAdsFreeRewardsV1320(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.32.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-private fun BytecodePatchContext.applyAdsFreeRewardsV1330(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.33.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-private fun BytecodePatchContext.applyAdsFreeRewardsV1340(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.34.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-private fun BytecodePatchContext.applyAdsFreeRewardsV1380(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.38.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-private fun BytecodePatchContext.applyAdsFreeRewardsV1400(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.40.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-private fun BytecodePatchContext.applyAdsFreeRewardsV1410(logger: Logger, rewardStrategy: String?, instantReward: Boolean?, sdkCoverage: AdsSdkCoverage) {
-    logger.info("Ads Free Rewards v1.41.0 selected")
-    applyAdsFreeRewardsV1190(logger, rewardStrategy, instantReward, sdkCoverage)
-}
-
-/** Latest stable strategy shared by Control App Ads. */
-internal fun BytecodePatchContext.applyLatestAdsFreeRewards(
-    logger: Logger,
-    rewardStrategy: String?,
-    instantReward: Boolean?,
-    sdkCoverage: AdsSdkCoverage = AdsSdkCoverage(),
-) = applyAdsFreeRewardsV1320(logger, rewardStrategy, instantReward, sdkCoverage)

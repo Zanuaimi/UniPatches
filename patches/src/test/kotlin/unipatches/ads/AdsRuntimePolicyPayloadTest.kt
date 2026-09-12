@@ -20,6 +20,14 @@ class AdsRuntimePolicyPayloadTest {
     }
 
     @Test
+    fun blockedFormatMaskUsesIndividualCheckboxesWithoutPresetOverrides() {
+        assertEquals(0, buildAdsBlockedFormatsMask(false, false, false, false, false, false))
+        assertEquals(16, buildAdsBlockedFormatsMask(false, false, false, false, true, false))
+        assertEquals(47, buildAdsBlockedFormatsMask(true, true, true, true, false, true))
+        assertEquals(63, buildAdsBlockedFormatsMask(true, true, true, true, true, true))
+    }
+
+    @Test
     fun runtimePolicyRequiresAtLeastOneModule() {
         assertEquals(false, isAdsRuntimePolicyActive(true, false, false, false))
         assertEquals(true, isAdsRuntimePolicyActive(true, false, true, false))
@@ -55,12 +63,48 @@ class AdsRuntimePolicyPayloadTest {
     }
 
     @Test
+    fun targetedFallbackRequiresTheExactDefiningClass() {
+        assertEquals(true, isAdsFallbackCandidate(
+            classType = "Lcom/applovin/mediation/ads/MaxRewardedAd;",
+            target = "Lcom/applovin/mediation/ads/MaxRewardedAd;",
+            hasAdsReference = false,
+        ))
+        assertEquals(false, isAdsFallbackCandidate(
+            classType = "Lcom/applovin/mediation/ads/MaxInterstitialAd;",
+            target = "Lcom/applovin/mediation/ads/MaxRewardedAd;",
+            hasAdsReference = true,
+        ))
+        assertEquals(true, isAdsFallbackCandidate(
+            classType = "Lcom/custom/ObfuscatedAd;",
+            target = null,
+            hasAdsReference = true,
+        ))
+    }
+
+    @Test
     fun disabledRewardsAddonDoesNotEnableRuntimeRewards() {
         assertEquals(false, isAdsRuntimeRewardsEnabled(true, false))
         assertEquals(false, isAdsRuntimeRewardsEnabled(false, true))
         assertEquals(true, isAdsRuntimeRewardsEnabled(true, true))
         assertEquals(false, isAdsRuntimeModuleEnabled(true, false, true))
         assertEquals(true, isAdsRuntimeModuleEnabled(true, true, true))
+    }
+
+    @Test
+    fun sdkCoverageKeepsOtherSdkSelectionsIndependent() {
+        val coverage = AdsSdkCoverage(
+            startApp = false,
+            moPub = true,
+            chartboost = false,
+            inMobi = true,
+            mintegral = false,
+        )
+
+        assertEquals(false, coverage.startApp)
+        assertEquals(true, coverage.moPub)
+        assertEquals(false, coverage.chartboost)
+        assertEquals(true, coverage.inMobi)
+        assertEquals(false, coverage.mintegral)
     }
 
     @Test
