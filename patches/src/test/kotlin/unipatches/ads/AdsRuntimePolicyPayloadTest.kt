@@ -20,6 +20,13 @@ class AdsRuntimePolicyPayloadTest {
     }
 
     @Test
+    fun runtimePolicyRequiresAtLeastOneModule() {
+        assertEquals(false, isAdsRuntimePolicyActive(true, false, false, false))
+        assertEquals(true, isAdsRuntimePolicyActive(true, false, true, false))
+        assertEquals(false, isAdsRuntimePolicyActive(false, true, true, true))
+    }
+
+    @Test
     fun disabledRewardsAddonDoesNotEnableRuntimeRewards() {
         assertEquals(false, isAdsRuntimeRewardsEnabled(true, false))
         assertEquals(false, isAdsRuntimeRewardsEnabled(false, true))
@@ -28,7 +35,7 @@ class AdsRuntimePolicyPayloadTest {
 
     @Test
     fun rewardsAddonSerializesModuleBitTwo() {
-        assertEquals("1|2|0|0|0|0|0|0|", serializeAdsRuntimePolicy(2, 0, false, true, true, false, emptyList()))
+        assertEquals("1|2|0|0|1|1|0|0|", serializeAdsRuntimePolicy(2, 0, false, true, true, false, emptyList()))
     }
 
     @Test
