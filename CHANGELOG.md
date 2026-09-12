@@ -1,3 +1,10 @@
+## [1.20.1](https://github.com/Zanuaimi/UniPatches/compare/v1.20.0...v1.20.1) (2026-09-12)
+
+### 🐛 Bug Fixes
+
+* **ads:** add runtime safety regression coverage ([5e11651](https://github.com/Zanuaimi/UniPatches/commit/5e11651a19fdbadab8266720da57f87230dba9d4))
+* **ads:** prevent runtime media readiness interference ([d4f3509](https://github.com/Zanuaimi/UniPatches/commit/d4f3509f86f6e42888959f9920f71e759380655f))
+
 ## [1.20.0](https://github.com/Zanuaimi/UniPatches/compare/v1.19.0...v1.20.0) (2026-09-12)
 
 ### ✨ New Features
