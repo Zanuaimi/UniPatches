@@ -1,3 +1,14 @@
+## [1.19.0](https://github.com/Zanuaimi/UniPatches/compare/v1.18.0...v1.19.0) (2026-09-12)
+
+### 🐛 Bug Fixes
+
+* **ads:** harden runtime policy instrumentation ([9908658](https://github.com/Zanuaimi/UniPatches/commit/99086580f4d968ad2838625dc76a28f61bbee9f8))
+* **overlay:** align runtime bridge startup ([eeea72b](https://github.com/Zanuaimi/UniPatches/commit/eeea72b3c19b3bb1e8c220f8184d4954855e1722))
+
+### ✨ New Features
+
+* **docs:** document overlay runtime architecture ([4439f33](https://github.com/Zanuaimi/UniPatches/commit/4439f3368a4027bd0b52448f9e85e2b3378075bf))
+
 ## [1.18.0](https://github.com/Zanuaimi/UniPatches/compare/v1.17.4...v1.18.0) (2026-09-12)
 
 ### 🐛 Bug Fixes
