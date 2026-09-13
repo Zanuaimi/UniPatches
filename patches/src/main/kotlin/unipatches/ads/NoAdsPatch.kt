@@ -224,9 +224,9 @@ private fun BytecodePatchContext.flushAdsFallbackOperations(logger: Logger): Int
                             return@forEach
                         }
                         if (runtimeCategory != null) {
-                            val guard = runtimeGuard(runtimeCategory) ?: return@forEach
+                            val guard = runtimeGuard(runtimeCategory, booleanReturnInstructions(false)) ?: return@forEach
                             if (mutableMethod.implementation!!.registerCount - mutableMethod.numberOfParameterRegisters < 1) return@forEach
-                            mutableMethod.addInstructions(0, guard.replace("return-void", booleanReturnInstructions(false)))
+                            mutableMethod.addInstructions(0, guard)
                         } else {
                             mutableMethod.addInstructions(0, booleanReturnInstructions(false))
                         }
@@ -263,7 +263,7 @@ private fun BytecodePatchContext.cachedAdsMutableClass(classType: String): Mutab
     return mutableClassDefByOrNull(classType)?.also { adsFallbackMutableClasses[classType] = it }
 }
 
-private fun runtimeGuard(category: String): String? {
+private fun runtimeGuard(category: String, blockedInstructions: String = "return-void"): String? {
     if (!runtimeHooksEnabled) return null
     val method = when (category) {
         "interstitials" -> "shouldBlockInterstitials"
@@ -281,7 +281,7 @@ private fun runtimeGuard(category: String): String? {
             move-result v0
             if-eqz v0, :unipatch_ads_runtime_shared_continue
             :unipatch_ads_runtime_shared_block
-            return-void
+            $blockedInstructions
             :unipatch_ads_runtime_shared_continue
         """.trimIndent()
         else -> return null
@@ -290,7 +290,7 @@ private fun runtimeGuard(category: String): String? {
         invoke-static {}, $ADS_POLICY_CLASS->$method()Z
         move-result v0
         if-eqz v0, :unipatch_ads_runtime_continue
-        return-void
+        $blockedInstructions
         :unipatch_ads_runtime_continue
     """.trimIndent()
 }
@@ -306,7 +306,17 @@ private fun BytecodePatchContext.injectOrSkip(
         )
         return 0
     }
-    val effectiveInstructions = runtimeCategoryByFingerprint[fingerprint]?.let { runtimeGuard(it) } ?: instructions
+    // Callers that need a non-void return type provide a typed runtime guard.
+    // Do not replace it with the default void guard here. Custom instructions
+    // without a policy call are still wrapped for runtime-selected fingerprints.
+    val effectiveInstructions = if (
+        runtimeCategoryByFingerprint[fingerprint] != null &&
+        !instructions.contains("AdsRuntimePolicy;->")
+    ) {
+        runtimeGuard(runtimeCategoryByFingerprint.getValue(fingerprint)) ?: instructions
+    } else {
+        instructions
+    }
     val methodKey = guardMethodKey(method)
     if (effectiveInstructions.contains("AdsRuntimePolicy;->") &&
         (methodKey in runtimeGuardedMethods || hasRuntimePolicyGuard(method))
@@ -373,14 +383,15 @@ private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int
 
     val exact = fingerprint.methodOrNull
     if (exact != null && exact.implementation != null) {
-        runtimeCategoryByFingerprint[fingerprint]?.let { category ->
-            val guard = runtimeGuard(category) ?: return@let 0
-            val dynamic = guard.replace("return-void", booleanReturnInstructions(false))
-            return injectOrSkip(fingerprint, dynamic)
-        }
-        if (exact.returnType != "Z" || (exact.implementation?.registerCount ?: 0) < 1) {
-            logger.warning("No Ads: skipping $name: boolean method has no usable register")
+        if (exact.returnType != "Z" || (exact.implementation?.registerCount ?: 0) < 1 ||
+            (exact.implementation?.registerCount ?: 0) - exact.numberOfParameterRegisters < 1
+        ) {
+            logger.warning("No Ads: skipping $name: boolean method has no usable local register")
             return 0
+        }
+        runtimeCategoryByFingerprint[fingerprint]?.let { category ->
+            val guard = runtimeGuard(category, booleanReturnInstructions(false)) ?: return@let 0
+            return injectOrSkip(fingerprint, guard)
         }
         exact.addInstructions(0, booleanReturnInstructions(false))
         logger.info("No Ads: forced $name -> false (exact 1 impl)")
