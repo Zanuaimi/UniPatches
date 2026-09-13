@@ -1,3 +1,10 @@
+## [1.22.1](https://github.com/Zanuaimi/UniPatches/compare/v1.22.0...v1.22.1) (2026-09-13)
+
+### 🐛 Bug Fixes
+
+* **ads:** add register safety regression coverage ([d460559](https://github.com/Zanuaimi/UniPatches/commit/d460559cbda99511d0d968144e29527226f84ed4))
+* **ads:** protect MAX reward readiness instrumentation ([978821c](https://github.com/Zanuaimi/UniPatches/commit/978821c9e8e675d92fb73d29fd559c741020a646))
+
 ## [1.22.0](https://github.com/Zanuaimi/UniPatches/compare/v1.21.0...v1.22.0) (2026-09-13)
 
 ### 🐛 Bug Fixes
