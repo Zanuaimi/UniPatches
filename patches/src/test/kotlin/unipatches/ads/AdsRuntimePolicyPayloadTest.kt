@@ -122,6 +122,12 @@ class AdsRuntimePolicyPayloadTest {
     }
 
     @Test
+    fun availabilityGuardsRequireASeparateLocalRegister() {
+        assertEquals(false, hasSafeLocalRegister(2, 2))
+        assertEquals(true, hasSafeLocalRegister(3, 2))
+    }
+
+    @Test
     fun rewardsAddonSerializesModuleBitTwo() {
         assertEquals("1|2|0|0|1|1|0|0|", serializeAdsRuntimePolicy(2, 0, false, true, true, false, false, emptyList()))
     }

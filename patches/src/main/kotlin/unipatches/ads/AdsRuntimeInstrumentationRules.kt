@@ -14,3 +14,6 @@ internal fun shouldPatchUnityAdsV4Permanently(
 /** Returns a valid smali boolean return sequence for an injected guard. */
 internal fun booleanReturnInstructions(value: Boolean): String =
     "const/4 v0, 0x${if (value) "1" else "0"}\nreturn v0"
+
+internal fun hasSafeLocalRegister(registerCount: Int, parameterRegisters: Int): Boolean =
+    registerCount - parameterRegisters >= 1
