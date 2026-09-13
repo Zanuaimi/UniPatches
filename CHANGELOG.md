@@ -1,3 +1,14 @@
+## [1.21.0](https://github.com/Zanuaimi/UniPatches/compare/v1.20.2...v1.21.0) (2026-09-13)
+
+### 🐛 Bug Fixes
+
+* **ads:** add runtime instrumentation regression coverage ([3cdba35](https://github.com/Zanuaimi/UniPatches/commit/3cdba358663fa95ac4fde9265b1d867a851c6742))
+* **ads:** remove strategy coupling and protect runtime startup ([a5455ca](https://github.com/Zanuaimi/UniPatches/commit/a5455ca2049c09354f2331fe1499edeb9e83bf4c))
+
+### ✨ New Features
+
+* **overlay:** release Universal Overlay v2.4.6 ([8c8fdb4](https://github.com/Zanuaimi/UniPatches/commit/8c8fdb48c4bc06498dff39974400a2c26a35acef))
+
 ## [1.20.2](https://github.com/Zanuaimi/UniPatches/compare/v1.20.1...v1.20.2) (2026-09-12)
 
 ### 🐛 Bug Fixes
