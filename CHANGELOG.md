@@ -1,3 +1,13 @@
+## [1.22.0](https://github.com/Zanuaimi/UniPatches/compare/v1.21.0...v1.22.0) (2026-09-13)
+
+### 🐛 Bug Fixes
+
+* **ads:** preserve typed runtime boolean guards ([ece0fe8](https://github.com/Zanuaimi/UniPatches/commit/ece0fe800fe98012726d502b5b9fae5236f282b0))
+
+### ✨ New Features
+
+* **overlay:** release Universal Overlay v2.4.7 ([572c1c8](https://github.com/Zanuaimi/UniPatches/commit/572c1c89640be17589fcd491a2e7b6667621159c))
+
 ## [1.21.0](https://github.com/Zanuaimi/UniPatches/compare/v1.20.2...v1.21.0) (2026-09-13)
 
 ### 🐛 Bug Fixes
