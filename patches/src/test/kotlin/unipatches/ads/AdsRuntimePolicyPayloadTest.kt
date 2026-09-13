@@ -108,6 +108,20 @@ class AdsRuntimePolicyPayloadTest {
     }
 
     @Test
+    fun unityV4SharedShowIsNeverPermanentlyPatchedInRuntimeMode() {
+        assertEquals(false, shouldPatchUnityAdsV4Permanently(true, true, true, true))
+        assertEquals(false, shouldPatchUnityAdsV4Permanently(true, true, true, false))
+        assertEquals(true, shouldPatchUnityAdsV4Permanently(false, true, true, true))
+        assertEquals(false, shouldPatchUnityAdsV4Permanently(false, false, true, true))
+    }
+
+    @Test
+    fun injectedBooleanGuardsAlwaysReturnABoolean() {
+        assertEquals("const/4 v0, 0x0\nreturn v0", booleanReturnInstructions(false))
+        assertEquals("const/4 v0, 0x1\nreturn v0", booleanReturnInstructions(true))
+    }
+
+    @Test
     fun rewardsAddonSerializesModuleBitTwo() {
         assertEquals("1|2|0|0|1|1|0|0|", serializeAdsRuntimePolicy(2, 0, false, true, true, false, false, emptyList()))
     }
