@@ -1,3 +1,14 @@
+## [1.27.0](https://github.com/Zanuaimi/UniPatches/compare/v1.26.1...v1.27.0) (2026-09-14)
+
+### 🐛 Bug Fixes
+
+* **ads:** verify MAX runtime hook boundaries ([60fab17](https://github.com/Zanuaimi/UniPatches/commit/60fab17c357b2bb3daa23be17d13b74571b58c2d))
+
+### ✨ New Features
+
+* **ads:** add request-scoped MAX reward controls ([6e452ed](https://github.com/Zanuaimi/UniPatches/commit/6e452edddab646dfd1a1db4555259b3e2c46855b))
+* **overlay:** release v2.5.3 ([1df7924](https://github.com/Zanuaimi/UniPatches/commit/1df7924cc876f8a9b6093c1dd0e1ecc11828a254))
+
 ## [1.26.1](https://github.com/Zanuaimi/UniPatches/compare/v1.26.0...v1.26.1) (2026-09-14)
 
 ### 🐛 Bug Fixes
