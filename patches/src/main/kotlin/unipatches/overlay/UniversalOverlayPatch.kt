@@ -24,7 +24,7 @@ import java.util.logging.Logger
 import kotlin.math.roundToInt
 
 private const val RUNTIME_CLASS = OVERLAY_RUNTIME_CLASS
-private const val PRESET_SCHEMA_VERSION = 6
+private const val PRESET_SCHEMA_VERSION = 7
 private const val MAX_CUSTOM_ICON_BYTES = 1024 * 1024
 private const val MAX_TITLE_CHARACTERS = 80
 private const val MAX_DESCRIPTION_CHARACTERS = 500
@@ -66,9 +66,13 @@ private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
     addProperty("format", "unipatches-universal-overlay-preset")
     addProperty("version", PRESET_SCHEMA_VERSION)
     add("settings", JsonObject().apply {
+        addProperty("title", title)
+        addProperty("description", description)
         addProperty("appendDescription", appendDescription)
         addProperty("appendDescriptionColor", appendDescriptionColor)
         addProperty("descriptionAlignment", descriptionAlignment)
+        addProperty("repositoryText", repositoryText)
+        addProperty("repositoryUrl", repositoryUrl)
         addProperty("backgroundColor", background)
         addProperty("backgroundTransparency", backgroundTransparency)
         addProperty("outlineColor", outline)
@@ -107,6 +111,9 @@ private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
         addProperty("customIconImageInput", customIconImageInput)
         addProperty("buttonShape", buttonShape)
         addProperty("buttonSize", buttonSize)
+        addProperty("menuWidthLimit", menuWidthLimit)
+        addProperty("menuHeightLimit", menuHeightLimit)
+        addProperty("showExtraPopupHeaders", showExtraPopupHeaders)
         addProperty("buttonOpacity", buttonOpacity)
         addProperty("dragVisibilityDuration", dragVisibilityDuration)
         addProperty("buttonPosition", buttonPosition)
@@ -206,9 +213,15 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             ?.toIntOrNull(16)
             ?.let { ((it * 100f) / 255f).roundToInt() }
         val imported = fallback.copy(
+            title = text("title", fallback.title) { it.isNotBlank() && it.length <= MAX_TITLE_CHARACTERS },
+            description = text("description", fallback.description) { it.isNotBlank() && it.length <= MAX_DESCRIPTION_CHARACTERS },
             appendDescription = text("appendDescription", fallback.appendDescription) { it.length <= MAX_DESCRIPTION_CHARACTERS },
             appendDescriptionColor = rgbColor("appendDescriptionColor", fallback.appendDescriptionColor),
             descriptionAlignment = choice("descriptionAlignment", fallback.descriptionAlignment, setOf("left", "center", "right")),
+            repositoryText = text("repositoryText", fallback.repositoryText) { it.isNotBlank() && it.length <= MAX_TITLE_CHARACTERS },
+            repositoryUrl = text("repositoryUrl", fallback.repositoryUrl) {
+                it.startsWith("http://") || it.startsWith("https://")
+            },
             background = rgbColor("backgroundColor", fallback.background),
             backgroundTransparency = if (values.has("backgroundTransparency")) {
                 number("backgroundTransparency", fallback.backgroundTransparency, 0..100)
@@ -254,6 +267,9 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             customIconImageInput = text("customIconImageInput", fallback.customIconImageInput),
             buttonShape = text("buttonShape", fallback.buttonShape) { it in setOf("circle", "squircle", "square") },
             buttonSize = number("buttonSize", fallback.buttonSize, 32..128),
+            menuWidthLimit = number("menuWidthLimit", fallback.menuWidthLimit, 45..90),
+            menuHeightLimit = number("menuHeightLimit", fallback.menuHeightLimit, 45..90),
+            showExtraPopupHeaders = flag("showExtraPopupHeaders", fallback.showExtraPopupHeaders),
             buttonOpacity = number("buttonOpacity", fallback.buttonOpacity, 10..100),
             dragVisibilityDuration = number("dragVisibilityDuration", fallback.dragVisibilityDuration, 1..10),
             buttonPosition = text("buttonPosition", fallback.buttonPosition) { it in setOf("topLeft", "topMiddle", "topRight", "centerLeft", "centerRight", "bottomLeft", "bottomMiddle", "bottomRight") },
@@ -500,7 +516,7 @@ private fun validate(
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v2.5.0 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v2.5.1 (Experimental)",
     description = """
         A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual
         preset, select the overlay modules you want, optionally supply an icon image, then patch. Modules
@@ -535,10 +551,22 @@ val universalOverlayPatch = bytecodePatch(
         title = "Quick setup > Preset selection",
         default = "custom",
         key = "runtimeOverlaySelectedPreset",
-        description = "Start here. Custom (UniPatches defaults) is the editable red UniPatches look. Other presets apply a complete visual style: Morphe blue, dark, light, ZArchiver-inspired, LuckyPatcher-inspired, or ReVanced-inspired. Presets never change selected modules or your title and repository details.",
+        description = "Start here. Custom (UniPatches defaults) is the editable red UniPatches look. Other presets apply a complete visual style: Morphe blue, dark, light, ZArchiver-inspired, LuckyPatcher-inspired, or ReVanced-inspired. Built-in presets never change selected modules or your title and repository details. Imported Custom presets can include all supported UI settings.",
         values = linkedMapOf("Custom (UniPatches defaults)" to "custom").apply {
             OverlayPresetCatalog.definitions.forEach { put(it.displayName, it.id) }
         },
+    )
+    val menuWidthLimit by intOption(
+        title = "UI settings > Menu size > Width limit (%)",
+        default = 90,
+        key = "runtimeOverlayMenuWidthLimit",
+        description = "Maximum overlay menu and popup width in portrait as a percentage of the available window width. Landscape transposes this with the height limit. Values are clamped to 45% through 90%.",
+    )
+    val menuHeightLimit by intOption(
+        title = "UI settings > Menu size > Height limit (%)",
+        default = 45,
+        key = "runtimeOverlayMenuHeightLimit",
+        description = "Maximum overlay menu and popup height in portrait as a percentage of the available window height. Landscape transposes this with the width limit. Values are clamped to 45% through 90%.",
     )
     val importUiPreset by filePathOption(
         title = "Quick setup > Import / export UI presets > Import UI preset",
@@ -1203,6 +1231,9 @@ val universalOverlayPatch = bytecodePatch(
             customIconImageInput = customIconImageInput.orEmpty().trim(),
             buttonShape = buttonShape.orEmpty().ifBlank { "circle" },
             buttonSize = (buttonSizeDp ?: 56).coerceIn(32, 128),
+            menuWidthLimit = (menuWidthLimit ?: 90).coerceIn(45, 90),
+            menuHeightLimit = (menuHeightLimit ?: 45).coerceIn(45, 90),
+            showExtraPopupHeaders = showExtraPopupHeaders == true,
             buttonOpacity = (buttonOpacity ?: 50).coerceIn(10, 100),
             dragVisibilityDuration = (buttonDragVisibilityDurationSeconds ?: 2).coerceIn(1, 10),
             buttonPosition = buttonPosition.orEmpty().ifBlank { "topRight" },
@@ -1517,7 +1548,10 @@ val universalOverlayPatch = bytecodePatch(
                 if (includeDoNotDisturb == true) "1" else "0",
                 if (includeOverlayRuntimeLogs == true) "1" else "0",
                 if (enableOverlayRuntimeLogsOnLaunch == true) "1" else "0",
-                if (showExtraPopupHeaders == true || selectedPreset.orEmpty() == "luckyPatcher") "1" else "0",
+                if (showExtraPopupHeaders == true || selectedUiPreset.showExtraPopupHeaders
+                    || selectedPreset.orEmpty() == "luckyPatcher") "1" else "0",
+                selectedUiPreset.menuWidthLimit.toString(),
+                selectedUiPreset.menuHeightLimit.toString(),
             ),
         )
 

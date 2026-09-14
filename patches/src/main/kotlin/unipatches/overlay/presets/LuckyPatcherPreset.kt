@@ -21,6 +21,7 @@ internal val luckyPatcherPreset = OverlayPresetDefinition(
         iconOutline = true,
         iconOutlineColor = "#000000",
         iconOutlineWidth = 2,
+        showExtraPopupHeaders = true,
         iconStyle = "parts",
         iconParts = listOf(
             "circle|35|35|10|16|5|solid|#000000|#000000|0|100|0",

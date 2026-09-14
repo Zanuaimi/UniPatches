@@ -35,6 +35,7 @@ final class OverlayConfig {
     String activityInstallBanlist;
     int background, outline, overlayTextColor, buttonTextColor, buttonBackground, buttonSize, gravity;
     int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle, iconOutlineWidth, iconTextSize;
+    int menuWidthLimitPercent, menuHeightLimitPercent;
     int backgroundTransparency;
     float opacity;
     int shape;
@@ -197,6 +198,8 @@ final class OverlayConfig {
         c.menuTextFont = choice(field(v, offset, 88), "default",
             "default", "roboto", "sansSerif", "serif", "monospace", "sansCondensed", "sansMedium", "sansBlack");
         c.legacyIconJson = field(v, offset, 89);
+        c.menuWidthLimitPercent = integer(field(v, offset, 94), 90, 45, 90);
+        c.menuHeightLimitPercent = integer(field(v, offset, 95), 45, 45, 90);
         c.includeDoNotDisturb = "1".equals(field(v, offset, 90));
         c.includeOverlayRuntimeLogs = "1".equals(field(v, offset, 91));
         c.enableOverlayRuntimeLogsOnLaunch = "1".equals(field(v, offset, 92));
