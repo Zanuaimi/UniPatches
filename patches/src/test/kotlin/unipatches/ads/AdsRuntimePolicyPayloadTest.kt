@@ -383,6 +383,29 @@ class AdsRuntimePolicyPayloadTest {
     }
 
     @Test
+    fun injectedLabelsAreNamespacedToAvoidTargetMethodCollisions() {
+        val body = "if-eqz v0, :cond_0\n:cond_0\nreturn-void"
+        val namespaced = uniquifyInjectedLabels(body, "Lcom/example/Target;->show")
+        assertEquals(false, namespaced.contains(":cond_0"))
+        assertEquals(true, namespaced.contains("return-void"))
+        assertEquals(2, Regex(":unipatch_ads_[A-Za-z0-9_]+_cond_0").findAll(namespaced).count())
+    }
+
+    @Test
+    fun skipRewardedIsIndependentFromInstantReward() {
+        val previous = adsFreeRewardsRuntimeGuardEnabled
+        try {
+            adsFreeRewardsRuntimeGuardEnabled = true
+            val guard = guardedInstantReward("return-void", "morphe_reward_original")
+            assertEquals(true, guard.indexOf("shouldSkipRewarded") < guard.indexOf("shouldGrantReward"))
+            assertEquals(true, guard.contains("return-void"))
+            assertEquals(true, guard.contains(":morphe_reward_original"))
+        } finally {
+            adsFreeRewardsRuntimeGuardEnabled = previous
+        }
+    }
+
+    @Test
     fun rewardsAddonSerializesModuleBitTwo() {
         assertEquals("1|2|0|0|1|1|0|0||0", serializeAdsRuntimePolicy(2, 0, false, true, true, false, false, emptyList()))
     }
