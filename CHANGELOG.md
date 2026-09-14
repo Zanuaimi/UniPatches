@@ -1,3 +1,14 @@
+## [1.23.0](https://github.com/Zanuaimi/UniPatches/compare/v1.22.1...v1.23.0) (2026-09-14)
+
+### 🐛 Bug Fixes
+
+* **ads:** add runtime policy regression verification ([a6f5988](https://github.com/Zanuaimi/UniPatches/commit/a6f59880832b35831feba8af84fa33acd03c8f8a))
+* **overlay:** reset runtime policy state between sessions ([050ea21](https://github.com/Zanuaimi/UniPatches/commit/050ea21beaea7bca0959b48d0d11fc26a6a8058d))
+
+### ✨ New Features
+
+* **ads:** rewrite control patch around resolved runtime plans ([aa0294e](https://github.com/Zanuaimi/UniPatches/commit/aa0294ed6805906434e0a17b0a8431bc6863969b))
+
 ## [1.22.1](https://github.com/Zanuaimi/UniPatches/compare/v1.22.0...v1.22.1) (2026-09-13)
 
 ### 🐛 Bug Fixes
