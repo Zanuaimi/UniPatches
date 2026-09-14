@@ -343,7 +343,10 @@ internal fun BytecodePatchContext.injectOrSkip(
         logger.warning("No Ads: skipping ${fingerprint.name}: the injected strategy needs a local register.")
         return 0
     }
-    method.addInstructions(0, effectiveInstructions)
+    method.addInstructions(
+        0,
+        uniquifyInjectedLabels(effectiveInstructions, "${method.definingClass}_${method.name}"),
+    )
     if (effectiveInstructions.contains("AdsRuntimePolicy;->")) runtimeGuardedMethods += methodKey
     return 1
 }
@@ -438,7 +441,7 @@ internal fun BytecodePatchContext.patchWith(fingerprint: Fingerprint, smali: Str
             logger.warning("No Ads: skipping ${fingerprint.name} in ${exact.definingClass}: fewer than 7 local registers are available for its callback patch.")
             return 0
         }
-        exact.addInstructions(0, smali)
+        exact.addInstructions(0, uniquifyInjectedLabels(smali, "${exact.definingClass}_${exact.name}"))
         logger.info("No Ads: patched ${fingerprint.name} (exact 1 impl)")
         return 1
     }
@@ -551,7 +554,11 @@ internal fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildc
             }
         }
     }
-    if (replacements > 0) logger.info("Control App Ads: redirected $replacements literal host string(s).")
+    if (replacements > 0) {
+        logger.info("Control App Ads: redirected $replacements literal host string(s).")
+    } else {
+        logger.warning("Control App Ads: no matching literal host strings were found; the runtime Hosts module will have no effect for this APK unless matching endpoints are instrumented.")
+    }
     return replacements
 }
 

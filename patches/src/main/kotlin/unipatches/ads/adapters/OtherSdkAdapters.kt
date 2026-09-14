@@ -43,19 +43,10 @@ internal class InMobiAdsAdapter(
 
     private fun apply(settings: AdsPatchSettings, coverageEnabled: Boolean): PatchResult {
         if (!coverageEnabled || !detect().detected) return PatchResult(skipped = 1)
-        context.applyInMobiRewardedStrategy(logger, settings.instantReward)
-        return PatchResult(patched = 1)
-    }
-}
-
-internal fun BytecodePatchContext.applyInMobiRewardedStrategy(logger: Logger, instantReward: Boolean?) {
-    if (instantReward != true && !adsFreeRewardsRuntimeGuardEnabled) return
-    val target = InMobiRewardedShowFingerprint.methodOrNull ?: return
-    try {
-        target.addInstructions(0, guardedInstantReward("return-void", "morphe_inmobi_original"))
-        logger.info("Ads Free Rewards: InMobi rewarded patch applied")
-    } catch (e: Exception) {
-        logger.warning("Ads Free Rewards: InMobi patch failed: ${e.message}")
+        if (context.run { InMobiRewardedShowFingerprint.methodOrNull } != null) {
+            logger.warning("Ads Free Rewards: InMobi rewarded show hook skipped because no verified callback-safe fingerprint is available; availability-only handling remains supported.")
+        }
+        return PatchResult(skipped = 1)
     }
 }
 

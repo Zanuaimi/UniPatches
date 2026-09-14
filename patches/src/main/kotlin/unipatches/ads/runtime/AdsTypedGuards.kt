@@ -15,6 +15,17 @@ private val parameterWriteInstruction = Regex(
     "(?:const(?:/[0-9]+)?|move(?:-object|-wide)?(?:/(?:from16|16))?|move-result(?:-object|-wide)?|new-instance|iget(?:-object|-boolean|-byte|-char|-short|-wide)?|sget(?:-object|-boolean|-byte|-char|-short|-wide)?)\\s+p\\d+\\b",
 )
 
+private val injectedLabel = Regex(":([A-Za-z0-9_.$-]+)")
+
+/** Prevent injected labels from colliding with labels already present in a target method. */
+internal fun uniquifyInjectedLabels(body: String, namespace: String): String {
+    val safeNamespace = namespace
+        .replace(Regex("[^A-Za-z0-9_]"), "_")
+        .takeLast(72)
+    val prefix = "unipatch_ads_${safeNamespace}_"
+    return body.replace(injectedLabel) { match -> ":$prefix${match.groupValues[1]}" }
+}
+
 internal fun hasGuardParameterWrite(body: String): Boolean =
     parameterWriteInstruction.containsMatchIn(body)
 
@@ -64,11 +75,12 @@ private fun buildGuard(
 ): String? {
     if (!validateGuard(method, returnType, blockedBody)) return null
     val original = safeLabel(method, "original")
+    val safeBlockedBody = uniquifyInjectedLabels(blockedBody, original)
     return """
         invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->$policyMethod()Z
         move-result v0
         if-eqz v0, :$original
-        $blockedBody
+        $safeBlockedBody
         :$original
     """.trimIndent()
 }
@@ -89,6 +101,7 @@ internal fun guardSharedVoid(method: MutableMethod, blockedBody: String): String
     if (!validateGuard(method, AdsGuardReturnType.VOID, blockedBody)) return null
     val block = safeLabel(method, "block")
     val original = safeLabel(method, "original")
+    val safeBlockedBody = uniquifyInjectedLabels(blockedBody, original)
     return """
         invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldBlockInterstitials()Z
         move-result v0
@@ -97,7 +110,7 @@ internal fun guardSharedVoid(method: MutableMethod, blockedBody: String): String
         move-result v0
         if-eqz v0, :$original
         :$block
-        $blockedBody
+        $safeBlockedBody
         :$original
     """.trimIndent()
 }

@@ -12,34 +12,40 @@ import java.util.logging.Logger
  * while the patch orchestrator only resolves plans and dispatches adapters.
  */
 internal fun guardedPolicyBlock(policyMethod: String, instructions: String, originalLabel: String): String {
-    if (!adsFreeRewardsRuntimeGuardEnabled) return instructions
-    if (hasGuardParameterWrite(instructions)) return ":$originalLabel"
+    val safeInstructions = uniquifyInjectedLabels(instructions, originalLabel)
+    if (!adsFreeRewardsRuntimeGuardEnabled) return safeInstructions
+    if (hasGuardParameterWrite(safeInstructions)) return ":$originalLabel"
     return """
         invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->$policyMethod()Z
         move-result v0
         if-eqz v0, :$originalLabel
-        $instructions
+        $safeInstructions
         :$originalLabel
     """.trimIndent()
 }
 
 internal fun guardedInstantReward(instructions: String, originalLabel: String): String {
-    if (!adsFreeRewardsRuntimeGuardEnabled) return instructions
-    if (hasGuardParameterWrite(instructions)) return ":$originalLabel"
+    val safeInstructions = uniquifyInjectedLabels(instructions, originalLabel)
+    if (!adsFreeRewardsRuntimeGuardEnabled) return safeInstructions
+    if (hasGuardParameterWrite(safeInstructions)) return ":$originalLabel"
     val skipReturn = when {
-        "return-void" in instructions -> "return-void"
-        "return v0" in instructions -> "const/4 v0, 0x0\nreturn v0"
+        "return-void" in safeInstructions -> "return-void"
+        "return v0" in safeInstructions -> "const/4 v0, 0x0\nreturn v0"
         else -> return ":$originalLabel"
     }
-    val skipLabel = "${originalLabel}_skip"
-    return guardedPolicyBlock("shouldGrantReward", """
+    val grantLabel = "${originalLabel}_grant"
+    return """
         invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldSkipRewarded()Z
         move-result v0
-        if-eqz v0, :$skipLabel
+        if-eqz v0, :$grantLabel
         $skipReturn
-        :$skipLabel
-        $instructions
-    """.trimIndent(), originalLabel)
+        :$grantLabel
+        invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldGrantReward()Z
+        move-result v0
+        if-eqz v0, :$originalLabel
+        $safeInstructions
+        :$originalLabel
+    """.trimIndent()
 }
 
 internal fun guardedFakeAvailability(originalLabel: String): String = if (!adsFreeRewardsRuntimeGuardEnabled) {
@@ -67,7 +73,13 @@ internal fun addGuardedFakeAvailability(
         logger.warning("Ads Free Rewards: skip availability guard for ${method.definingClass}->${method.name}: one local register is required")
         return false
     }
-    method.addInstructions(0, guardedFakeAvailability(label))
+    method.addInstructions(
+        0,
+        uniquifyInjectedLabels(
+            guardedFakeAvailability(label),
+            "${method.definingClass}_${method.name}",
+        ),
+    )
     return true
 }
 
@@ -95,7 +107,13 @@ internal fun BytecodePatchContext.forceAdAvailability(
             ${booleanReturnInstructions(true)}
             :unipatch_ads_runtime_availability_original
         """.trimIndent() else booleanReturnInstructions(true)
-        method.addInstructions(0, instructions)
+        method.addInstructions(
+            0,
+            uniquifyInjectedLabels(
+                instructions,
+                "${method.definingClass}_${method.name}",
+            ),
+        )
         logger.info("Ads Free Rewards: faked availability for $label")
         patched++
     }

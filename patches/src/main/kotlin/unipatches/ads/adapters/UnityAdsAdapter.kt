@@ -41,10 +41,12 @@ internal fun BytecodePatchContext.applyUnityAdsStrategy(logger: Logger, useUnity
     val adsShow = UnityRewardedAdShowFingerprint.methodOrNull ?: return
     if (!useUnityAds || (instantReward != true && !adsFreeRewardsRuntimeGuardEnabled)) return
     adsShow.addInstructions(0, guardedInstantReward("""
+        if-eqz p3, :morphe_unity_ads_callback_done
         invoke-interface {p3, p0}, Lcom/unity3d/ads/RewardedShowListener;->onRewarded(Lcom/unity3d/ads/RewardedAd;)V
         invoke-interface {p3, p0}, Lcom/unity3d/ads/ShowListener;->onStarted(Ljava/lang/Object;)V
         sget-object v0, Lcom/unity3d/ads/ShowFinishState;->COMPLETED:Lcom/unity3d/ads/ShowFinishState;
         invoke-interface {p3, p0, v0}, Lcom/unity3d/ads/ShowListener;->onCompleted(Ljava/lang/Object;Lcom/unity3d/ads/ShowFinishState;)V
+        :morphe_unity_ads_callback_done
         return-void
     """.trimIndent(), "morphe_unity_ads_original"))
     logger.info("Ads Free Rewards: Unity Ads patch succeeded")
@@ -53,15 +55,19 @@ internal fun BytecodePatchContext.applyUnityAdsStrategy(logger: Logger, useUnity
 internal fun BytecodePatchContext.applyUnityAdsV4Strategy(logger: Logger, useUnityAds: Boolean, instantReward: Boolean?) {
     if (!useUnityAds || (instantReward != true && !adsFreeRewardsRuntimeGuardEnabled)) return
     UnityAdsV4Show3ArgFingerprint.methodOrNull?.addInstructions(0, guardedInstantReward("""
+        if-eqz p2, :morphe_unity_ads_v4_3_callback_done
         invoke-interface {p2, p1}, Lcom/unity3d/ads/IUnityAdsShowListener;->onUnityAdsShowStart(Ljava/lang/String;)V
         sget-object v0, Lcom/unity3d/ads/UnityAds${'$'}UnityAdsShowCompletionState;->COMPLETED:Lcom/unity3d/ads/UnityAds${'$'}UnityAdsShowCompletionState;
         invoke-interface {p2, p1, v0}, Lcom/unity3d/ads/IUnityAdsShowListener;->onUnityAdsShowComplete(Ljava/lang/String;Lcom/unity3d/ads/UnityAds${'$'}UnityAdsShowCompletionState;)V
+        :morphe_unity_ads_v4_3_callback_done
         return-void
     """.trimIndent(), "morphe_unity_ads_v4_3_original"))
     UnityAdsV4Show4ArgFingerprint.methodOrNull?.addInstructions(0, guardedInstantReward("""
+        if-eqz p3, :morphe_unity_ads_v4_4_callback_done
         invoke-interface {p3, p1}, Lcom/unity3d/ads/IUnityAdsShowListener;->onUnityAdsShowStart(Ljava/lang/String;)V
         sget-object v0, Lcom/unity3d/ads/UnityAds${'$'}UnityAdsShowCompletionState;->COMPLETED:Lcom/unity3d/ads/UnityAds${'$'}UnityAdsShowCompletionState;
         invoke-interface {p3, p1, v0}, Lcom/unity3d/ads/IUnityAdsShowListener;->onUnityAdsShowComplete(Ljava/lang/String;Lcom/unity3d/ads/UnityAds${'$'}UnityAdsShowCompletionState;)V
+        :morphe_unity_ads_v4_4_callback_done
         return-void
     """.trimIndent(), "morphe_unity_ads_v4_4_original"))
     logger.info("Ads Free Rewards: Unity Ads v4 patch evaluated")
