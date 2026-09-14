@@ -12,9 +12,9 @@ class MaxRuntimeRewardsTest {
         val guard = maxRuntimeShowGuard(
             skipCallbacks = "return-void",
             instantCallbacks = "return-void",
-            requestSetup = "const-string v7, \"unit\"\nif-eqz v7, :max_show_original\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
+            requestSetup = "const-string v7, \"unit\"\nif-eqz v7, :max_show_original_original\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
             requestRegister = "v7",
-            originalLabel = "max_show_original",
+            originalLabel = "max_show",
         )
 
         assertTrue(guard.contains("AdsRuntimePolicy;->shouldSkipRewarded()Z"))
@@ -22,7 +22,7 @@ class MaxRuntimeRewardsTest {
         assertTrue(guard.contains("AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V"))
         assertTrue(guard.contains("AdsRuntimePolicy;->armInstantReward(Ljava/lang/String;)V"))
         assertTrue(guard.contains("if-eqz v7"))
-        assertTrue(guard.contains(":max_show_original"))
+        assertTrue(guard.contains(":unipatch_ads_max_show_original"))
         assertTrue(guard.contains("return-void"))
     }
 
@@ -33,7 +33,7 @@ class MaxRuntimeRewardsTest {
             instantCallbacks = fireRewardedAdImmediateCallbacks(),
             requestSetup = "const-string v7, \"unit\"",
             requestRegister = "v7",
-            originalLabel = "max_show_original",
+            originalLabel = "max_show",
         )
 
         val declarations = Regex("(?m)^:([^\\s]+)$").findAll(guard).map { it.groupValues[1] }.toList()

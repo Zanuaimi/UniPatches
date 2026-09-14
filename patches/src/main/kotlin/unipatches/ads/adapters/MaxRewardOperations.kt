@@ -16,26 +16,31 @@ internal fun maxRuntimeShowGuard(
     requestRegister: String,
     originalLabel: String,
 ): String {
-    val safeSkipCallbacks = uniquifyInjectedLabels(skipCallbacks, "${originalLabel}_skip")
-    val safeInstantCallbacks = uniquifyInjectedLabels(instantCallbacks, "${originalLabel}_instant")
+    val safeOriginalLabel = "unipatch_ads_${originalLabel}"
+    val safeSkipCallbacks = uniquifyInjectedLabels(skipCallbacks, "${safeOriginalLabel}_skip")
+    val safeInstantCallbacks = uniquifyInjectedLabels(instantCallbacks, "${safeOriginalLabel}_instant")
+    val safeRequestSetup = requestSetup.replace(
+        ":${originalLabel}_original",
+        ":${safeOriginalLabel}_original",
+    )
     return """
     invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldSkipRewarded()Z
     move-result v0
-    if-eqz v0, :${originalLabel}_instant
+    if-eqz v0, :${safeOriginalLabel}_instant
     invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldGrantReward()Z
     move-result v0
-    if-eqz v0, :${originalLabel}_return
+    if-eqz v0, :${safeOriginalLabel}_return
     $safeSkipCallbacks
-    :${originalLabel}_return
+    :${safeOriginalLabel}_return
     return-void
-    :${originalLabel}_instant
+    :${safeOriginalLabel}_instant
     invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldGrantReward()Z
     move-result v0
-    if-eqz v0, :${originalLabel}_original
-    $requestSetup
+    if-eqz v0, :${safeOriginalLabel}_original
+    $safeRequestSetup
     $safeInstantCallbacks
     invoke-static {$requestRegister}, Lunipatch/overlaycore/AdsRuntimePolicy;->armInstantReward(Ljava/lang/String;)V
-    :${originalLabel}_original
+    :${safeOriginalLabel}_original
     """.trimIndent()
 }
 
@@ -206,7 +211,7 @@ internal fun BytecodePatchContext.applyRuntimeMaxUnityRewardedShow(logger: Logge
             maxUnityImmediateRewardedCallbacks(),
             "move-object v7, p1\nif-eqz v7, :morphe_max_unity_runtime_original\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
             "v7",
-            "morphe_max_unity_runtime_original",
+            "morphe_max_unity_runtime",
         )) {
         logger.info("Ads Free Rewards: MAX Unity runtime rewarded show guard installed")
         1
