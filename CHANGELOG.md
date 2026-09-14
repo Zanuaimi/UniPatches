@@ -1,3 +1,13 @@
+## [1.26.0](https://github.com/Zanuaimi/UniPatches/compare/v1.25.0...v1.26.0) (2026-09-14)
+
+### 🐛 Bug Fixes
+
+* **overlay:** keep controls inside Activity bounds ([7d6776f](https://github.com/Zanuaimi/UniPatches/commit/7d6776fec4cdd531d632f8b0a663c2af2775e1b1))
+
+### ✨ New Features
+
+* **overlay:** add configurable adaptive menu limits ([a2fe7fe](https://github.com/Zanuaimi/UniPatches/commit/a2fe7fe3cfc812de4bf71276d92d408aac7ee528))
+
 ## [1.25.0](https://github.com/Zanuaimi/UniPatches/compare/v1.24.1...v1.25.0) (2026-09-14)
 
 ### 🐛 Bug Fixes

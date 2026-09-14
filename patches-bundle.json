@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-14T08:01:41",
-  "description": "## [1.25.0](https://github.com/Zanuaimi/UniPatches/compare/v1.24.1...v1.25.0) (2026-09-14)\n\n### 🐛 Bug Fixes\n\n* **overlay:** add v2.5 regression coverage ([dc5d7fa](https://github.com/Zanuaimi/UniPatches/commit/dc5d7fa8e1525228d94de64442aa86a25be6453a))\n\n### ✨ New Features\n\n* **overlay:** add system and advanced module families ([7c044e2](https://github.com/Zanuaimi/UniPatches/commit/7c044e2b70c249d003ee7fdb66343ab06987d1d2))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.25.0/patches-1.25.0.mpp",
+  "created_at": "2026-09-14T08:47:50",
+  "description": "## [1.26.0](https://github.com/Zanuaimi/UniPatches/compare/v1.25.0...v1.26.0) (2026-09-14)\n\n### 🐛 Bug Fixes\n\n* **overlay:** keep controls inside Activity bounds ([7d6776f](https://github.com/Zanuaimi/UniPatches/commit/7d6776fec4cdd531d632f8b0a663c2af2775e1b1))\n\n### ✨ New Features\n\n* **overlay:** add configurable adaptive menu limits ([a2fe7fe](https://github.com/Zanuaimi/UniPatches/commit/a2fe7fe3cfc812de4bf71276d92d408aac7ee528))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.26.0/patches-1.26.0.mpp",
   "signature_download_url": "",
-  "version": "1.25.0"
+  "version": "1.26.0"
 }
