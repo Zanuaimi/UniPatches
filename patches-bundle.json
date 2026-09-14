@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-14T11:00:03",
-  "description": "## [1.27.0](https://github.com/Zanuaimi/UniPatches/compare/v1.26.1...v1.27.0) (2026-09-14)\n\n### 🐛 Bug Fixes\n\n* **ads:** verify MAX runtime hook boundaries ([60fab17](https://github.com/Zanuaimi/UniPatches/commit/60fab17c357b2bb3daa23be17d13b74571b58c2d))\n\n### ✨ New Features\n\n* **ads:** add request-scoped MAX reward controls ([6e452ed](https://github.com/Zanuaimi/UniPatches/commit/6e452edddab646dfd1a1db4555259b3e2c46855b))\n* **overlay:** release v2.5.3 ([1df7924](https://github.com/Zanuaimi/UniPatches/commit/1df7924cc876f8a9b6093c1dd0e1ecc11828a254))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.27.0/patches-1.27.0.mpp",
+  "created_at": "2026-09-14T11:31:02",
+  "description": "## [1.27.1](https://github.com/Zanuaimi/UniPatches/compare/v1.27.0...v1.27.1) (2026-09-14)\n\n### 🐛 Bug Fixes\n\n* **ads + overlay:** Fix missing callback done and return void, which caused morphe patch error because of its absence ([9f34e08](https://github.com/Zanuaimi/UniPatches/commit/9f34e0864719979f05f010a56e0d87b479d7f619))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.27.1/patches-1.27.1.mpp",
   "signature_download_url": "",
-  "version": "1.27.0"
+  "version": "1.27.1"
 }

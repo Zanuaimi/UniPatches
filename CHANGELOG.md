@@ -1,3 +1,9 @@
+## [1.27.1](https://github.com/Zanuaimi/UniPatches/compare/v1.27.0...v1.27.1) (2026-09-14)
+
+### 🐛 Bug Fixes
+
+* **ads + overlay:** Fix missing callback done and return void, which caused morphe patch error because of its absence ([9f34e08](https://github.com/Zanuaimi/UniPatches/commit/9f34e0864719979f05f010a56e0d87b479d7f619))
+
 ## [1.27.0](https://github.com/Zanuaimi/UniPatches/compare/v1.26.1...v1.27.0) (2026-09-14)
 
 ### 🐛 Bug Fixes
