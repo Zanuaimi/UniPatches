@@ -19,10 +19,6 @@ internal fun maxRuntimeShowGuard(
     val safeOriginalLabel = "unipatch_ads_${originalLabel}"
     val safeSkipCallbacks = uniquifyInjectedLabels(skipCallbacks, "${safeOriginalLabel}_skip")
     val safeInstantCallbacks = uniquifyInjectedLabels(instantCallbacks, "${safeOriginalLabel}_instant")
-    val safeRequestSetup = requestSetup.replace(
-        Regex(":([A-Za-z0-9_.$-]+)_original\\b"),
-        ":${safeOriginalLabel}_original",
-    )
     return """
     invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldSkipRewarded()Z
     move-result v0
@@ -37,7 +33,8 @@ internal fun maxRuntimeShowGuard(
     invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldGrantReward()Z
     move-result v0
     if-eqz v0, :${safeOriginalLabel}_original
-    $safeRequestSetup
+    $requestSetup
+    if-eqz $requestRegister, :${safeOriginalLabel}_original
     $safeInstantCallbacks
     invoke-static {$requestRegister}, Lunipatch/overlaycore/AdsRuntimePolicy;->armInstantReward(Ljava/lang/String;)V
     :${safeOriginalLabel}_original
@@ -208,7 +205,7 @@ internal fun BytecodePatchContext.applyRuntimeMaxUnityRewardedShow(logger: Logge
             mutableClass,
             maxUnityRewardedCallbacks(),
             maxUnityImmediateRewardedCallbacks(),
-            "move-object v7, p1\nif-eqz v7, :morphe_max_unity_runtime_original\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
+            "move-object v7, p1\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
             "v7",
             "morphe_max_unity_runtime",
         )) {
@@ -256,7 +253,7 @@ internal fun BytecodePatchContext.applyRuntimeNativeMaxRewardedShows(logger: Log
                 mutableClass,
                 fireRewardedAdCallbacks(),
                 fireRewardedAdImmediateCallbacks(),
-                "invoke-virtual {p0}, Lcom/applovin/mediation/ads/MaxRewardedAd;->getAdUnitId()Ljava/lang/String;\nmove-result-object v7\nif-eqz v7, :morphe_max_native_runtime_${count}_original\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
+                "invoke-virtual {p0}, Lcom/applovin/mediation/ads/MaxRewardedAd;->getAdUnitId()Ljava/lang/String;\nmove-result-object v7\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
                 "v7",
                 "morphe_max_native_runtime_${count}",
             )) {

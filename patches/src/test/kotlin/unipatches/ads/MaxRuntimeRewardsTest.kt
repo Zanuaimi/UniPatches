@@ -13,7 +13,7 @@ class MaxRuntimeRewardsTest {
         val guard = maxRuntimeShowGuard(
             skipCallbacks = "return-void",
             instantCallbacks = "return-void",
-            requestSetup = "const-string v7, \"unit\"\nif-eqz v7, :max_show_original_original\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
+            requestSetup = "const-string v7, \"unit\"\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
             requestRegister = "v7",
             originalLabel = "max_show",
         )
