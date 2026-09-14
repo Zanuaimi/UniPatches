@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-14T06:04:51",
-  "description": "## [1.24.1](https://github.com/Zanuaimi/UniPatches/compare/v1.24.0...v1.24.1) (2026-09-14)\n\n### 🐛 Bug Fixes\n\n* **ads:** preserve smali descriptors during label isolation ([95b0d4f](https://github.com/Zanuaimi/UniPatches/commit/95b0d4f26d17791101ae3c9df6d29953d2748bba))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.24.1/patches-1.24.1.mpp",
+  "created_at": "2026-09-14T08:01:41",
+  "description": "## [1.25.0](https://github.com/Zanuaimi/UniPatches/compare/v1.24.1...v1.25.0) (2026-09-14)\n\n### 🐛 Bug Fixes\n\n* **overlay:** add v2.5 regression coverage ([dc5d7fa](https://github.com/Zanuaimi/UniPatches/commit/dc5d7fa8e1525228d94de64442aa86a25be6453a))\n\n### ✨ New Features\n\n* **overlay:** add system and advanced module families ([7c044e2](https://github.com/Zanuaimi/UniPatches/commit/7c044e2b70c249d003ee7fdb66343ab06987d1d2))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.25.0/patches-1.25.0.mpp",
   "signature_download_url": "",
-  "version": "1.24.1"
+  "version": "1.25.0"
 }

@@ -1,3 +1,13 @@
+## [1.25.0](https://github.com/Zanuaimi/UniPatches/compare/v1.24.1...v1.25.0) (2026-09-14)
+
+### 🐛 Bug Fixes
+
+* **overlay:** add v2.5 regression coverage ([dc5d7fa](https://github.com/Zanuaimi/UniPatches/commit/dc5d7fa8e1525228d94de64442aa86a25be6453a))
+
+### ✨ New Features
+
+* **overlay:** add system and advanced module families ([7c044e2](https://github.com/Zanuaimi/UniPatches/commit/7c044e2b70c249d003ee7fdb66343ab06987d1d2))
+
 ## [1.24.1](https://github.com/Zanuaimi/UniPatches/compare/v1.24.0...v1.24.1) (2026-09-14)
 
 ### 🐛 Bug Fixes

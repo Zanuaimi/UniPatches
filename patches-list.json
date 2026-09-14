@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.24.1",
+  "version": "1.25.0",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -802,7 +802,7 @@
       "description": "Example overlay addon for Hill Climb Racing (com.fingersoft.hillclimb), used together with UniPatches Universal Overlay.\n        It adds six safe, mock-only app-specific preview modules to the shared overlay: A\n        - Add Coins\n        - Add Gems\n        - Add Paints \n        - Vehicle Selection\n        - Stage Selection\n        - Garage Selection. \n        All these six module options are enabled by default and can be disabled independently. \n        \n        Module settings and Preview actions are session-only; this example addon never reads or changes currencies, vehicles, stages, garage state, purchases, save files, or game bytecode.",
       "default": false,
       "dependencies": [
-        "UniPatches Universal Overlay Patch v2.4.9 (Experimental)"
+        "UniPatches Universal Overlay Patch v2.5.0 (Experimental)"
       ],
       "compatiblePackages": [
         {
@@ -1347,9 +1347,9 @@
       ]
     },
     {
-      "name": "UniPatches Universal Overlay Patch v2.4.9 (Experimental)",
+      "name": "UniPatches Universal Overlay Patch v2.5.0 (Experimental)",
       "category": "★ Universal Overlay",
-      "description": "A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual\npreset, select the overlay modules you want, optionally supply an icon image, then patch. Modules\nare excluded and disabled by default. Monitor modules show information, Activity modules control\nthe current Activity, and Hook modules make best-effort changes to app behavior. Text is the\ndefault legacy icon; an optional image replaces it completely, while the advanced Multi-parts editor\nsupports custom drawn icons, and can be conveniently made in Icon Builder local website in UniPatches repo.\n\nThis is an experimental patch and may not work on all apps. UI presets can save and reuse supported appearance and advanced icon\nsettings. The title, description, repository button text, and repository button URL remain\ncontrolled by the visible Morphe settings. Module selections and module behavior are excluded\nbecause hook and module combinations can be app-specific. \n\nIf Control App Ads is patched with its optional runtime policy enabled, its selected ad-control modules appear here\nautomatically; Universal Overlay does not patch ad SDKs by itself. When both patches are\nselected, Control App Ads attaches its runtime policy to this overlay's exact startup bridge,\nincluding an explicit Activity override, instead of selecting a separate Activity.\n\nAttribution: The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.",
+      "description": "A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual\npreset, select the overlay modules you want, optionally supply an icon image, then patch. Modules\nare excluded and disabled by default. Monitor modules show information, Activity modules control\nthe current Activity, Hook modules make best-effort changes to app behavior, System modules\ncontrol Android capabilities, and Advanced modules provide opt-in diagnostics. Text is the\ndefault legacy icon; an optional image replaces it completely, while the advanced Multi-parts editor\nsupports custom drawn icons, and can be conveniently made in Icon Builder local website in UniPatches repo.\n\nThis is an experimental patch and may not work on all apps. UI presets can save and reuse supported appearance and advanced icon\nsettings. The title, description, repository button text, and repository button URL remain\ncontrolled by the visible Morphe settings. Module selections and module behavior are excluded\nbecause hook and module combinations can be app-specific. \n\nIf Control App Ads is patched with its optional runtime policy enabled, its selected ad-control modules appear here\nautomatically; Universal Overlay does not patch ad SDKs by itself. When both patches are\nselected, Control App Ads attaches its runtime policy to this overlay's exact startup bridge,\nincluding an explicit Activity override, instead of selecting a separate Activity.\n\nAttribution: The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.",
       "default": false,
       "dependencies": [
         "Resolve Real Application (internal)"
@@ -1546,6 +1546,42 @@
           "values": null
         },
         {
+          "key": "runtimeOverlayIncludeDoNotDisturb",
+          "title": "Quick setup > Module settings > System > Do Not Disturb",
+          "description": "Include a system module for controlling Do Not Disturb. Android notification-policy access is required before it can change the system state.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "runtimeOverlayIncludeOverlayRuntimeLogs",
+          "title": "Quick setup > Module settings > Advanced > Overlay Runtime Logs",
+          "description": "Include an opt-in, bounded diagnostic buffer containing logs emitted by Universal Overlay and its runtime modules. This does not read system logcat.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "runtimeOverlayEnableOverlayRuntimeLogsOnLaunch",
+          "title": "Quick setup > Settings to modules > Advanced > Enable Overlay Runtime Logs at app launch",
+          "description": "Start Overlay Runtime Logs active when the overlay session begins. The module must also be included above.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "runtimeOverlayShowExtraPopupHeaders",
+          "title": "Quick setup > UI settings > Extra popups > Show headers",
+          "description": "Show title header boxes in settings, logs, confirmation, and module action popups. The main overlay menu title is always shown. LuckyPatcher-inspired preset enables this by default.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
           "key": "runtimeOverlayActivateStatisticsOnLaunch",
           "title": "Quick setup > Settings to modules > Monitor behavior > Activate statistics on launch",
           "description": "Start selected statistic modules as soon as the app launches. Active is disabled by default.",
@@ -1557,7 +1593,7 @@
         {
           "key": "runtimeOverlayShowNoModulesWarning",
           "title": "Quick setup > Settings to modules > General > Show empty-module message",
-          "description": "Show a message in the overlay when no Statistic, Activity, Hook, app-specific, or integrated module is selected. Control App Ads modules count only when that patch was also configured and patched successfully.",
+          "description": "Show a message in the overlay when no Statistic, Activity, Hook, app-specific, System, Advanced, or integrated module is selected. Control App Ads modules count only when that patch was also configured and patched successfully.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": true,
@@ -1663,7 +1699,7 @@
         {
           "key": "runtimeOverlayControlForeground",
           "title": "UI settings > Controls > Foreground color",
-          "description": "Foreground color for control contents, such as text, slider progress, and checked checkbox state.",
+          "description": "Foreground color for control contents, such as text, slider progress, and checked checkbox state. Unchecked checkbox state uses the configured control background color.",
           "required": false,
           "type": "kotlin.String",
           "default": "#FF5656",
