@@ -516,7 +516,7 @@ private fun validate(
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v2.5.1 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v2.5.2 (Experimental)",
     description = """
         A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual
         preset, select the overlay modules you want, optionally supply an icon image, then patch. Modules
@@ -846,7 +846,7 @@ val universalOverlayPatch = bytecodePatch(
         description = "Alignment of the overlay menu title.",
         values = linkedMapOf("Left" to "left", "Center" to "center", "Right" to "right"),
     )
-    val titleSeparator by booleanOption(title = "UI settings > Menu title > Separator", default = false, key = "runtimeOverlayTitleSeparator", description = "Show a Text color 1 line below the title.")
+    val titleSeparator by booleanOption(title = "UI settings > Menu title > Outline below title", default = false, key = "runtimeOverlayTitleSeparator", description = "Show a full-width 1dp line below the title using the overlay outline color.")
     val menuCorners by stringOption(title = "UI settings > Menu layout > Corners", default = "rounded", key = "runtimeOverlayMenuCorners", description = "Choose rounded or square menu corners.", values = linkedMapOf("Rounded (default)" to "rounded", "Square" to "square"))
     val menuOutlineAnimation by stringOption(title = "UI settings > Menu outline > Animation", default = "static", key = "runtimeOverlayMenuOutlineAnimation", description = "Choose a static, horizontal, vertical, or rainbow menu outline animation.", values = linkedMapOf("Static (default)" to "static", "Horizontal scrolling gradient" to "gradient", "Vertical gradient" to "vertical", "Rainbow gradient" to "rainbow"))
     val outlineAnimationSpeed by intOption(title = "UI settings > Menu outline > Animation speed", default = 1, key = "runtimeOverlayOutlineAnimationSpeed", description = "Use -10 to 10. Zero stops movement; positive vertical values move upward and negative values move downward.")

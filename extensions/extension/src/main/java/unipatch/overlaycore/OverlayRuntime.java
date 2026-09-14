@@ -810,9 +810,6 @@ public final class OverlayRuntime {
             titleRow.setOrientation(LinearLayout.HORIZONTAL);
             titleRow.setGravity(Gravity.CENTER_VERTICAL);
             titleRow.setPadding(dp(8), dp(6), dp(8), dp(6));
-            titleRow.setBackground(OverlayViews.background(
-                    config.background, config.outline, false, config.outlineWidth,
-                    !"square".equals(config.menuCorners)));
             boolean leftTitleIcon = "left".equals(config.titleIconPlacement) || "both".equals(config.titleIconPlacement);
             boolean rightTitleIcon = "right".equals(config.titleIconPlacement) || "both".equals(config.titleIconPlacement);
             if (leftTitleIcon) titleRow.addView(createMenuTitleIcon(), titleIconParams());
@@ -838,9 +835,11 @@ public final class OverlayRuntime {
             menu.addView(titleRow, titleRowParams);
             if (config.titleSeparator) {
                 View titleLine = new View(overlayContext);
-                titleLine.setBackgroundColor(config.menuTextColor1);
+                titleLine.setBackgroundColor(config.outline);
                 LinearLayout.LayoutParams lineParams = new LinearLayout.LayoutParams(-1, dp(1));
                 lineParams.topMargin = dp(6);
+                lineParams.leftMargin = -dp(20);
+                lineParams.rightMargin = -dp(20);
                 menu.addView(titleLine, lineParams);
             }
 
@@ -859,7 +858,7 @@ public final class OverlayRuntime {
                 menu.addView(appendedDescription, appendedParams);
             }
 
-            int maxControlHeight = boundedOverlayContentHeight(160);
+            int maxControlHeight = boundedMenuContentHeight();
             ScrollView scroll = new BoundedScrollView(overlayContext, maxControlHeight);
             scroll.setFillViewport(true);
             styleModuleScrollBar(scroll);
@@ -886,8 +885,8 @@ public final class OverlayRuntime {
             int windowWidth = root.getWidth() > 0
                     ? root.getWidth()
                     : activity.getResources().getDisplayMetrics().widthPixels;
-            int availableWidth = windowWidth - dp(40);
-            int limitedWidth = Math.round(availableWidth * effectiveWidthLimitPercent() / 100f);
+            int availableWidth = Math.max(dp(1), windowWidth - dp(40));
+            int limitedWidth = Math.round(availableWidth * effectiveWidthLimitPercent() / 90f);
             return Math.max(dp(1), Math.min(availableWidth, limitedWidth));
         }
 
@@ -899,7 +898,9 @@ public final class OverlayRuntime {
             boolean hasSharedPosition = sharedButtonPositionInitialized;
             float x = floatingButton.getX();
             float y = floatingButton.getY();
-            if (hasSharedPosition && sharedButtonOrientationKnown
+            boolean containerChanged = sharedButtonContainerWidth != root.getWidth()
+                    || sharedButtonContainerHeight != root.getHeight();
+            if (hasSharedPosition && sharedButtonOrientationKnown && containerChanged
                     && sharedButtonContainerWidth > 0 && sharedButtonContainerHeight > 0) {
                 // Preserve normalized coordinates across window resizes. Transpose the axes when
                 // the Activity changes orientation instead of reusing raw pixel coordinates.
@@ -942,8 +943,18 @@ public final class OverlayRuntime {
                 windowHeight = activity.getResources().getDisplayMetrics().heightPixels;
             }
             int availableHeight = Math.max(dp(1), windowHeight - dp(reservedDp));
-            int limitedHeight = Math.round(availableHeight * effectiveHeightLimitPercent() / 100f);
+            int limitedHeight = Math.round(availableHeight * effectiveHeightLimitPercent() / 45f);
             return Math.max(dp(1), Math.min(availableHeight, limitedHeight));
+        }
+
+        private int boundedMenuContentHeight() {
+            int windowHeight = root.getHeight();
+            if (windowHeight <= 0) {
+                windowHeight = activity.getResources().getDisplayMetrics().heightPixels;
+            }
+            int legacyHeight = Math.max(dp(120), Math.min(dp(280), Math.round(windowHeight * .45f)) - dp(8));
+            int limitedHeight = Math.round(legacyHeight * effectiveHeightLimitPercent() / 45f);
+            return Math.max(dp(1), Math.min(windowHeight, limitedHeight));
         }
 
         /** Landscape uses the configured portrait dimensions transposed for a natural wide layout. */
@@ -979,6 +990,13 @@ public final class OverlayRuntime {
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(32), dp(32));
             params.gravity = Gravity.CENTER_VERTICAL;
             return params;
+        }
+
+        private TextView popupTitleIcon(boolean left) {
+            boolean enabled = left
+                    ? ("left".equals(config.titleIconPlacement) || "both".equals(config.titleIconPlacement))
+                    : ("right".equals(config.titleIconPlacement) || "both".equals(config.titleIconPlacement));
+            return enabled ? createMenuTitleIcon() : null;
         }
 
         private TextView createMenuTitleIcon() {
@@ -1041,7 +1059,7 @@ public final class OverlayRuntime {
             layer.setOnClickListener(v -> hideCloseConfirmation());
 
             OverlayPopupFrame card = new OverlayPopupFrame(overlayContext, config);
-            card.addHeader("Close overlay?", config);
+            card.addHeader("Close overlay?", config, popupTitleIcon(true), popupTitleIcon(false));
 
             TextView message = text("The overlay will close for this app process until the app is restarted.", 14, config.menuTextColor3);
             LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(-1, -2);
@@ -1473,7 +1491,7 @@ public final class OverlayRuntime {
 
             OverlayPopupFrame card = new OverlayPopupFrame(overlayContext, config);
             layer.setOnClickListener(v -> dismissSettingsPopup(layer));
-            card.addHeader("View Overlay Runtime Logs", config);
+            card.addHeader("View Overlay Runtime Logs", config, popupTitleIcon(true), popupTitleIcon(false));
 
             TextView logText = text(module.formattedSnapshot(), 12, config.menuTextColor3);
             logText.setGravity(Gravity.LEFT | Gravity.TOP);
@@ -1521,7 +1539,7 @@ public final class OverlayRuntime {
             layer.setFocusable(true);
 
             OverlayPopupFrame card = new OverlayPopupFrame(overlayContext, config);
-            card.addHeader(module.settingsTitle(), config);
+            card.addHeader(module.settingsTitle(), config, popupTitleIcon(true), popupTitleIcon(false));
             layer.setOnClickListener(v -> dismissModuleSettingsPopup(layer, card));
 
             final String textValue = module.settingsTextValue();
@@ -2436,6 +2454,12 @@ public final class OverlayRuntime {
                     if (!dragged) view.performClick();
                     else {
                         sharedButtonPositionInitialized = true;
+                        sharedButtonX = Math.round(view.getX());
+                        sharedButtonY = Math.round(view.getY());
+                        sharedButtonContainerWidth = root.getWidth();
+                        sharedButtonContainerHeight = root.getHeight();
+                        sharedButtonLandscape = root.getWidth() > root.getHeight();
+                        sharedButtonOrientationKnown = true;
                         constrainFloatingButton();
                         // Start the full-visibility countdown after the finger is released.
                         showButtonFullyVisibleAfterDrag();
@@ -2447,7 +2471,7 @@ public final class OverlayRuntime {
         }
 
         private int settingsChoicesMaxHeight() {
-            return boundedOverlayContentHeight(160);
+            return boundedOverlayContentHeight(220);
         }
 
         private int dp(int value) { return (int) (value * activity.getResources().getDisplayMetrics().density + .5f); }
