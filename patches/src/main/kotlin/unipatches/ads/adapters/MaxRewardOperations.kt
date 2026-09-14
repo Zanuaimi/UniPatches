@@ -203,7 +203,7 @@ internal fun BytecodePatchContext.applyRuntimeMaxUnityRewardedShow(logger: Logge
             mutableClass,
             maxUnityRewardedCallbacks(),
             maxUnityImmediateRewardedCallbacks(),
-            "move-object v7, p1\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
+            "move-object v7, p1\nif-eqz v7, :morphe_max_unity_runtime_original\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
             "v7",
             "morphe_max_unity_runtime_original",
         )) {
@@ -251,7 +251,7 @@ internal fun BytecodePatchContext.applyRuntimeNativeMaxRewardedShows(logger: Log
                 mutableClass,
                 fireRewardedAdCallbacks(),
                 fireRewardedAdImmediateCallbacks(),
-                "invoke-virtual {p0}, Lcom/applovin/mediation/ads/MaxRewardedAd;->getAdUnitId()Ljava/lang/String;\nmove-result-object v7\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
+                "invoke-virtual {p0}, Lcom/applovin/mediation/ads/MaxRewardedAd;->getAdUnitId()Ljava/lang/String;\nmove-result-object v7\nif-eqz v7, :morphe_max_native_runtime_${count}_original\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
                 "v7",
                 "morphe_max_native_runtime_${count}",
             )) {

@@ -79,8 +79,9 @@ fun fireRewardedAdCallbacks(): String = """
 
 /** Same request-scoped native callback sequence, without completion or dismissal. */
 fun fireRewardedAdImmediateCallbacks(): String = fireRewardedAdCallbacks()
-    .substringBefore("    invoke-interface {v4, p0}, Lcom/applovin/mediation/MaxRewardedAdListener;->onRewardedVideoCompleted")
+    .substringBefore("invoke-interface {v4, p0}, Lcom/applovin/mediation/MaxRewardedAdListener;->onRewardedVideoCompleted")
     .trimEnd()
+    .plus("\n:callback_done\nreturn-void")
 
 /**
  * Generates Smali bytecode that uses reflection to find the

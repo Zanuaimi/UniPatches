@@ -4,6 +4,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import helpers.bytecode.fireRewardedAdCallbacks
+import helpers.bytecode.fireRewardedAdImmediateCallbacks
 
 class MaxRuntimeRewardsTest {
     @Test
@@ -11,8 +12,8 @@ class MaxRuntimeRewardsTest {
         val guard = maxRuntimeShowGuard(
             skipCallbacks = "return-void",
             instantCallbacks = "return-void",
-            requestSetup = "const-string v3, \"unit\"\ninvoke-static {v3}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
-            requestRegister = "v3",
+            requestSetup = "const-string v7, \"unit\"\nif-eqz v7, :max_show_original\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
+            requestRegister = "v7",
             originalLabel = "max_show_original",
         )
 
@@ -20,6 +21,7 @@ class MaxRuntimeRewardsTest {
         assertTrue(guard.contains("AdsRuntimePolicy;->shouldGrantReward()Z"))
         assertTrue(guard.contains("AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V"))
         assertTrue(guard.contains("AdsRuntimePolicy;->armInstantReward(Ljava/lang/String;)V"))
+        assertTrue(guard.contains("if-eqz v7"))
         assertTrue(guard.contains(":max_show_original"))
         assertTrue(guard.contains("return-void"))
     }
@@ -29,8 +31,8 @@ class MaxRuntimeRewardsTest {
         val guard = maxRuntimeShowGuard(
             skipCallbacks = "invoke-static {p0}, Lexample/Callbacks;->run(Ljava/lang/Object;)V",
             instantCallbacks = "return-void",
-            requestSetup = "const-string v3, \"unit\"",
-            requestRegister = "v3",
+            requestSetup = "const-string v7, \"unit\"",
+            requestRegister = "v7",
             originalLabel = "max_show_original",
         )
 
@@ -42,10 +44,14 @@ class MaxRuntimeRewardsTest {
     @Test
     fun nativeRewardCallbacksResolveTheInheritedImplementationListener() {
         val callbacks = fireRewardedAdCallbacks()
+        val immediateCallbacks = fireRewardedAdImmediateCallbacks()
 
         assertTrue(callbacks.contains("Lcom/applovin/impl/mediation/ads/MaxFullscreenAdImpl;"))
         assertTrue(callbacks.contains("Ljava/lang/Class;->getSuperclass()Ljava/lang/Class;"))
         assertTrue(callbacks.contains("MaxRewardedAdListener;->onUserRewarded"))
         assertFalse(callbacks.contains("MaxUnityAdManager;->forwardUnityEvent"))
+        assertTrue(immediateCallbacks.contains(":callback_done"))
+        assertTrue(immediateCallbacks.contains("MaxRewardedAdListener;->onUserRewarded"))
+        assertFalse(immediateCallbacks.contains("onRewardedVideoCompleted"))
     }
 }

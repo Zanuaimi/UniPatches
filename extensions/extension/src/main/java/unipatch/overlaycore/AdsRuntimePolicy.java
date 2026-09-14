@@ -106,6 +106,7 @@ public final class AdsRuntimePolicy {
     /** Starts a one-shot native or Unity request that received an immediate reward. */
     public static synchronized void beginInstantReward(String requestId) {
         if (!hasModule(MODULE_REWARDS) || !grantReward || requestId == null || requestId.isEmpty()) return;
+        if (instantRewardRequests.size() >= 32) instantRewardRequests.clear();
         instantRewardRequests.put(requestId, count(instantRewardRequests, requestId) + 1);
     }
 
