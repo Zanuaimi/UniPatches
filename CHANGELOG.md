@@ -1,3 +1,9 @@
+## [1.24.1](https://github.com/Zanuaimi/UniPatches/compare/v1.24.0...v1.24.1) (2026-09-14)
+
+### 🐛 Bug Fixes
+
+* **ads:** preserve smali descriptors during label isolation ([95b0d4f](https://github.com/Zanuaimi/UniPatches/commit/95b0d4f26d17791101ae3c9df6d29953d2748bba))
+
 ## [1.24.0](https://github.com/Zanuaimi/UniPatches/compare/v1.23.0...v1.24.0) (2026-09-14)
 
 ### 🐛 Bug Fixes

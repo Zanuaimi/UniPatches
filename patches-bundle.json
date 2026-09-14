@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-14T05:53:08",
-  "description": "## [1.24.0](https://github.com/Zanuaimi/UniPatches/compare/v1.23.0...v1.24.0) (2026-09-14)\n\n### 🐛 Bug Fixes\n\n* **ads:** cover runtime guard regressions ([ab89925](https://github.com/Zanuaimi/UniPatches/commit/ab89925779b5967e1c8c1f467b8d332738028959))\n* **ads:** harden runtime reward instrumentation ([ca6d206](https://github.com/Zanuaimi/UniPatches/commit/ca6d206ff9097d38902b9c60653f5997a2640ec2))\n\n### ✨ New Features\n\n* **overlay:** update patch version to v2.4.9 ([0d10c63](https://github.com/Zanuaimi/UniPatches/commit/0d10c635a5a8794870be4bae890ed3b01794ecef))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.24.0/patches-1.24.0.mpp",
+  "created_at": "2026-09-14T06:04:51",
+  "description": "## [1.24.1](https://github.com/Zanuaimi/UniPatches/compare/v1.24.0...v1.24.1) (2026-09-14)\n\n### 🐛 Bug Fixes\n\n* **ads:** preserve smali descriptors during label isolation ([95b0d4f](https://github.com/Zanuaimi/UniPatches/commit/95b0d4f26d17791101ae3c9df6d29953d2748bba))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.24.1/patches-1.24.1.mpp",
   "signature_download_url": "",
-  "version": "1.24.0"
+  "version": "1.24.1"
 }
