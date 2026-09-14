@@ -10,8 +10,6 @@ package helpers.bytecode
  * the game (game gets the reward callbacks it expects).
  */
 fun fireRewardedAdCallbacks(): String = """
-    # Resolve MaxRewardedAd's implementation field first. The listener is stored by
-    # MaxFullscreenAdImpl, not as a field declared on the public wrapper.
     const-class v0, Lcom/applovin/mediation/ads/MaxRewardedAd;
     invoke-virtual {v0}, Ljava/lang/Class;->getDeclaredFields()[Ljava/lang/reflect/Field;
     move-result-object v0
@@ -32,8 +30,8 @@ fun fireRewardedAdCallbacks(): String = """
     move-result-object v4
     if-eqz v4, :callback_done
     invoke-virtual {v4}, Ljava/lang/Object;->getClass()Ljava/lang/Class;
-    move-result-object v0
-    invoke-virtual {v0}, Ljava/lang/Class;->getDeclaredFields()[Ljava/lang/reflect/Field;
+    move-result-object v6
+    invoke-virtual {v6}, Ljava/lang/Class;->getDeclaredFields()[Ljava/lang/reflect/Field;
     move-result-object v0
     array-length v1, v0
     const/4 v2, 0x0
@@ -49,10 +47,10 @@ fun fireRewardedAdCallbacks(): String = """
     add-int/lit8 v2, v2, 0x1
     goto :listener_loop
     :listener_super
-    invoke-virtual {v0}, Ljava/lang/Class;->getSuperclass()Ljava/lang/Class;
-    move-result-object v0
-    if-eqz v0, :callback_done
-    invoke-virtual {v0}, Ljava/lang/Class;->getDeclaredFields()[Ljava/lang/reflect/Field;
+    invoke-virtual {v6}, Ljava/lang/Class;->getSuperclass()Ljava/lang/Class;
+    move-result-object v6
+    if-eqz v6, :callback_done
+    invoke-virtual {v6}, Ljava/lang/Class;->getDeclaredFields()[Ljava/lang/reflect/Field;
     move-result-object v0
     array-length v1, v0
     const/4 v2, 0x0
@@ -79,9 +77,11 @@ fun fireRewardedAdCallbacks(): String = """
 
 /** Same request-scoped native callback sequence, without completion or dismissal. */
 fun fireRewardedAdImmediateCallbacks(): String = fireRewardedAdCallbacks()
-    .substringBefore("invoke-interface {v4, p0}, Lcom/applovin/mediation/MaxRewardedAdListener;->onRewardedVideoCompleted")
-    .trimEnd()
-    .plus("\n:callback_done\nreturn-void")
+    .replace(
+        "invoke-interface {v4, p0}, Lcom/applovin/mediation/MaxRewardedAdListener;->onRewardedVideoCompleted(Lcom/applovin/mediation/MaxAd;)V\n" +
+            "invoke-interface {v4, p0}, Lcom/applovin/mediation/MaxRewardedAdListener;->onAdHidden(Lcom/applovin/mediation/MaxAd;)V\n",
+        "",
+    )
 
 /**
  * Generates Smali bytecode that uses reflection to find the

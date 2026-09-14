@@ -48,9 +48,12 @@ class MaxRuntimeRewardsTest {
 
         assertTrue(callbacks.contains("Lcom/applovin/impl/mediation/ads/MaxFullscreenAdImpl;"))
         assertTrue(callbacks.contains("Ljava/lang/Class;->getSuperclass()Ljava/lang/Class;"))
+        assertTrue(callbacks.contains("invoke-virtual {v6}, Ljava/lang/Class;->getSuperclass()Ljava/lang/Class;"))
         assertTrue(callbacks.contains("MaxRewardedAdListener;->onUserRewarded"))
         assertFalse(callbacks.contains("MaxUnityAdManager;->forwardUnityEvent"))
         assertTrue(immediateCallbacks.contains(":callback_done"))
+        assertTrue(immediateCallbacks.contains(":implementation_next"))
+        assertTrue(immediateCallbacks.contains("goto :callback_done"))
         assertTrue(immediateCallbacks.contains("MaxRewardedAdListener;->onUserRewarded"))
         assertFalse(immediateCallbacks.contains("onRewardedVideoCompleted"))
     }
