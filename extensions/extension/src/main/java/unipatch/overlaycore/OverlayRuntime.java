@@ -107,6 +107,10 @@ public final class OverlayRuntime {
     private static boolean sharedButtonPositionInitialized;
     private static int sharedButtonX;
     private static int sharedButtonY;
+    private static int sharedButtonContainerWidth;
+    private static int sharedButtonContainerHeight;
+    private static boolean sharedButtonLandscape;
+    private static boolean sharedButtonOrientationKnown;
     private static Float appBrightnessState;
     private static Integer rotationModeState;
     private static boolean fullyClosedToastShown;
@@ -351,6 +355,10 @@ public final class OverlayRuntime {
             originalSystemUi = window.getDecorView().getSystemUiVisibility();
             root = new FrameLayout(overlayContext);
             root.setClipChildren(false);
+            root.addOnLayoutChangeListener((view, left, top, right, bottom,
+                                             oldLeft, oldTop, oldRight, oldBottom) -> {
+                if (attached && !detached) constrainFloatingButton();
+            });
             root.setFocusableInTouchMode(true);
             root.setOnKeyListener((view, keyCode, event) -> {
                 if (keyCode == android.view.KeyEvent.KEYCODE_BACK
@@ -427,6 +435,7 @@ public final class OverlayRuntime {
                 confirmationLayer.setVisibility(View.GONE);
                 activity.addContentView(root, contentLayoutParams());
                 attached = true;
+                root.post(this::constrainFloatingButton);
                 for (OverlaySystemModule module : systemRegistry.snapshot()) module.startSafely(activity);
                 for (OverlayAdvancedModule module : advancedRegistry.snapshot()) {
                     if (config.enableOverlayRuntimeLogsOnLaunch && module instanceof OverlayRuntimeLogsModule) {
@@ -850,8 +859,7 @@ public final class OverlayRuntime {
                 menu.addView(appendedDescription, appendedParams);
             }
 
-            int maxControlHeight = Math.max(dp(120), Math.min(dp(280),
-                    (int) (activity.getResources().getDisplayMetrics().heightPixels * .45f)) - dp(8));
+            int maxControlHeight = boundedOverlayContentHeight(160);
             ScrollView scroll = new BoundedScrollView(overlayContext, maxControlHeight);
             scroll.setFillViewport(true);
             styleModuleScrollBar(scroll);
@@ -875,8 +883,84 @@ public final class OverlayRuntime {
 
         /** Keep centered content usable on wide landscape displays as well as phones. */
         private int boundedOverlayPanelWidth() {
-            int availableWidth = activity.getResources().getDisplayMetrics().widthPixels - dp(40);
-            return Math.max(dp(1), Math.min(dp(560), availableWidth));
+            int windowWidth = root.getWidth() > 0
+                    ? root.getWidth()
+                    : activity.getResources().getDisplayMetrics().widthPixels;
+            int availableWidth = windowWidth - dp(40);
+            int limitedWidth = Math.round(availableWidth * effectiveWidthLimitPercent() / 100f);
+            return Math.max(dp(1), Math.min(availableWidth, limitedWidth));
+        }
+
+        /** Keeps the draggable button inside the current Activity content bounds. */
+        private void constrainFloatingButton() {
+            if (root.getWidth() <= 0 || root.getHeight() <= 0
+                    || floatingButton.getWidth() <= 0 || floatingButton.getHeight() <= 0) return;
+            boolean landscape = root.getWidth() > root.getHeight();
+            boolean hasSharedPosition = sharedButtonPositionInitialized;
+            float x = floatingButton.getX();
+            float y = floatingButton.getY();
+            if (hasSharedPosition && sharedButtonOrientationKnown
+                    && sharedButtonContainerWidth > 0 && sharedButtonContainerHeight > 0) {
+                // Preserve normalized coordinates across window resizes. Transpose the axes when
+                // the Activity changes orientation instead of reusing raw pixel coordinates.
+                float oldUsableWidth = Math.max(1, sharedButtonContainerWidth - floatingButton.getWidth());
+                float oldUsableHeight = Math.max(1, sharedButtonContainerHeight - floatingButton.getHeight());
+                float newUsableWidth = Math.max(1, root.getWidth() - floatingButton.getWidth());
+                float newUsableHeight = Math.max(1, root.getHeight() - floatingButton.getHeight());
+                float normalizedX = sharedButtonX / oldUsableWidth;
+                float normalizedY = sharedButtonY / oldUsableHeight;
+                if (sharedButtonLandscape != landscape) {
+                    x = normalizedY * newUsableWidth;
+                    y = normalizedX * newUsableHeight;
+                } else {
+                    x = normalizedX * newUsableWidth;
+                    y = normalizedY * newUsableHeight;
+                }
+            }
+            x = clampButtonCoordinate(x, root.getWidth(), floatingButton.getWidth());
+            y = clampButtonCoordinate(y, root.getHeight(), floatingButton.getHeight());
+            if (floatingButton.getX() != x) floatingButton.setX(x);
+            if (floatingButton.getY() != y) floatingButton.setY(y);
+            if (hasSharedPosition) {
+                sharedButtonX = Math.round(x);
+                sharedButtonY = Math.round(y);
+                sharedButtonContainerWidth = root.getWidth();
+                sharedButtonContainerHeight = root.getHeight();
+                sharedButtonLandscape = landscape;
+                sharedButtonOrientationKnown = true;
+            }
+            updateMonitorLayout();
+        }
+
+        private float clampButtonCoordinate(float value, int containerSize, int buttonSize) {
+            return Math.max(0f, Math.min(value, Math.max(0, containerSize - buttonSize)));
+        }
+
+        private int boundedOverlayContentHeight(int reservedDp) {
+            int windowHeight = root.getHeight();
+            if (windowHeight <= 0) {
+                windowHeight = activity.getResources().getDisplayMetrics().heightPixels;
+            }
+            int availableHeight = Math.max(dp(1), windowHeight - dp(reservedDp));
+            int limitedHeight = Math.round(availableHeight * effectiveHeightLimitPercent() / 100f);
+            return Math.max(dp(1), Math.min(availableHeight, limitedHeight));
+        }
+
+        /** Landscape uses the configured portrait dimensions transposed for a natural wide layout. */
+        private int effectiveWidthLimitPercent() {
+            return isLandscape() ? config.menuHeightLimitPercent : config.menuWidthLimitPercent;
+        }
+
+        private int effectiveHeightLimitPercent() {
+            return isLandscape() ? config.menuWidthLimitPercent : config.menuHeightLimitPercent;
+        }
+
+        private boolean isLandscape() {
+            if (root.getWidth() > 0 && root.getHeight() > 0) {
+                return root.getWidth() > root.getHeight();
+            }
+            android.util.DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
+            return metrics.widthPixels > metrics.heightPixels;
         }
 
         private void styleModuleScrollBar(ScrollView scroll) {
@@ -2340,8 +2424,8 @@ public final class OverlayRuntime {
                     float dy = event.getRawY() - downY;
                     if (Math.abs(dx) > dp(5) || Math.abs(dy) > dp(5)) dragged = true;
                     if (dragged) {
-                        view.setX(clamp(startX + dx, 0, root.getWidth() - view.getWidth()));
-                        view.setY(clamp(startY + dy, 0, root.getHeight() - view.getHeight()));
+                        view.setX(clampButtonCoordinate(startX + dx, root.getWidth(), view.getWidth()));
+                        view.setY(clampButtonCoordinate(startY + dy, root.getHeight(), view.getHeight()));
                         // Keep the control fully visible while dragging and reset the fade timer
                         // for every movement so repeated dragging never fades mid-drag.
                         showButtonFullyVisibleAfterDrag();
@@ -2352,8 +2436,7 @@ public final class OverlayRuntime {
                     if (!dragged) view.performClick();
                     else {
                         sharedButtonPositionInitialized = true;
-                        sharedButtonX = Math.max(0, (int) view.getX());
-                        sharedButtonY = Math.max(0, (int) view.getY());
+                        constrainFloatingButton();
                         // Start the full-visibility countdown after the finger is released.
                         showButtonFullyVisibleAfterDrag();
                         updateMonitorLayout();
@@ -2364,11 +2447,7 @@ public final class OverlayRuntime {
         }
 
         private int settingsChoicesMaxHeight() {
-            int availableHeight = root.getHeight();
-            if (availableHeight <= 0) {
-                availableHeight = activity.getResources().getDisplayMetrics().heightPixels;
-            }
-            return Math.max(dp(120), availableHeight - dp(220));
+            return boundedOverlayContentHeight(160);
         }
 
         private int dp(int value) { return (int) (value * activity.getResources().getDisplayMetrics().density + .5f); }
