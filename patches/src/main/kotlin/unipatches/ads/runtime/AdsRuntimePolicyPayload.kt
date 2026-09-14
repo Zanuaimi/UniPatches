@@ -26,9 +26,9 @@ internal fun buildAdsRuntimeModuleMask(
     hostsEnabled: Boolean,
 ): Int {
     if (!runtimeHooksEnabled) return 0
-    return (if (blockAdsEnabled) 1 else 0) or
-        (if (rewardsEnabled) 2 else 0) or
-        (if (hostsEnabled) 4 else 0)
+    return (if (blockAdsEnabled) AdsRuntimeModule.BLOCK_ADS else 0) or
+        (if (rewardsEnabled) AdsRuntimeModule.REWARDS else 0) or
+        (if (hostsEnabled) AdsRuntimeModule.HOSTS else 0)
 }
 
 /** Converts the six independent patch-time ad-format switches to policy bits. */
@@ -55,6 +55,7 @@ internal fun serializeAdsRuntimePolicy(
     hostsEnabled: Boolean,
     wildcardHostsEnabled: Boolean,
     hosts: List<String>,
+    hostsAllowedEnabled: Boolean = hostsEnabled,
 ): String = listOf(
     "1",
     moduleMask.toString(),
@@ -65,4 +66,5 @@ internal fun serializeAdsRuntimePolicy(
     if (hostsEnabled) "1" else "0",
     if (wildcardHostsEnabled) "1" else "0",
     hosts.sorted().joinToString(","),
+    if (hostsAllowedEnabled) "1" else "0",
 ).joinToString("|")

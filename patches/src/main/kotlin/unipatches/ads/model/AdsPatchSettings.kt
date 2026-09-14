@@ -1,0 +1,27 @@
+package unipatches.ads
+
+internal data class AdsPatchSettings(
+    val noAdsEnabled: Boolean,
+    val blockInterstitials: Boolean,
+    val blockBanners: Boolean,
+    val blockAppOpen: Boolean,
+    val blockMRec: Boolean,
+    val blockRewarded: Boolean,
+    val blockNative: Boolean,
+    val rewardsEnabled: Boolean,
+    val skipRewardedAds: Boolean,
+    val instantReward: Boolean,
+    val fakeAdAvailability: Boolean,
+    val hostsEnabled: Boolean,
+    val wildcardHosts: Boolean,
+    val uBlockFilter: Boolean = false,
+    val easyListFilter: Boolean = false,
+    val adGuardFilter: Boolean = false,
+    val oisdFilter: Boolean = false,
+    val hageziProMiniFilter: Boolean = false,
+    val privacyEssentialsFilter: Boolean = false,
+    val easyPrivacyFilter: Boolean = false,
+    val peterLoweFilter: Boolean = false,
+    val customFilterHosts: List<String> = emptyList(),
+    val broadHeuristics: Boolean = false,
+)

@@ -11,7 +11,6 @@ import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.reference.StringReference
-import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import java.util.Locale
 import java.util.logging.Logger
 import helpers.ads.*
@@ -22,6 +21,7 @@ import unipatches.overlay.attachQueuedAdsRuntimePolicy
 private val logger = Logger.getLogger("unipatches.ads.NoAdsPatch")
 private const val ADS_POLICY_CLASS = "Lunipatch/overlaycore/AdsRuntimePolicy;"
 private var runtimeHooksEnabled = false
+private var runtimeNoAdsEnabled = false
 private var runtimeHostsEnabled = false
 private var runtimeCategoryByFingerprint: Map<Fingerprint, String> = emptyMap()
 
@@ -58,13 +58,36 @@ private data class AdsGuardMethodKey(
 )
 
 private val adsFallbackOperations = mutableListOf<AdsFallbackOperation>()
-private val adsFallbackMutableClasses = mutableMapOf<String, MutableClass>()
 private val runtimeGuardedMethods = mutableSetOf<AdsGuardMethodKey>()
+
+private class PatchLogBudget(private val logger: Logger, private val limit: Int = 32) {
+    private var emitted = 0
+
+    fun info(message: String) {
+        if (emitted < limit) {
+            logger.info(message)
+            emitted++
+        } else if (emitted == limit) {
+            logger.info("No Ads: additional per-method patch messages suppressed")
+            emitted++
+        }
+    }
+
+    fun warning(message: String) {
+        if (emitted < limit) {
+            logger.warning(message)
+            emitted++
+        } else if (emitted == limit) {
+            logger.warning("No Ads: additional per-method patch messages suppressed")
+            emitted++
+        }
+    }
+}
 
 private fun resetAdsFallbackIndex() {
     adsFallbackOperations.clear()
-    adsFallbackMutableClasses.clear()
     runtimeGuardedMethods.clear()
+    runtimeNoAdsEnabled = false
 }
 
 private val knownAdsPackagePrefixes = listOf(
@@ -149,6 +172,7 @@ private fun hasRuntimePolicyGuard(method: app.morphe.patcher.util.proxy.mutableT
 
 private fun BytecodePatchContext.flushAdsFallbackOperations(logger: Logger): Int {
     if (adsFallbackOperations.isEmpty()) return 0
+    val logBudget = PatchLogBudget(logger)
     val operationsByKey = adsFallbackOperations.groupBy { it.key }
     val matchesByKey = operationsByKey.keys.associateWith { mutableListOf<AdsFallbackMatch>() }
     classDefForEach { classDef ->
@@ -184,7 +208,10 @@ private fun BytecodePatchContext.flushAdsFallbackOperations(logger: Logger): Int
     matchesByKey.forEach { (key, matches) ->
         val operations = operationsByClass.getValue(key)
         matches.groupBy { it.classType }.forEach { (classType, classMatches) ->
-            val mutableClass = cachedAdsMutableClass(classType) ?: return@forEach
+            // Resolve a class only when it is about to be patched. Retaining every matched
+            // mutable class globally multiplies heap use on large APKs and can keep stale proxy
+            // objects alive between adapter phases.
+            val mutableClass = mutableClassDefByOrNull(classType) ?: return@forEach
             classMatches.forEach { match ->
                 val mutableMethod = mutableClass.methods.firstOrNull {
                     it.name == match.methodName && it.returnType == match.returnType &&
@@ -199,17 +226,21 @@ private fun BytecodePatchContext.flushAdsFallbackOperations(logger: Logger): Int
                     ?: operations.firstOrNull()
                     ?: return@forEach
                 val runtimeCategory = runtimeCategoryByFingerprint[operation.fingerprint]
+                if (shouldSkipUnplannedRuntimePatch(runtimeNoAdsEnabled, runtimeCategory != null)) {
+                    logBudget.info("No Ads: skipped unplanned runtime fallback in ${mutableMethod.definingClass}->${mutableMethod.name}")
+                    return@forEach
+                }
                 val methodKey = guardMethodKey(mutableMethod)
                 if (runtimeCategory != null &&
                     (methodKey in runtimeGuardedMethods || hasRuntimePolicyGuard(mutableMethod))
                 ) {
-                    logger.warning("No Ads: skipped duplicate runtime guard in ${mutableMethod.definingClass}->${mutableMethod.name}")
+                    logBudget.warning("No Ads: skipped duplicate runtime guard in ${mutableMethod.definingClass}->${mutableMethod.name}")
                     return@forEach
                 }
                 when (operation.kind) {
                     AdsFallbackKind.VOID -> {
                         if (runtimeCategory != null) {
-                            val guard = runtimeGuard(runtimeCategory) ?: return@forEach
+                            val guard = runtimeGuard(mutableMethod, runtimeCategory) ?: return@forEach
                             if (mutableMethod.implementation!!.registerCount - mutableMethod.numberOfParameterRegisters < 1) return@forEach
                             mutableMethod.addInstructions(0, guard)
                         } else {
@@ -224,7 +255,7 @@ private fun BytecodePatchContext.flushAdsFallbackOperations(logger: Logger): Int
                             return@forEach
                         }
                         if (runtimeCategory != null) {
-                            val guard = runtimeGuard(runtimeCategory, booleanReturnInstructions(false)) ?: return@forEach
+                            val guard = runtimeGuard(mutableMethod, runtimeCategory, booleanReturnInstructions(false)) ?: return@forEach
                             if (mutableMethod.implementation!!.registerCount - mutableMethod.numberOfParameterRegisters < 1) return@forEach
                             mutableMethod.addInstructions(0, guard)
                         } else {
@@ -237,8 +268,8 @@ private fun BytecodePatchContext.flushAdsFallbackOperations(logger: Logger): Int
             }
         }
     }
-    adsFallbackOperations.forEach { operation ->
-        if (patched > 0) logger.info("No Ads: applied queued ${operation.kind.name.lowercase()} fallback operations")
+    if (patched > 0) {
+        logger.info("No Ads: applied $patched queued fallback operation(s)")
     }
     return patched
 }
@@ -258,44 +289,26 @@ private fun enqueueAdsFallbackOperation(
     )
 }
 
-private fun BytecodePatchContext.cachedAdsMutableClass(classType: String): MutableClass? {
-    adsFallbackMutableClasses[classType]?.let { return it }
-    return mutableClassDefByOrNull(classType)?.also { adsFallbackMutableClasses[classType] = it }
-}
-
-private fun runtimeGuard(category: String, blockedInstructions: String = "return-void"): String? {
+private fun runtimeGuard(
+    method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod,
+    category: String,
+    blockedInstructions: String = "return-void",
+): String? {
     if (!runtimeHooksEnabled) return null
-    val method = when (category) {
-        "interstitials" -> "shouldBlockInterstitials"
-        "banners" -> "shouldBlockBanners"
-        "appOpen" -> "shouldBlockAppOpen"
-        "mrec" -> "shouldBlockMrec"
-        "rewarded" -> "shouldBlockRewarded"
-        "rewardedAvailability" -> "shouldBlockRewardedFormat"
-        "native" -> "shouldBlockNative"
-        "shared" -> return """
-            invoke-static {}, $ADS_POLICY_CLASS->shouldBlockInterstitials()Z
-            move-result v0
-            if-nez v0, :unipatch_ads_runtime_shared_block
-            invoke-static {}, $ADS_POLICY_CLASS->shouldBlockRewarded()Z
-            move-result v0
-            if-eqz v0, :unipatch_ads_runtime_shared_continue
-            :unipatch_ads_runtime_shared_block
-            $blockedInstructions
-            :unipatch_ads_runtime_shared_continue
-        """.trimIndent()
-        else -> return null
+    return when (category) {
+        "interstitials" -> guardVoid(method, "shouldBlockInterstitials", blockedInstructions)
+        "banners" -> guardVoid(method, "shouldBlockBanners", blockedInstructions)
+        "appOpen" -> guardVoid(method, "shouldBlockAppOpen", blockedInstructions)
+        "mrec" -> guardVoid(method, "shouldBlockMrec", blockedInstructions)
+        "rewarded" -> guardVoid(method, "shouldBlockRewarded", blockedInstructions)
+        "rewardedAvailability" -> guardBoolean(method, "shouldBlockRewardedFormat", blockedInstructions)
+        "native" -> guardVoid(method, "shouldBlockNative", blockedInstructions)
+        "shared" -> guardSharedVoid(method, blockedInstructions)
+        else -> null
     }
-    return """
-        invoke-static {}, $ADS_POLICY_CLASS->$method()Z
-        move-result v0
-        if-eqz v0, :unipatch_ads_runtime_continue
-        $blockedInstructions
-        :unipatch_ads_runtime_continue
-    """.trimIndent()
 }
 
-private fun BytecodePatchContext.injectOrSkip(
+internal fun BytecodePatchContext.injectOrSkip(
     fingerprint: Fingerprint,
     instructions: String,
 ) : Int {
@@ -306,6 +319,7 @@ private fun BytecodePatchContext.injectOrSkip(
         )
         return 0
     }
+    if (shouldSkipUnplannedRuntimePatch(runtimeNoAdsEnabled, runtimeCategoryByFingerprint[fingerprint] != null)) return 0
     // Callers that need a non-void return type provide a typed runtime guard.
     // Do not replace it with the default void guard here. Custom instructions
     // without a policy call are still wrapped for runtime-selected fingerprints.
@@ -313,10 +327,9 @@ private fun BytecodePatchContext.injectOrSkip(
         runtimeCategoryByFingerprint[fingerprint] != null &&
         !instructions.contains("AdsRuntimePolicy;->")
     ) {
-        runtimeGuard(runtimeCategoryByFingerprint.getValue(fingerprint)) ?: instructions
-    } else {
-        instructions
-    }
+        // A rejected runtime guard must never degrade into an unguarded permanent patch.
+        runtimeGuard(method, runtimeCategoryByFingerprint.getValue(fingerprint)) ?: return 0
+    } else instructions
     val methodKey = guardMethodKey(method)
     if (effectiveInstructions.contains("AdsRuntimePolicy;->") &&
         (methodKey in runtimeGuardedMethods || hasRuntimePolicyGuard(method))
@@ -335,10 +348,10 @@ private fun BytecodePatchContext.injectOrSkip(
     return 1
 }
 
-private fun BytecodePatchContext.returnVoid(fingerprint: Fingerprint) =
+internal fun BytecodePatchContext.returnVoid(fingerprint: Fingerprint) =
     injectOrSkip(fingerprint, "return-void")
 
-private fun BytecodePatchContext.patchVoid(fingerprint: Fingerprint): Int {
+internal fun BytecodePatchContext.patchVoid(fingerprint: Fingerprint): Int {
     val name = fingerprint.name ?: return 0
     val params = fingerprint.parameters ?: emptyList()
     val ret = fingerprint.returnType ?: return 0
@@ -347,8 +360,10 @@ private fun BytecodePatchContext.patchVoid(fingerprint: Fingerprint): Int {
     // Fast path: exact match has implementation
     val exact = fingerprint.methodOrNull
     if (exact != null && exact.implementation != null) {
+        if (shouldSkipUnplannedRuntimePatch(runtimeNoAdsEnabled, runtimeCategoryByFingerprint[fingerprint] != null)) return 0
         runtimeCategoryByFingerprint[fingerprint]?.let { category ->
-            return injectOrSkip(fingerprint, runtimeGuard(category) ?: return@let 0)
+            val guard = runtimeGuard(exact, category) ?: return 0
+            return injectOrSkip(fingerprint, guard)
         }
         exact.addInstructions(0, "return-void")
         logger.info("No Ads: blocked $name (exact 1 impl)")
@@ -375,7 +390,7 @@ private fun BytecodePatchContext.patchVoid(fingerprint: Fingerprint): Int {
     return 0
 }
 
-private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int {
+internal fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int {
     val name = fingerprint.name ?: return 0
     val params = fingerprint.parameters ?: emptyList()
     val ret = fingerprint.returnType ?: return 0
@@ -383,6 +398,7 @@ private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int
 
     val exact = fingerprint.methodOrNull
     if (exact != null && exact.implementation != null) {
+        if (shouldSkipUnplannedRuntimePatch(runtimeNoAdsEnabled, runtimeCategoryByFingerprint[fingerprint] != null)) return 0
         if (exact.returnType != "Z" || (exact.implementation?.registerCount ?: 0) < 1 ||
             (exact.implementation?.registerCount ?: 0) - exact.numberOfParameterRegisters < 1
         ) {
@@ -390,7 +406,7 @@ private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int
             return 0
         }
         runtimeCategoryByFingerprint[fingerprint]?.let { category ->
-            val guard = runtimeGuard(category, booleanReturnInstructions(false)) ?: return@let 0
+            val guard = runtimeGuard(exact, category, booleanReturnInstructions(false)) ?: return 0
             return injectOrSkip(fingerprint, guard)
         }
         exact.addInstructions(0, booleanReturnInstructions(false))
@@ -410,11 +426,12 @@ private fun BytecodePatchContext.patchReturnFalse(fingerprint: Fingerprint): Int
     return 0
 }
 
-private fun BytecodePatchContext.patchWith(fingerprint: Fingerprint, smali: String): Int {
+internal fun BytecodePatchContext.patchWith(fingerprint: Fingerprint, smali: String): Int {
     val exact = fingerprint.methodOrNull
     if (exact != null && exact.implementation != null) {
         runtimeCategoryByFingerprint[fingerprint]?.let { category ->
-            return injectOrSkip(fingerprint, runtimeGuard(category) ?: return@let 0)
+            val guard = runtimeGuard(exact, category) ?: return 0
+            return injectOrSkip(fingerprint, guard)
         }
         val localRegisters = (exact.implementation?.registerCount ?: 0) - exact.numberOfParameterRegisters
         if ((fingerprint === MaxInterstitialAdShowAdFingerprint || fingerprint === MaxAppOpenAdShowAdFingerprint || fingerprint === MaxRewardedAdShowAdFingerprint) && localRegisters < 7) {
@@ -494,7 +511,7 @@ private fun escapeSmaliString(value: String): String = value
     .replace("\n", "\\n")
     .replace("\r", "\\r")
 
-private fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildcard: Boolean, logger: Logger): Int {
+internal fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildcard: Boolean, logger: Logger): Int {
     if (hosts.isEmpty()) return 0
     var replacements = 0
     classDefForEach { classDef ->
@@ -683,72 +700,6 @@ val controlAppAdsPatch = bytecodePatch(
         resetAdsFallbackIndex()
         logHeap(detectionLogger, "start")
 
-        // Each format has one source of truth. Do not apply a second policy layer that can
-        // silently override the values shown in patch settings.
-        var effectiveBlockInterstitials = blockInterstitials == true
-        var effectiveBlockBanners = blockBanners == true
-        var effectiveBlockAppOpen = blockAppOpen == true
-        var effectiveBlockMRec = blockMRec == true
-        var effectiveBlockRewarded = blockRewarded == true
-        var effectiveBlockNative = blockNative == true
-
-        val staticAdsFreeRewardsEnabled = enableAdsFreeRewards == true &&
-            (skipRewardedAds == true || instantReward == true || fakeAdAvailability == true)
-        effectiveBlockInterstitials = enableNoAds == true && effectiveBlockInterstitials
-        effectiveBlockBanners = enableNoAds == true && effectiveBlockBanners
-        effectiveBlockAppOpen = enableNoAds == true && effectiveBlockAppOpen
-        effectiveBlockMRec = enableNoAds == true && effectiveBlockMRec
-        effectiveBlockRewarded = enableNoAds == true && effectiveBlockRewarded
-        effectiveBlockNative = enableNoAds == true && effectiveBlockNative
-        if (staticAdsFreeRewardsEnabled && effectiveBlockRewarded) {
-            effectiveBlockRewarded = false
-            detectionLogger.info("Control App Ads: keeping rewarded flows enabled for Ads Free Rewards.")
-        }
-
-        val runtimeControlsRequested = runtimeHookModules == true
-        runtimeHooksEnabled = isAdsRuntimePolicyActive(
-            runtimeControlsRequested = runtimeControlsRequested,
-            blockAdsModule = enableNoAds == true && runtimeBlockAdsModule == true,
-            rewardsModule = enableAdsFreeRewards == true && runtimeRewardsModule == true,
-            hostsModule = runtimeHostsModule == true,
-        )
-        if (runtimeControlsRequested && !runtimeHooksEnabled) {
-            detectionLogger.info("Control App Ads: runtime controls requested without selected modules; using permanent patch settings.")
-        }
-        val runtimeBlockAdsEnabled = isAdsRuntimeModuleEnabled(
-            runtimeHooksEnabled,
-            enableNoAds == true,
-            runtimeBlockAdsModule == true,
-        )
-        val configuredBlockedFormats = buildAdsBlockedFormatsMask(
-            blockInterstitials = effectiveBlockInterstitials,
-            blockBanners = effectiveBlockBanners,
-            blockAppOpen = effectiveBlockAppOpen,
-            blockMRec = effectiveBlockMRec,
-            blockRewarded = effectiveBlockRewarded,
-            blockNative = effectiveBlockNative,
-        )
-        // Runtime mode must preserve original behavior until a runtime control changes it. Keep
-        // the static flags only as instrumentation selectors for the selected Block Ads module;
-        // every such method is guarded by runtimeCategoryByFingerprint below.
-        if (runtimeHooksEnabled) {
-            effectiveBlockInterstitials = runtimeBlockAdsEnabled
-            effectiveBlockBanners = runtimeBlockAdsEnabled
-            effectiveBlockAppOpen = runtimeBlockAdsEnabled
-            effectiveBlockMRec = runtimeBlockAdsEnabled
-            effectiveBlockRewarded = runtimeBlockAdsEnabled
-            effectiveBlockNative = runtimeBlockAdsEnabled
-        }
-        // Selecting the runtime Rewards control also requests its guarded reward hooks. The
-        // separate Ads Free Rewards option controls the non-runtime/static policy only; requiring
-        // it here would silently drop the selected runtime module from the overlay mask.
-        val runtimeRewardsEnabled = isAdsRuntimeModuleEnabled(
-            runtimeHooksEnabled = runtimeHooksEnabled,
-            masterEnabled = enableAdsFreeRewards == true,
-            moduleSelected = runtimeRewardsModule == true,
-        )
-        runtimeHostsEnabled = runtimeHooksEnabled && runtimeHostsModule == true
-        adsFreeRewardsRuntimeGuardEnabled = runtimeRewardsEnabled
         val sdkCoverage = AdsSdkCoverage(
             max = sdkMax == true,
             adMob = sdkAdMob == true,
@@ -766,105 +717,93 @@ val controlAppAdsPatch = bytecodePatch(
             inMobi = sdkInMobi == true,
             mintegral = sdkMintegral == true,
         )
-        runtimeCategoryByFingerprint = if (runtimeHooksEnabled) buildMap {
-            fun add(enabled: Boolean, category: String, vararg fingerprints: Fingerprint) {
-                if (!enabled) return
-                fingerprints.forEach { put(it, category) }
-            }
-            add(sdkCoverage.max, "interstitials", ShowInterstitialFingerprint, MaxInterstitialAdShowAdFingerprint,
-                MaxInterstitialAdIsReadyFingerprint,
-            )
-            add(sdkCoverage.adMob, "interstitials",
-                AdMobInterstitialShowFingerprint, AdMobLegacyInterstitialShowFingerprint,
-            )
-            add(sdkCoverage.unity, "interstitials",
-                UnityAdsV3Show2ArgFingerprint, UnityAdsV3ShowOptionsFingerprint,
-            )
-            add(sdkCoverage.ironSource, "interstitials",
-                IronSourceShowDemandOnlyInterstitialFingerprint, IronSourceShowInterstitialFingerprint,
-                IronSourceIsInterstitialReadyFingerprint,
-                IronSourceShowInterstitialActivityFingerprint, IronSourceShowInterstitialActivityPlacementFingerprint,
-                IronSourceShowInterstitialPlacementFingerprint,
-            )
-            add(sdkCoverage.appLovin, "interstitials",
-                AppLovinInterstitialDialogShowFingerprint, AppLovinInterstitialDialogShowAndRenderFingerprint,
-                AppLovinAdViewLoadNextAdFingerprint,
-            )
-            add(sdkCoverage.meta, "interstitials",
-                FacebookInterstitialAdShowFingerprint, FacebookInterstitialAdShowConfigFingerprint,
-            )
-            add(sdkCoverage.pangle, "interstitials", PangleInterstitialShowFingerprint)
-            add(sdkCoverage.vungle, "interstitials", VungleInterstitialShowFingerprint)
-            add(sdkCoverage.huawei, "interstitials", HuaweiInterstitialAdShowFingerprint)
-            add(sdkCoverage.yandex, "interstitials",
-                YandexInterstitialAdLoadFingerprint,
-                YandexUnityInterstitialWrapperShowFingerprint, MyTargetBaseInterstitialShowFingerprint,
-            )
-            add(sdkCoverage.startApp, "interstitials", StartAppAdShowFingerprint)
-            add(sdkCoverage.moPub, "interstitials", MoPubInterstitialShowFingerprint)
-            add(sdkCoverage.chartboost, "interstitials", ChartboostShowInterstitialFingerprint)
-            add(sdkCoverage.inMobi, "interstitials", InMobiInterstitialShowFingerprint)
-            add(sdkCoverage.mintegral, "interstitials", MintegralInterstitialShowFingerprint)
-            add(sdkCoverage.max, "appOpen", ShowAppOpenAdFingerprint, MaxAppOpenAdShowAdFingerprint)
-            add(sdkCoverage.max, "appOpen", MaxAppOpenAdIsReadyFingerprint)
-            add(sdkCoverage.adMob, "appOpen",
-                AdMobAppOpenShowFingerprint, AdMobAppOpenLoadFingerprint,
-            )
-            add(sdkCoverage.pangle, "appOpen", PangleAppOpenShowFingerprint)
-            add(sdkCoverage.huawei, "appOpen", HuaweiSplashAdLoadFingerprint)
-            add(sdkCoverage.max, "banners", ShowBannerFingerprint, StartBannerAutoRefreshFingerprint,
-                MaxAdViewStartAutoRefreshFingerprint,
-            )
-            add(sdkCoverage.huawei, "banners", HuaweiBannerAdLoadFingerprint)
-            add(sdkCoverage.appLovin, "banners", AppLovinAdViewLoadNextAdFingerprint)
-            add(sdkCoverage.max, "mrec", ShowMRecFingerprint, StartMRecAutoRefreshFingerprint)
-            add(sdkCoverage.appLovin, "mrec", StartMRecAutoRefreshFingerprint)
-            add(sdkCoverage.max, "rewarded", ShowRewardedAdFingerprint, MaxRewardedAdShowAdFingerprint)
-            add(sdkCoverage.max, "rewardedAvailability", MaxRewardedAdIsReadyFingerprint, IsRewardedAdReadyFingerprint)
-            add(sdkCoverage.adMob, "rewarded",
-                AdMobRewardedShowFingerprint, AdMobLegacyRewardedVideoShowFingerprint,
-            )
-            add(sdkCoverage.unity, "rewarded", UnityRewardedAdShowFingerprint)
-            add(sdkCoverage.unity, "rewardedAvailability",
-                UnityAdsAdvertisementIsReadyFingerprint, UnityAdsAdvertisementIsReadyPlacementFingerprint,
-                UnityAdsSdkIsReadyFingerprint,
-            )
-            add(sdkCoverage.ironSource, "rewarded",
-                IronSourceShowDemandOnlyRewardedVideoFingerprint, IronSourceShowRewardedVideoFingerprint,
-                IronSourceShowRewardedVideoActivityFingerprint, IronSourceShowRewardedVideoActivityPlacementFingerprint,
-                IronSourceShowRewardedVideoPlacementFingerprint,
-            )
-            add(sdkCoverage.ironSource, "rewardedAvailability",
-                IronSourceIsRewardedVideoAvailableFingerprint, LevelPlayRewardedAdIsReadyFingerprint,
-                IronSourceUnityRewardedAdIsReadyFingerprint,
-            )
-            add(sdkCoverage.appLovin, "rewarded",
-                AppLovinIncentivizedShow4ListenerFingerprint, AppLovinIncentivizedShow5ListenerFingerprint,
-            )
-            add(sdkCoverage.meta, "rewarded",
-                FacebookRewardedVideoAdShowFingerprint, FacebookRewardedVideoAdShowConfigFingerprint,
-                FacebookRewardedInterstitialShowFingerprint, FacebookRewardedInterstitialShowConfigFingerprint,
-            )
-            add(sdkCoverage.pangle, "rewarded", PangleRewardedShowFingerprint)
-            add(sdkCoverage.vungle, "rewarded", VungleRewardedShowFingerprint)
-            add(sdkCoverage.yandex, "rewarded",
-                YandexRewardedAdLoadFingerprint, YandexUnityRewardedWrapperShowFingerprint,
-            )
-            add(sdkCoverage.huawei, "rewarded", HuaweiRewardAdShowFingerprint)
-            add(sdkCoverage.huawei, "rewardedAvailability", HuaweiRewardAdIsLoadedFingerprint)
-            add(sdkCoverage.inMobi, "rewarded", InMobiRewardedShowFingerprint)
-            add(sdkCoverage.ironSource, "shared", IronSourceLevelPlayFullScreenShowAdFingerprint)
-            // Unity Ads v4 show(Activity, placement, listener[, options]) is shared by rewarded
-            // and interstitial placements. It cannot be safely classified by this method alone.
-            // Leave it to the guarded Rewards implementation; combining it with Block Ads here
-            // can create a re-entry loop during SDK startup.
-            add(sdkCoverage.vungle, "shared", VungleBaseFullscreenAdLoadFingerprint)
-            add(sdkCoverage.pangle, "native", PangleNativeShowFingerprint)
-            add(sdkCoverage.adMob, "native", AdMobNativeAdViewFingerprint, AdMobAdLoaderLoadFingerprint)
-            add(sdkCoverage.huawei, "native", HuaweiNativeAdLoadFingerprint)
-        }.filter { (_, category) ->
-            (category == "rewarded" || category == "shared") && runtimeRewardsEnabled ||
-                runtimeBlockAdsEnabled
+        val settings = AdsPatchSettings(
+            noAdsEnabled = enableNoAds == true,
+            blockInterstitials = blockInterstitials == true,
+            blockBanners = blockBanners == true,
+            blockAppOpen = blockAppOpen == true,
+            blockMRec = blockMRec == true,
+            blockRewarded = blockRewarded == true,
+            blockNative = blockNative == true,
+            rewardsEnabled = enableAdsFreeRewards == true,
+            skipRewardedAds = skipRewardedAds == true,
+            instantReward = instantReward == true,
+            fakeAdAvailability = fakeAdAvailability == true,
+            hostsEnabled = enableBlockHosts == true,
+            wildcardHosts = wildcardHosts == true,
+            uBlockFilter = uBlockFilter == true,
+            easyListFilter = easyListFilter == true,
+            adGuardFilter = adGuardFilter == true,
+            oisdFilter = oisdFilter == true,
+            hageziProMiniFilter = hageziProMiniFilter == true,
+            privacyEssentialsFilter = privacyEssentialsFilter == true,
+            easyPrivacyFilter = easyPrivacyFilter == true,
+            peterLoweFilter = peterLoweFilter == true,
+            customFilterHosts = customFilterHosts.orEmpty(),
+            broadHeuristics = broadHeuristics == true,
+        )
+        val selection = AdsRuntimeSelection(
+            policyEnabled = runtimeHookModules == true,
+            noAdsModuleSelected = runtimeBlockAdsModule == true,
+            rewardsModuleSelected = runtimeRewardsModule == true,
+            hostsModuleSelected = runtimeHostsModule == true,
+        )
+        val patchPlan = AdsPatchPlanner.resolve(settings, selection, sdkCoverage)
+        runtimeHooksEnabled = patchPlan.runtimePolicyEnabled
+        val runtimeBlockAdsEnabled = patchPlan.noAds.mode == AdsPatchMode.RUNTIME
+        runtimeNoAdsEnabled = runtimeBlockAdsEnabled
+        val runtimeRewardsEnabled = patchPlan.rewards.mode == AdsPatchMode.RUNTIME
+        runtimeHostsEnabled = patchPlan.hosts.mode == AdsPatchMode.RUNTIME
+        adsFreeRewardsRuntimeGuardEnabled = runtimeRewardsEnabled
+        if (selection.policyEnabled && !runtimeHooksEnabled) {
+            detectionLogger.info("Control App Ads: runtime controls requested without an eligible module; using the resolved static plan.")
+        }
+        if (settings.blockRewarded && patchPlan.rewards.mode == AdsPatchMode.DISABLED && settings.rewardsEnabled) {
+            detectionLogger.info("Control App Ads: disabled Ads Free Rewards because static rewarded blocking is authoritative.")
+        }
+
+        // Each format has one source of truth. Runtime mode changes only the execution path;
+        // its initial values remain the patch settings serialized below.
+        var effectiveBlockInterstitials = settings.noAdsEnabled && settings.blockInterstitials
+        var effectiveBlockBanners = settings.noAdsEnabled && settings.blockBanners
+        var effectiveBlockAppOpen = settings.noAdsEnabled && settings.blockAppOpen
+        var effectiveBlockMRec = settings.noAdsEnabled && settings.blockMRec
+        var effectiveBlockRewarded = settings.noAdsEnabled && settings.blockRewarded
+        var effectiveBlockNative = settings.noAdsEnabled && settings.blockNative
+        val staticAdsFreeRewardsEnabled = patchPlan.rewards.mode == AdsPatchMode.STATIC &&
+            settings.rewardsEnabled && (settings.skipRewardedAds || settings.instantReward || settings.fakeAdAvailability)
+        if (staticAdsFreeRewardsEnabled && effectiveBlockRewarded) {
+            effectiveBlockRewarded = false
+            detectionLogger.info("Control App Ads: keeping rewarded flows enabled for Ads Free Rewards.")
+        }
+        val configuredBlockedFormats = buildAdsBlockedFormatsMask(
+            blockInterstitials = effectiveBlockInterstitials,
+            blockBanners = effectiveBlockBanners,
+            blockAppOpen = effectiveBlockAppOpen,
+            blockMRec = effectiveBlockMRec,
+            blockRewarded = effectiveBlockRewarded,
+            blockNative = effectiveBlockNative,
+        )
+        // Runtime mode must preserve original behavior until a runtime control changes it. Keep
+        // the static flags only as instrumentation selectors for the selected Block Ads module;
+        // every such method is guarded by runtimeCategoryByFingerprint below.
+        if (runtimeBlockAdsEnabled) {
+            // Runtime-owned formats must still be visited so their typed guards are injected.
+            // Unplanned fingerprints are rejected by the patch helpers above and cannot become
+            // permanent edits.
+            effectiveBlockInterstitials = true
+            effectiveBlockBanners = true
+            effectiveBlockAppOpen = true
+            effectiveBlockMRec = true
+            effectiveBlockRewarded = true
+            effectiveBlockNative = true
+        }
+        runtimeCategoryByFingerprint = if (runtimeHooksEnabled) {
+            RuntimeNoAdsCoordinator(
+                sdkCoverage = sdkCoverage,
+                blockAdsRuntime = runtimeBlockAdsEnabled,
+                rewardsRuntime = runtimeRewardsEnabled,
+            ).fingerprintCategories()
         } else emptyMap()
 
         // Runtime block controls guard the formats selected for static patching. Do not
@@ -873,53 +812,53 @@ val controlAppAdsPatch = bytecodePatch(
         // guarded reward hooks below and must not enable the broad static rewarded-blocking
         // branches, which can prevent an app from completing startup.
 
-        val hasMaxUnity = sdkMax == true && (ShowInterstitialFingerprint.methodOrNull != null ||
+        val hasMaxUnity = sdkCoverage.max && (ShowInterstitialFingerprint.methodOrNull != null ||
             ShowAppOpenAdFingerprint.methodOrNull != null ||
             ShowBannerFingerprint.methodOrNull != null)
-        val hasNativeMax = sdkMax == true && (MaxInterstitialAdShowAdFingerprint.methodOrNull != null ||
+        val hasNativeMax = sdkCoverage.max && (MaxInterstitialAdShowAdFingerprint.methodOrNull != null ||
             MaxAppOpenAdShowAdFingerprint.methodOrNull != null ||
             MaxAdViewStartAutoRefreshFingerprint.methodOrNull != null)
-        val hasAdMob = sdkAdMob == true && (AdMobInterstitialShowFingerprint.methodOrNull != null ||
+        val hasAdMob = sdkCoverage.adMob && (AdMobInterstitialShowFingerprint.methodOrNull != null ||
             AdMobLegacyInterstitialShowFingerprint.methodOrNull != null ||
             AdMobAppOpenShowFingerprint.methodOrNull != null ||
             AdMobAppOpenLoadFingerprint.methodOrNull != null ||
             AdMobRewardedShowFingerprint.methodOrNull != null ||
             AdMobLegacyRewardedVideoShowFingerprint.methodOrNull != null)
-        val hasUnityAdsV3 = sdkUnity == true && (UnityAdsV3Show2ArgFingerprint.methodOrNull != null ||
+        val hasUnityAdsV3 = sdkCoverage.unity && (UnityAdsV3Show2ArgFingerprint.methodOrNull != null ||
             UnityAdsV3ShowOptionsFingerprint.methodOrNull != null)
-        val hasUnityAdsV4 = sdkUnity == true && (UnityAdsV4Show3ArgFingerprint.methodOrNull != null ||
+        val hasUnityAdsV4 = sdkCoverage.unity && (UnityAdsV4Show3ArgFingerprint.methodOrNull != null ||
             UnityAdsV4Show4ArgFingerprint.methodOrNull != null ||
             UnityRewardedAdShowFingerprint.methodOrNull != null)
-        val hasIronSource = sdkIronSource == true && (IronSourceShowDemandOnlyInterstitialFingerprint.methodOrNull != null ||
+        val hasIronSource = sdkCoverage.ironSource && (IronSourceShowDemandOnlyInterstitialFingerprint.methodOrNull != null ||
             IronSourceShowDemandOnlyRewardedVideoFingerprint.methodOrNull != null ||
             IronSourceShowInterstitialFingerprint.methodOrNull != null ||
             IronSourceShowRewardedVideoFingerprint.methodOrNull != null)
-        val hasAppLovinLegacy = sdkAppLovin == true && (AppLovinInterstitialDialogShowFingerprint.methodOrNull != null ||
+        val hasAppLovinLegacy = sdkCoverage.appLovin && (AppLovinInterstitialDialogShowFingerprint.methodOrNull != null ||
             AppLovinIncentivizedShow4ListenerFingerprint.methodOrNull != null ||
             AppLovinAdViewLoadNextAdFingerprint.methodOrNull != null)
-        val hasVungle = sdkVungle == true && VungleBaseFullscreenAdLoadFingerprint.methodOrNull != null
-        val hasFacebook = sdkMeta == true && (FacebookInterstitialAdShowFingerprint.methodOrNull != null ||
+        val hasVungle = sdkCoverage.vungle && VungleBaseFullscreenAdLoadFingerprint.methodOrNull != null
+        val hasFacebook = sdkCoverage.meta && (FacebookInterstitialAdShowFingerprint.methodOrNull != null ||
             FacebookRewardedVideoAdShowFingerprint.methodOrNull != null)
-        val hasPangle = sdkPangle == true && (PangleInterstitialShowFingerprint.methodOrNull != null ||
+        val hasPangle = sdkCoverage.pangle && (PangleInterstitialShowFingerprint.methodOrNull != null ||
             PangleRewardedShowFingerprint.methodOrNull != null)
-        val hasMyTarget = sdkYandex == true && MyTargetBaseInterstitialShowFingerprint.methodOrNull != null
-        val hasYandexRewarded = sdkYandex == true && YandexUnityRewardedWrapperShowFingerprint.methodOrNull != null
-        val hasYandexInterstitial = sdkYandex == true && YandexUnityInterstitialWrapperShowFingerprint.methodOrNull != null
-        val hasLevelPlay = sdkIronSource == true && (LevelPlayRewardedAdIsReadyFingerprint.methodOrNull != null ||
+        val hasMyTarget = sdkCoverage.yandex && MyTargetBaseInterstitialShowFingerprint.methodOrNull != null
+        val hasYandexRewarded = sdkCoverage.yandex && YandexUnityRewardedWrapperShowFingerprint.methodOrNull != null
+        val hasYandexInterstitial = sdkCoverage.yandex && YandexUnityInterstitialWrapperShowFingerprint.methodOrNull != null
+        val hasLevelPlay = sdkCoverage.ironSource && (LevelPlayRewardedAdIsReadyFingerprint.methodOrNull != null ||
             IronSourceLevelPlayFullScreenShowAdFingerprint.methodOrNull != null)
-        val hasHuawei = sdkHuawei == true && (HuaweiRewardAdIsLoadedFingerprint.methodOrNull != null ||
+        val hasHuawei = sdkCoverage.huawei && (HuaweiRewardAdIsLoadedFingerprint.methodOrNull != null ||
             HuaweiRewardAdShowFingerprint.methodOrNull != null ||
             HuaweiInterstitialAdShowFingerprint.methodOrNull != null)
-        val hasStartApp = sdkStartApp == true && StartAppAdShowFingerprint.methodOrNull != null
-        val hasMoPub = sdkMoPub == true && MoPubInterstitialShowFingerprint.methodOrNull != null
-        val hasChartboost = sdkChartboost == true && ChartboostShowInterstitialFingerprint.methodOrNull != null
-        val hasInMobi = sdkInMobi == true && (InMobiInterstitialShowFingerprint.methodOrNull != null ||
+        val hasStartApp = sdkCoverage.startApp && StartAppAdShowFingerprint.methodOrNull != null
+        val hasMoPub = sdkCoverage.moPub && MoPubInterstitialShowFingerprint.methodOrNull != null
+        val hasChartboost = sdkCoverage.chartboost && ChartboostShowInterstitialFingerprint.methodOrNull != null
+        val hasInMobi = sdkCoverage.inMobi && (InMobiInterstitialShowFingerprint.methodOrNull != null ||
             InMobiRewardedShowFingerprint.methodOrNull != null)
-        val hasMintegral = sdkMintegral == true && MintegralInterstitialShowFingerprint.methodOrNull != null
-        val hasAdMobNative = sdkAdMob == true && (AdMobNativeAdViewFingerprint.methodOrNull != null || AdMobAdLoaderLoadFingerprint.methodOrNull != null)
-        val hasPangleNative = sdkPangle == true && PangleNativeShowFingerprint.methodOrNull != null
-        val hasVungleShow = sdkVungle == true && (VungleInterstitialShowFingerprint.methodOrNull != null || VungleRewardedShowFingerprint.methodOrNull != null)
-        val hasYandexDirect = sdkYandex == true && (YandexInterstitialAdLoadFingerprint.methodOrNull != null || YandexRewardedAdLoadFingerprint.methodOrNull != null)
+        val hasMintegral = sdkCoverage.mintegral && MintegralInterstitialShowFingerprint.methodOrNull != null
+        val hasAdMobNative = sdkCoverage.adMob && (AdMobNativeAdViewFingerprint.methodOrNull != null || AdMobAdLoaderLoadFingerprint.methodOrNull != null)
+        val hasPangleNative = sdkCoverage.pangle && PangleNativeShowFingerprint.methodOrNull != null
+        val hasVungleShow = sdkCoverage.vungle && (VungleInterstitialShowFingerprint.methodOrNull != null || VungleRewardedShowFingerprint.methodOrNull != null)
+        val hasYandexDirect = sdkCoverage.yandex && (YandexInterstitialAdLoadFingerprint.methodOrNull != null || YandexRewardedAdLoadFingerprint.methodOrNull != null)
 
         if (
             !hasMaxUnity &&
@@ -986,249 +925,44 @@ val controlAppAdsPatch = bytecodePatch(
 
         var totalPatched = 0
 
-        // -- VK MyTarget / RuStore build --
-        if (sdkYandex == true && hasMyTarget && (effectiveBlockInterstitials || effectiveBlockRewarded)) {
-            val myTargetChecks = buildString {
-                if (effectiveBlockRewarded) {
-                    appendLine("instance-of v0, p0, Lcom/my/target/ads/RewardedAd;")
-                    appendLine("if-nez v0, :morphe_no_ads_mytarget_block")
-                }
-                if (effectiveBlockInterstitials) {
-                    appendLine("instance-of v0, p0, Lcom/my/target/ads/InterstitialAd;")
-                    appendLine("if-nez v0, :morphe_no_ads_mytarget_block")
-                }
-                appendLine("goto :morphe_no_ads_mytarget_continue")
-                appendLine(":morphe_no_ads_mytarget_block")
-                appendLine("return-void")
-                appendLine(":morphe_no_ads_mytarget_continue")
+        val noAdsSdkPlan = NoAdsSdkPlan(
+            mode = patchPlan.noAds.mode,
+            interstitials = effectiveBlockInterstitials,
+            banners = effectiveBlockBanners,
+            appOpen = effectiveBlockAppOpen,
+            mrec = effectiveBlockMRec,
+            rewarded = effectiveBlockRewarded,
+            native = effectiveBlockNative,
+        )
+        totalPatched += NoAdsAdapterDispatcher(this, detectionLogger)
+            .apply(noAdsSdkPlan, sdkCoverage)
+
+        // -- AppLovin MAX --
+        if (sdkCoverage.max) {
+            val maxPlan = NoAdsSdkPlan(
+                mode = patchPlan.noAds.mode,
+                interstitials = effectiveBlockInterstitials,
+                banners = effectiveBlockBanners,
+                appOpen = effectiveBlockAppOpen,
+                mrec = effectiveBlockMRec,
+                rewarded = effectiveBlockRewarded,
+                native = effectiveBlockNative,
+            )
+            val maxAdapters = StaticNoAdsCoordinator(this, detectionLogger)
+            val result = if (maxPlan.mode == AdsPatchMode.RUNTIME) {
+                MaxNoAdsAdapterSet(this, detectionLogger).applyRuntime(maxPlan)
+            } else {
+                maxAdapters.applyMax(maxPlan)
             }
-            totalPatched += injectOrSkip(MyTargetBaseInterstitialShowFingerprint, myTargetChecks.trim())
+            totalPatched += result.patched
         }
-
-        if (sdkYandex == true && effectiveBlockRewarded) {
-            totalPatched += returnVoid(YandexUnityRewardedWrapperShowFingerprint)
-        }
-        if (sdkYandex == true && effectiveBlockInterstitials) {
-            totalPatched += returnVoid(YandexUnityInterstitialWrapperShowFingerprint)
-        }
-
-        // -- Huawei Ads Kit / Petal Ads --
-        if (sdkHuawei == true && effectiveBlockInterstitials) {
-            totalPatched += patchVoid(HuaweiInterstitialAdShowFingerprint)
-        }
-        if (sdkHuawei == true && effectiveBlockRewarded) {
-            totalPatched += patchReturnFalse(HuaweiRewardAdIsLoadedFingerprint)
-            totalPatched += patchVoid(HuaweiRewardAdShowFingerprint)
-        }
-
-        // -- MAX Unity wrapper --
-        if (sdkMax == true && effectiveBlockInterstitials) {
-            totalPatched += patchVoid(ShowInterstitialFingerprint)
-        }
-        if (sdkMax == true && effectiveBlockAppOpen) {
-            totalPatched += patchVoid(ShowAppOpenAdFingerprint)
-        }
-        if (sdkMax == true && effectiveBlockBanners) {
-            totalPatched += patchVoid(ShowBannerFingerprint)
-            totalPatched += patchVoid(StartBannerAutoRefreshFingerprint)
-        }
-        if (sdkMax == true && effectiveBlockMRec) {
-            totalPatched += patchVoid(ShowMRecFingerprint)
-            totalPatched += patchVoid(StartMRecAutoRefreshFingerprint)
-        }
-        if (sdkMax == true && effectiveBlockNative) {
-            // MAX native ads often use MaxAdView for native as well  -  block its refresh
-            totalPatched += patchVoid(MaxAdViewStartAutoRefreshFingerprint)
-        }
-
-        // -- Native MAX (non-Unity) --
-        if (sdkMax == true && effectiveBlockInterstitials) {
-            totalPatched += patchWith(
-                MaxInterstitialAdShowAdFingerprint,
-                fireHiddenCallbacks("Lcom/applovin/mediation/ads/MaxInterstitialAd;"),
-            )
-        }
-        if (sdkMax == true && effectiveBlockAppOpen) {
-            totalPatched += patchWith(
-                MaxAppOpenAdShowAdFingerprint,
-                fireHiddenCallbacks("Lcom/applovin/mediation/ads/MaxAppOpenAd;"),
-            )
-        }
-        if (sdkMax == true && (effectiveBlockBanners || effectiveBlockMRec || effectiveBlockNative)) {
-            totalPatched += patchVoid(MaxAdViewStartAutoRefreshFingerprint)
-        }
-
-        // -- AdMob (Google Mobile Ads) --
-        if (sdkAdMob == true && effectiveBlockInterstitials) {
-            totalPatched += patchVoid(AdMobInterstitialShowFingerprint)
-            totalPatched += patchVoid(AdMobLegacyInterstitialShowFingerprint)
-        }
-        if (sdkAdMob == true && effectiveBlockAppOpen) {
-            totalPatched += patchVoid(AdMobAppOpenShowFingerprint)
-            totalPatched += patchVoid(AdMobAppOpenLoadFingerprint)
-        }
-        if (sdkAdMob == true && effectiveBlockRewarded) {
-            totalPatched += patchVoid(AdMobRewardedShowFingerprint)
-            totalPatched += patchVoid(AdMobLegacyRewardedVideoShowFingerprint)
-        }
-        // Native ads often use AdMob NativeAdView  -  block its load if present
-        // (AdMobNativeAdShowFingerprint not yet fingerprinted; handled via generic scan below)
-
-        // -- Rewarded ads --
-        if (sdkMax == true && effectiveBlockRewarded) {
-            totalPatched += patchReturnFalse(IsRewardedAdReadyFingerprint)
-            totalPatched += patchVoid(ShowRewardedAdFingerprint)
-            totalPatched += patchReturnFalse(MaxRewardedAdIsReadyFingerprint)
-            totalPatched += patchWith(
-                MaxRewardedAdShowAdFingerprint,
-                fireHiddenCallbacks("Lcom/applovin/mediation/ads/MaxRewardedAd;"),
-            )
-            totalPatched += patchReturnFalse(LevelPlayRewardedAdIsReadyFingerprint)
-            totalPatched += patchReturnFalse(IronSourceUnityRewardedAdIsReadyFingerprint)
-            totalPatched += patchVoid(IronSourceLevelPlayFullScreenShowAdFingerprint)
-        }
-
-        // -- Unity Ads v3 (legacy) and v4 / RewardedAd --
-        if (sdkUnity == true && effectiveBlockInterstitials) {
-            totalPatched += patchVoid(UnityAdsV3Show2ArgFingerprint)
-            totalPatched += patchVoid(UnityAdsV3ShowOptionsFingerprint)
-        }
-        // Unity Ads v4 exposes one shared show(...) method for multiple ad
-        // formats. Blocking it for interstitials alone also breaks rewarded
-        // flows. In runtime mode, never permanently replace this method: its
-        // guarded reward implementation must retain control of the original
-        // SDK call until the session policy explicitly changes behavior.
-        if (shouldPatchUnityAdsV4Permanently(
-                runtimeHooksEnabled = runtimeHooksEnabled,
-                unitySdkEnabled = sdkUnity == true,
-                blockInterstitials = effectiveBlockInterstitials,
-                blockRewarded = effectiveBlockRewarded,
-            )
-        ) {
-            totalPatched += patchVoid(UnityAdsV4Show3ArgFingerprint)
-            totalPatched += patchVoid(UnityAdsV4Show4ArgFingerprint)
-        }
-        if (sdkUnity == true && effectiveBlockRewarded) {
-            totalPatched += patchVoid(UnityRewardedAdShowFingerprint)
-        }
-
-        // -- ironSource (LevelPlay) public API --
-        if (sdkIronSource == true && effectiveBlockInterstitials) {
-            totalPatched += patchVoid(IronSourceShowDemandOnlyInterstitialFingerprint)
-            totalPatched += patchVoid(IronSourceShowInterstitialFingerprint)
-            totalPatched += patchVoid(IronSourceShowInterstitialActivityFingerprint)
-            totalPatched += patchVoid(IronSourceShowInterstitialActivityPlacementFingerprint)
-            totalPatched += patchVoid(IronSourceShowInterstitialPlacementFingerprint)
-        }
-        if (sdkIronSource == true && effectiveBlockRewarded) {
-            totalPatched += patchVoid(IronSourceShowDemandOnlyRewardedVideoFingerprint)
-            totalPatched += patchVoid(IronSourceShowRewardedVideoFingerprint)
-            totalPatched += patchVoid(IronSourceShowRewardedVideoActivityFingerprint)
-            totalPatched += patchVoid(IronSourceShowRewardedVideoActivityPlacementFingerprint)
-            totalPatched += patchVoid(IronSourceShowRewardedVideoPlacementFingerprint)
-        }
-
-        // -- AppLovin legacy (direct SDK, non-MAX) --
-        if (sdkAppLovin == true && effectiveBlockInterstitials) {
-            totalPatched += patchVoid(AppLovinInterstitialDialogShowFingerprint)
-            totalPatched += patchVoid(AppLovinInterstitialDialogShowAndRenderFingerprint)
-        }
-        if (sdkAppLovin == true && effectiveBlockBanners) {
-            totalPatched += patchVoid(AppLovinAdViewLoadNextAdFingerprint)
-        }
-        if (sdkAppLovin == true && effectiveBlockRewarded) {
-            totalPatched += patchVoid(AppLovinIncentivizedShow4ListenerFingerprint)
-            totalPatched += patchVoid(AppLovinIncentivizedShow5ListenerFingerprint)
-        }
-        // AppLovin Native (handled via MaxAdView if present)
-
-        // -- Vungle --
-        if (sdkVungle == true && (effectiveBlockInterstitials || effectiveBlockRewarded)) {
-            totalPatched += patchVoid(VungleBaseFullscreenAdLoadFingerprint)
-        }
-
-        // -- Meta Audience Network (facebook/ads) --
-        if (sdkMeta == true && effectiveBlockInterstitials) {
-            totalPatched += patchReturnFalse(FacebookInterstitialAdShowFingerprint)
-            totalPatched += patchReturnFalse(FacebookInterstitialAdShowConfigFingerprint)
-        }
-        if (sdkMeta == true && effectiveBlockRewarded) {
-            totalPatched += patchReturnFalse(FacebookRewardedVideoAdShowFingerprint)
-            totalPatched += patchReturnFalse(FacebookRewardedVideoAdShowConfigFingerprint)
-            totalPatched += patchReturnFalse(FacebookRewardedInterstitialShowFingerprint)
-            totalPatched += patchReturnFalse(FacebookRewardedInterstitialShowConfigFingerprint)
-        }
-
-        // -- Pangle (bytedance) --
-        if (sdkPangle == true && effectiveBlockInterstitials) {
-            totalPatched += patchVoid(PangleInterstitialShowFingerprint)
-        }
-        if (sdkPangle == true && effectiveBlockAppOpen) {
-            totalPatched += patchVoid(PangleAppOpenShowFingerprint)
-        }
-        if (sdkPangle == true && effectiveBlockRewarded) {
-            totalPatched += patchVoid(PangleRewardedShowFingerprint)
-        }
-        if (sdkPangle == true && effectiveBlockNative) {
-            totalPatched += patchVoid(PangleNativeShowFingerprint)
-        }
-
-        // -- Vungle show (beyond load) --
-        if (sdkVungle == true && effectiveBlockInterstitials) {
-            totalPatched += patchVoid(VungleInterstitialShowFingerprint)
-        }
-        if (sdkVungle == true && effectiveBlockRewarded) {
-            totalPatched += patchVoid(VungleRewardedShowFingerprint)
-        }
-
-        // -- Huawei full (banner/native/splash) --
-        if (sdkHuawei == true && effectiveBlockBanners) {
-            totalPatched += patchVoid(HuaweiBannerAdLoadFingerprint)
-        }
-        if (sdkHuawei == true && effectiveBlockNative) {
-            totalPatched += patchVoid(HuaweiNativeAdLoadFingerprint)
-        }
-        if (sdkHuawei == true && effectiveBlockAppOpen) {
-            totalPatched += patchVoid(HuaweiSplashAdLoadFingerprint)
-        }
-
-        // -- Yandex direct --
-        if (sdkYandex == true && effectiveBlockInterstitials) {
-            totalPatched += patchVoid(YandexInterstitialAdLoadFingerprint)
-        }
-        if (sdkYandex == true && effectiveBlockRewarded) {
-            totalPatched += patchVoid(YandexRewardedAdLoadFingerprint)
-        }
-
-        // -- AdMob Native --
-        if (sdkAdMob == true && (effectiveBlockNative || effectiveBlockBanners)) {
-            totalPatched += patchVoid(AdMobNativeAdViewFingerprint)
-            totalPatched += patchVoid(AdMobAdLoaderLoadFingerprint)
-        }
-
-        // -- StartApp / MoPub / Chartboost / InMobi / Mintegral (obfuscated) --
-        if (sdkStartApp == true && effectiveBlockInterstitials) totalPatched += patchVoid(StartAppAdShowFingerprint)
-        if (sdkMoPub == true && effectiveBlockInterstitials) totalPatched += patchVoid(MoPubInterstitialShowFingerprint)
-        if (sdkChartboost == true && effectiveBlockInterstitials) totalPatched += patchVoid(ChartboostShowInterstitialFingerprint)
-        if (sdkInMobi == true && effectiveBlockInterstitials) totalPatched += patchVoid(InMobiInterstitialShowFingerprint)
-        if (sdkMintegral == true && effectiveBlockInterstitials) totalPatched += patchVoid(MintegralInterstitialShowFingerprint)
 
         // Hide rewarded UI only when rewarded ads were explicitly blocked by the static policy
         // (inverse of Ads Free Rewards fake true).
-        if (effectiveBlockRewarded) {
-            totalPatched += patchReturnFalse(UnityAdsAdvertisementIsReadyFingerprint)
-            totalPatched += patchReturnFalse(UnityAdsAdvertisementIsReadyPlacementFingerprint)
-            totalPatched += patchReturnFalse(UnityAdsSdkIsReadyFingerprint)
-            totalPatched += patchReturnFalse(IronSourceIsRewardedVideoAvailableFingerprint)
-            if (!runtimeHooksEnabled) {
-                totalPatched += patchReturnFalse(MaxRewardedAdIsReadyFingerprint)
-            }
-        }
-
         totalPatched += flushAdsFallbackOperations(detectionLogger)
 
         // Generic audio DAI ads (Klassik Radio, etc.)  -  adsIdentityToken, cuepoints.
-        if (broadHeuristics == true && !runtimeHooksEnabled) classDefForEach { classDef ->
+        if (settings.broadHeuristics && patchPlan.noAds.mode == AdsPatchMode.STATIC) classDefForEach { classDef ->
             val tl = classDef.type.lowercase()
             if (!tl.contains("song") && !tl.contains("station") && !tl.contains("stream") && !tl.contains("ad")) return@classDefForEach
             if (tl.contains("okhttp") || tl.contains("androidx")) return@classDefForEach
@@ -1269,12 +1003,12 @@ val controlAppAdsPatch = bytecodePatch(
         }
 
         if ((!runtimeRewardsEnabled && staticAdsFreeRewardsEnabled) || runtimeRewardsEnabled) {
-            applyAdsFreeRewards(detectionLogger, instantReward, sdkCoverage)
+            applyAdsFreeRewards(detectionLogger, settings, patchPlan)
         }
         logHeap(detectionLogger, "after-method-patches")
         // Availability needs a guarded method even when the initial runtime value is false;
         // otherwise the overlay checkbox could never enable it after patching.
-        if ((!runtimeRewardsEnabled && staticAdsFreeRewardsEnabled && fakeAdAvailability == true) || runtimeRewardsEnabled) {
+        if ((!runtimeRewardsEnabled && staticAdsFreeRewardsEnabled && settings.fakeAdAvailability) || runtimeRewardsEnabled) {
             totalPatched += forceAdAvailability(
                 detectionLogger,
                 runtimeRewardsEnabled,
@@ -1283,32 +1017,28 @@ val controlAppAdsPatch = bytecodePatch(
         }
 
         val filterHosts = buildSet {
-            if (uBlockFilter == true) addAll(uBlockHosts)
-            if (easyListFilter == true) addAll(easyListHosts)
-            if (adGuardFilter == true) addAll(adGuardMobileHosts)
-            if (oisdFilter == true) addAll(oisdPrivacyHosts)
-            if (hageziProMiniFilter == true) addAll(hageziProMiniHosts)
-            if (privacyEssentialsFilter == true) addAll(privacyEssentialsHosts)
-            if (easyPrivacyFilter == true) addAll(easyPrivacyHosts)
-            if (peterLoweFilter == true) addAll(peterLoweHosts)
-            addAll(parseFilterHosts(customFilterHosts.orEmpty()))
+            if (settings.uBlockFilter) addAll(uBlockHosts)
+            if (settings.easyListFilter) addAll(easyListHosts)
+            if (settings.adGuardFilter) addAll(adGuardMobileHosts)
+            if (settings.oisdFilter) addAll(oisdPrivacyHosts)
+            if (settings.hageziProMiniFilter) addAll(hageziProMiniHosts)
+            if (settings.privacyEssentialsFilter) addAll(privacyEssentialsHosts)
+            if (settings.easyPrivacyFilter) addAll(easyPrivacyHosts)
+            if (settings.peterLoweFilter) addAll(peterLoweHosts)
+            addAll(parseFilterHosts(settings.customFilterHosts))
         }
         if (runtimeHooksEnabled) {
-            val moduleMask = buildAdsRuntimeModuleMask(
-                runtimeHooksEnabled = runtimeHooksEnabled,
-                blockAdsEnabled = runtimeBlockAdsModule == true,
-                rewardsEnabled = runtimeRewardsEnabled,
-                hostsEnabled = runtimeHostsModule == true,
-            )
+            val moduleMask = patchPlan.runtimeModuleMask
             val policy = serializeAdsRuntimePolicy(
                 moduleMask = moduleMask,
                 blockedFormats = configuredBlockedFormats,
-                skipRewardedAdsEnabled = skipRewardedAds == true,
-                instantRewardEnabled = instantReward == true,
-                fakeAvailabilityEnabled = fakeAdAvailability == true,
-                hostsEnabled = enableBlockHosts == true,
-                wildcardHostsEnabled = wildcardHosts == true,
+                skipRewardedAdsEnabled = settings.skipRewardedAds,
+                instantRewardEnabled = settings.instantReward,
+                fakeAvailabilityEnabled = settings.fakeAdAvailability,
+                hostsEnabled = patchPlan.hosts.initialEnabled,
+                wildcardHostsEnabled = settings.wildcardHosts,
                 hosts = filterHosts.toList(),
+                hostsAllowedEnabled = settings.hostsEnabled,
             )
             OverlayAdsRuntimeIntegration.queue(policy)
             val earlierBridge = OverlayAdsRuntimeIntegration.takeUnconfiguredBridge(this)
@@ -1321,8 +1051,12 @@ val controlAppAdsPatch = bytecodePatch(
         }
         // In runtime mode, host rewriting is installed only for the selected Hosts module and
         // remains disabled until the overlay policy enables it.
-        if (enableBlockHosts == true && (!runtimeHooksEnabled || runtimeHostsEnabled)) {
-            totalPatched += redirectLiteralHosts(filterHosts, wildcardHosts == true, detectionLogger)
+        if (patchPlan.hosts.mode == AdsPatchMode.STATIC && settings.hostsEnabled) {
+            totalPatched += StaticHostsCoordinator(this, detectionLogger)
+                .apply(filterHosts, settings.wildcardHosts)
+        } else if (patchPlan.hosts.mode == AdsPatchMode.RUNTIME) {
+            totalPatched += RuntimeHostsCoordinator(this, detectionLogger)
+                .apply(filterHosts, settings.wildcardHosts)
         }
         logHeap(detectionLogger, "after-host-rewrites")
         resetAdsFallbackIndex()
