@@ -31,4 +31,10 @@ public final class OverlaySessionState {
     public static synchronized void putBooleans(String module, String field, boolean[] value) {
         VALUES.put(key(module, field), value == null ? new boolean[0] : value.clone());
     }
+
+    /** Clears one module's values when a fresh runtime policy starts a new app session. */
+    public static synchronized void clearModule(String module) {
+        String prefix = module + "\u0000";
+        VALUES.keySet().removeIf(value -> value.startsWith(prefix));
+    }
 }

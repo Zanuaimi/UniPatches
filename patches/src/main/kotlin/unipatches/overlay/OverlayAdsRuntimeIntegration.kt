@@ -23,6 +23,9 @@ internal object OverlayAdsRuntimeIntegration {
     fun queue(policy: String) {
         pendingPolicy = policy
         injectedBy = null
+        // A new policy belongs to the current patch execution. Do not retain a bridge recorded
+        // by an earlier overlay pass or patch context and risk attaching the policy to stale state.
+        unconfiguredBridge = null
     }
 
     fun pendingPolicy(): String? = pendingPolicy

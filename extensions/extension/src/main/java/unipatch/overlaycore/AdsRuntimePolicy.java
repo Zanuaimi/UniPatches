@@ -4,6 +4,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
+import unipatch.overlaycore.modules.OverlaySessionState;
 
 /** Session-local policy shared by Control App Ads and overlay runtime modules. */
 public final class AdsRuntimePolicy {
@@ -18,13 +19,19 @@ public final class AdsRuntimePolicy {
     private static boolean grantReward;
     private static boolean fakeAvailability;
     private static boolean hostsEnabled;
+    private static boolean hostsAllowed;
     private static boolean wildcardHosts;
     private static final Set<String> hosts = new HashSet<>();
 
     private AdsRuntimePolicy() { }
 
-    /** Config format: version|moduleMask|blockedFormats|skip|grant|fake|hostsEnabled|wildcard|hosts. */
+    /** Config format: version|moduleMask|blockedFormats|skip|grant|fake|hostsEnabled|wildcard|hosts[|hostsAllowed]. */
     public static synchronized void configure(String encoded) {
+        // The bridge can be reused by recreated Activities. Clear only Ads Control's saved
+        // overlay values so a new patch policy cannot inherit checkbox state from an older app
+        // process/session.
+        OverlaySessionState.clearModule("adsRuntimeBlockAds");
+        OverlaySessionState.clearModule("adsRuntimeRewards");
         integrated = false;
         modules = 0;
         blockedFormats = 0;
@@ -32,6 +39,7 @@ public final class AdsRuntimePolicy {
         grantReward = false;
         fakeAvailability = false;
         hostsEnabled = false;
+        hostsAllowed = false;
         wildcardHosts = false;
         hosts.clear();
         if (encoded == null) return;
@@ -45,12 +53,16 @@ public final class AdsRuntimePolicy {
             if (!isBooleanField(values[3]) || !isBooleanField(values[4]) ||
                     !isBooleanField(values[5]) || !isBooleanField(values[6]) ||
                     !isBooleanField(values[7])) return;
+            // Field 9 is an optional capability boundary. The original nine-field payload
+            // remains valid and treats its initial host state as the capability.
+            if (values.length >= 10 && !isBooleanField(values[9])) return;
             modules = parsedModules;
             blockedFormats = parsedBlockedFormats;
             skipRewarded = "1".equals(values[3]);
             grantReward = "1".equals(values[4]);
             fakeAvailability = "1".equals(values[5]);
             hostsEnabled = "1".equals(values[6]);
+            hostsAllowed = values.length >= 10 ? "1".equals(values[9]) : hostsEnabled;
             wildcardHosts = "1".equals(values[7]);
             for (String host : values[8].split(",")) {
                 String normalized = normalizeHost(host);
@@ -95,7 +107,7 @@ public final class AdsRuntimePolicy {
 
     /** Returns the original URL or the loopback replacement according to the current policy. */
     public static synchronized String rewriteHost(String value) {
-        if (!hostsEnabled || value == null) return value;
+        if (!hostsAllowed || !hostsEnabled || value == null) return value;
         String host = extractHost(value);
         if (host.isEmpty()) return value;
         for (String blocked : hosts) {
