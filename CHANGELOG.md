@@ -1,3 +1,9 @@
+## [1.27.4](https://github.com/Zanuaimi/UniPatches/compare/v1.27.3...v1.27.4) (2026-09-14)
+
+### 🐛 Bug Fixes
+
+* **ads + overlay:** fix morphe patch errors part 4 ([4f3a0b9](https://github.com/Zanuaimi/UniPatches/commit/4f3a0b93f00cec37e4da72a5c1a254daa1cfa19d))
+
 ## [1.27.3](https://github.com/Zanuaimi/UniPatches/compare/v1.27.2...v1.27.3) (2026-09-14)
 
 ### 🐛 Bug Fixes
