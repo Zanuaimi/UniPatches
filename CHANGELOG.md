@@ -1,3 +1,14 @@
+## [1.24.0](https://github.com/Zanuaimi/UniPatches/compare/v1.23.0...v1.24.0) (2026-09-14)
+
+### 🐛 Bug Fixes
+
+* **ads:** cover runtime guard regressions ([ab89925](https://github.com/Zanuaimi/UniPatches/commit/ab89925779b5967e1c8c1f467b8d332738028959))
+* **ads:** harden runtime reward instrumentation ([ca6d206](https://github.com/Zanuaimi/UniPatches/commit/ca6d206ff9097d38902b9c60653f5997a2640ec2))
+
+### ✨ New Features
+
+* **overlay:** update patch version to v2.4.9 ([0d10c63](https://github.com/Zanuaimi/UniPatches/commit/0d10c635a5a8794870be4bae890ed3b01794ecef))
+
 ## [1.23.0](https://github.com/Zanuaimi/UniPatches/compare/v1.22.1...v1.23.0) (2026-09-14)
 
 ### 🐛 Bug Fixes
