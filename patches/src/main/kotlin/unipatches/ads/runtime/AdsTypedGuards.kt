@@ -20,6 +20,15 @@ private val branchLabel = Regex(
     "(?m)(\\b(?:goto(?:/[0-9]+)?|if-[a-z-]+)\\s+(?:[^\\n,]+,\\s*)?):([A-Za-z0-9_.$-]+)\\b",
 )
 
+internal fun hasResolvedLabels(body: String): Boolean {
+    val declarations = labelDeclaration.findAll(body)
+        .map { it.groupValues[2] }
+        .toSet()
+    return branchLabel.findAll(body)
+        .map { it.groupValues[2] }
+        .all { it in declarations }
+}
+
 /** Prevent injected labels from colliding with labels already present in a target method. */
 internal fun uniquifyInjectedLabels(body: String, namespace: String): String {
     val safeNamespace = namespace

@@ -20,7 +20,7 @@ internal fun maxRuntimeShowGuard(
     val safeSkipCallbacks = uniquifyInjectedLabels(skipCallbacks, "${safeOriginalLabel}_skip")
     val safeInstantCallbacks = uniquifyInjectedLabels(instantCallbacks, "${safeOriginalLabel}_instant")
     val safeRequestSetup = requestSetup.replace(
-        ":${originalLabel}_original",
+        Regex(":([A-Za-z0-9_.$-]+)_original\\b"),
         ":${safeOriginalLabel}_original",
     )
     return """
@@ -134,11 +134,10 @@ private fun addRuntimeMaxShowGuard(
             localRegisters = originalImplementation.registerCount - method.numberOfParameterRegisters,
             body = callbacks,
         )) return false
+    val guard = maxRuntimeShowGuard(callbacks, instantCallbacks, requestSetup, requestRegister, label)
+    if (!hasResolvedLabels(guard)) return false
     val allocation = method.cloneMutableAndAllocateScratchRegisters(mutableClass, 8)
-    allocation.method.addInstructions(
-        0,
-        maxRuntimeShowGuard(callbacks, instantCallbacks, requestSetup, requestRegister, label),
-    )
+    allocation.method.addInstructions(0, guard)
     return true
 }
 

@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import helpers.bytecode.fireRewardedAdCallbacks
 import helpers.bytecode.fireRewardedAdImmediateCallbacks
+import unipatches.ads.hasResolvedLabels
 
 class MaxRuntimeRewardsTest {
     @Test
@@ -24,6 +25,7 @@ class MaxRuntimeRewardsTest {
         assertTrue(guard.contains("if-eqz v7"))
         assertTrue(guard.contains(":unipatch_ads_max_show_original"))
         assertTrue(guard.contains("return-void"))
+        assertTrue(hasResolvedLabels(guard))
     }
 
     @Test
@@ -38,6 +40,7 @@ class MaxRuntimeRewardsTest {
 
         val declarations = Regex("(?m)^:([^\\s]+)$").findAll(guard).map { it.groupValues[1] }.toList()
         assertTrue(declarations.size == declarations.toSet().size)
+        assertTrue(hasResolvedLabels(guard))
     }
 
     @Test
