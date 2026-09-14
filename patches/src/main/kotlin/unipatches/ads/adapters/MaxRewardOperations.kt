@@ -15,14 +15,17 @@ internal fun maxRuntimeShowGuard(
     requestSetup: String,
     requestRegister: String,
     originalLabel: String,
-): String = """
+): String {
+    val safeSkipCallbacks = uniquifyInjectedLabels(skipCallbacks, "${originalLabel}_skip")
+    val safeInstantCallbacks = uniquifyInjectedLabels(instantCallbacks, "${originalLabel}_instant")
+    return """
     invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldSkipRewarded()Z
     move-result v0
     if-eqz v0, :${originalLabel}_instant
     invoke-static {}, Lunipatch/overlaycore/AdsRuntimePolicy;->shouldGrantReward()Z
     move-result v0
     if-eqz v0, :${originalLabel}_return
-    $skipCallbacks
+    $safeSkipCallbacks
     :${originalLabel}_return
     return-void
     :${originalLabel}_instant
@@ -30,10 +33,11 @@ internal fun maxRuntimeShowGuard(
     move-result v0
     if-eqz v0, :${originalLabel}_original
     $requestSetup
-    $instantCallbacks
+    $safeInstantCallbacks
     invoke-static {$requestRegister}, Lunipatch/overlaycore/AdsRuntimePolicy;->armInstantReward(Ljava/lang/String;)V
     :${originalLabel}_original
-""".trimIndent()
+    """.trimIndent()
+}
 
 private fun maxUnityRewardedCallbacks(): String = """
     new-instance v0, Lorg/json/JSONObject;
@@ -128,10 +132,7 @@ private fun addRuntimeMaxShowGuard(
     val allocation = method.cloneMutableAndAllocateScratchRegisters(mutableClass, 8)
     allocation.method.addInstructions(
         0,
-        uniquifyInjectedLabels(
-            maxRuntimeShowGuard(callbacks, instantCallbacks, requestSetup, requestRegister, label),
-            label,
-        ),
+        maxRuntimeShowGuard(callbacks, instantCallbacks, requestSetup, requestRegister, label),
     )
     return true
 }

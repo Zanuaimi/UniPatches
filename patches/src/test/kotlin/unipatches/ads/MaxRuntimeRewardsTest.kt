@@ -27,6 +27,20 @@ class MaxRuntimeRewardsTest {
     }
 
     @Test
+    fun runtimeMaxShowGuardDoesNotDuplicateCallbackLabels() {
+        val guard = maxRuntimeShowGuard(
+            skipCallbacks = fireRewardedAdCallbacks(),
+            instantCallbacks = fireRewardedAdImmediateCallbacks(),
+            requestSetup = "const-string v7, \"unit\"",
+            requestRegister = "v7",
+            originalLabel = "max_show_original",
+        )
+
+        val declarations = Regex("(?m)^:([^\\s]+)$").findAll(guard).map { it.groupValues[1] }.toList()
+        assertTrue(declarations.size == declarations.toSet().size)
+    }
+
+    @Test
     fun runtimeMaxShowGuardDoesNotWriteParameters() {
         val guard = maxRuntimeShowGuard(
             skipCallbacks = "invoke-static {p0}, Lexample/Callbacks;->run(Ljava/lang/Object;)V",
