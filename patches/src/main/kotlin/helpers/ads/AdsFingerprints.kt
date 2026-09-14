@@ -12,6 +12,24 @@ internal object ShowRewardedAdFingerprint : Fingerprint(
     parameters = listOf("Ljava/lang/String;", "Ljava/lang/String;", "Ljava/lang/String;"),
 )
 
+/** Exact AppLovin MAX Unity bridge rewarded-show entry point. */
+internal object MaxUnityAdManagerShowRewardedAdFingerprint : Fingerprint(
+    definingClass = "Lcom/applovin/mediation/unity/MaxUnityAdManager;",
+    name = "showRewardedAd",
+    accessFlags = listOf(AccessFlags.PUBLIC),
+    returnType = "V",
+    parameters = listOf("Ljava/lang/String;", "Ljava/lang/String;", "Ljava/lang/String;"),
+)
+
+/** Exact Unity event bridge used to suppress only a duplicate MAX reward event. */
+internal object MaxUnityForwardUnityEventFingerprint : Fingerprint(
+    definingClass = "Lcom/applovin/mediation/unity/MaxUnityAdManager;",
+    name = "forwardUnityEvent",
+    accessFlags = listOf(AccessFlags.PRIVATE, AccessFlags.STATIC),
+    returnType = "V",
+    parameters = listOf("Lorg/json/JSONObject;"),
+)
+
 internal object LoadRewardedAdFingerprint : Fingerprint(
     name = "loadRewardedAd",
     accessFlags = listOf(AccessFlags.PUBLIC),
@@ -467,6 +485,36 @@ internal object MaxRewardedAdShowAdFingerprint : Fingerprint(
     accessFlags = listOf(AccessFlags.PUBLIC),
     returnType = "V",
     parameters = emptyList(),
+)
+
+/** Terminal native MAX overload used by the Unity bridge. */
+internal object MaxRewardedAdShowAdPlacementCustomDataActivityFingerprint : Fingerprint(
+    definingClass = "Lcom/applovin/mediation/ads/MaxRewardedAd;",
+    name = "showAd",
+    accessFlags = listOf(AccessFlags.PUBLIC),
+    returnType = "V",
+    parameters = listOf("Ljava/lang/String;", "Ljava/lang/String;", "Landroid/app/Activity;"),
+)
+
+/** Terminal native MAX overload used by older Java integrations. */
+internal object MaxRewardedAdShowAdPlacementCustomDataFingerprint : Fingerprint(
+    definingClass = "Lcom/applovin/mediation/ads/MaxRewardedAd;",
+    name = "showAd",
+    accessFlags = listOf(AccessFlags.PUBLIC),
+    returnType = "V",
+    parameters = listOf("Ljava/lang/String;", "Ljava/lang/String;"),
+)
+
+/** MAX's concrete rewarded listener callback, used only for one-shot deduplication. */
+internal object MaxRewardedAdImplRewardCallbackFingerprint : Fingerprint(
+    definingClass = "Lcom/applovin/impl/mediation/ads/MaxRewardedAdImpl\$b;",
+    name = "onUserRewarded",
+    accessFlags = listOf(AccessFlags.PUBLIC),
+    returnType = "V",
+    parameters = listOf(
+        "Lcom/applovin/mediation/MaxAd;",
+        "Lcom/applovin/mediation/MaxReward;",
+    ),
 )
 
 internal object MaxInterstitialAdShowAdFingerprint : Fingerprint(

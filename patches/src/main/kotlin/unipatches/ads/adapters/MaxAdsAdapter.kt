@@ -11,17 +11,19 @@ internal class MaxUnityRewardAdapter(
 ) : ContextAdsSdkAdapter(context, logger) {
     override fun detect(): DetectionResult {
         val detected = with(context) {
-            ShowRewardedAdFingerprint.methodOrNull != null && IsRewardedAdReadyFingerprint.methodOrNull != null
+            MaxUnityAdManagerShowRewardedAdFingerprint.methodOrNull != null
         }
         return DetectionResult(
             sdkName = "AppLovin MAX Unity bridge",
             detected = detected,
             supportedFormats = setOf("rewarded"),
             supportsRewards = detected,
-            supportsAvailability = detected,
+            supportsAvailability = with(context) {
+                IsRewardedAdReadyFingerprint.methodOrNull != null
+            },
             minimumLocalRegisters = 1,
             preservesParameterRegisters = true,
-            callbackStrategy = "native-only-static; runtime-skipped",
+            callbackStrategy = "request-scoped Unity bridge callbacks",
         )
     }
 
@@ -32,9 +34,7 @@ internal class MaxUnityRewardAdapter(
 
     override fun applyRuntime(plan: RuntimeSdkPlan): PatchResult {
         if (!plan.coverageEnabled || !detect().detected) return PatchResult(skipped = 1)
-        // Runtime MAX remains untouched until a request-scoped, parameter-preserving hook exists.
-        logger.warning("Ads Free Rewards: skipped MAX Unity runtime reward hooks for startup safety")
-        return PatchResult(skipped = 1)
+        return PatchResult(patched = context.applyRuntimeMaxUnityRewardedShow(logger))
     }
 }
 
@@ -45,17 +45,21 @@ internal class MaxNativeRewardedAdapter(
 ) : ContextAdsSdkAdapter(context, logger) {
     override fun detect(): DetectionResult {
         val detected = with(context) {
-            MaxRewardedAdShowAdFingerprint.methodOrNull != null && MaxRewardedAdIsReadyFingerprint.methodOrNull != null
+            MaxRewardedAdShowAdPlacementCustomDataActivityFingerprint.methodOrNull != null ||
+                MaxRewardedAdShowAdPlacementCustomDataFingerprint.methodOrNull != null ||
+                MaxRewardedAdShowAdFingerprint.methodOrNull != null
         }
         return DetectionResult(
             sdkName = "AppLovin MAX native rewarded",
             detected = detected,
             supportedFormats = setOf("rewarded"),
             supportsRewards = detected,
-            supportsAvailability = detected,
+            supportsAvailability = with(context) {
+                MaxRewardedAdIsReadyFingerprint.methodOrNull != null
+            },
             minimumLocalRegisters = 1,
             preservesParameterRegisters = true,
-            callbackStrategy = "native-listener-static; runtime-skipped",
+            callbackStrategy = "request-scoped native listener callbacks",
         )
     }
 
@@ -67,8 +71,7 @@ internal class MaxNativeRewardedAdapter(
 
     override fun applyRuntime(plan: RuntimeSdkPlan): PatchResult {
         if (!plan.coverageEnabled || !detect().detected) return PatchResult(skipped = 1)
-        logger.warning("Ads Free Rewards: skipped native MAX runtime reward hooks for startup safety")
-        return PatchResult(skipped = 1)
+        return PatchResult(patched = context.applyRuntimeNativeMaxRewardedShows(logger))
     }
 }
 

@@ -1,6 +1,8 @@
 package unipatch.overlaycore;
 
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -22,6 +24,8 @@ public final class AdsRuntimePolicy {
     private static boolean hostsAllowed;
     private static boolean wildcardHosts;
     private static final Set<String> hosts = new HashSet<>();
+    private static final Map<String, Integer> instantRewardRequests = new HashMap<>();
+    private static final Map<String, Integer> armedInstantRewards = new HashMap<>();
 
     private AdsRuntimePolicy() { }
 
@@ -42,6 +46,8 @@ public final class AdsRuntimePolicy {
         hostsAllowed = false;
         wildcardHosts = false;
         hosts.clear();
+        instantRewardRequests.clear();
+        armedInstantRewards.clear();
         if (encoded == null) return;
         String[] values = encoded.split("\\|", -1);
         if (values.length < 9 || !"1".equals(values[0])) return;
@@ -96,6 +102,59 @@ public final class AdsRuntimePolicy {
     public static synchronized boolean shouldSkipRewarded() { return hasModule(MODULE_REWARDS) && skipRewarded; }
     public static synchronized boolean shouldGrantReward() { return hasModule(MODULE_REWARDS) && grantReward; }
     public static synchronized boolean shouldFakeRewardAvailability() { return hasModule(MODULE_REWARDS) && fakeAvailability; }
+
+    /** Starts a one-shot native or Unity request that received an immediate reward. */
+    public static synchronized void beginInstantReward(String requestId) {
+        if (!hasModule(MODULE_REWARDS) || !grantReward || requestId == null || requestId.isEmpty()) return;
+        instantRewardRequests.put(requestId, count(instantRewardRequests, requestId) + 1);
+    }
+
+    /** Arms suppression only after the synthetic immediate callback has been delivered. */
+    public static synchronized void armInstantReward(String requestId) {
+        if (requestId == null || requestId.isEmpty()) return;
+        int pending = count(instantRewardRequests, requestId);
+        if (pending <= 0) return;
+        decrement(instantRewardRequests, requestId);
+        if (armedInstantRewards.size() >= 32) armedInstantRewards.clear();
+        armedInstantRewards.put(requestId, count(armedInstantRewards, requestId) + 1);
+    }
+
+    /** Consumes one later native reward callback for the matching request. */
+    public static synchronized boolean consumeInstantNativeReward(Object ad) {
+        if (ad == null || !hasModule(MODULE_REWARDS)) return false;
+        try {
+            Object value = ad.getClass().getMethod("getAdUnitId").invoke(ad);
+            return consumeArmed(value instanceof String ? (String) value : null);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    /** Consumes one later Unity reward event for the matching ad unit. */
+    public static synchronized boolean consumeInstantUnityReward(Object event) {
+        if (!(event instanceof org.json.JSONObject) || !hasModule(MODULE_REWARDS)) return false;
+        org.json.JSONObject json = (org.json.JSONObject) event;
+        if (!"OnRewardedAdReceivedRewardEvent".equals(json.optString("name"))) return false;
+        return consumeArmed(json.optString("adUnitId", null));
+    }
+
+    private static int count(Map<String, Integer> values, String key) {
+        Integer value = values.get(key);
+        return value == null ? 0 : value;
+    }
+
+    private static void decrement(Map<String, Integer> values, String key) {
+        int next = count(values, key) - 1;
+        if (next <= 0) values.remove(key); else values.put(key, next);
+    }
+
+    private static boolean consumeArmed(String requestId) {
+        if (requestId == null || requestId.isEmpty()) return false;
+        int armed = count(armedInstantRewards, requestId);
+        if (armed <= 0) return false;
+        decrement(armedInstantRewards, requestId);
+        return true;
+    }
 
     public static synchronized void setBlockedFormats(int value) { blockedFormats = value; }
     public static synchronized int blockedFormats() { return blockedFormats; }

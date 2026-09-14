@@ -10,32 +10,55 @@ package helpers.bytecode
  * the game (game gets the reward callbacks it expects).
  */
 fun fireRewardedAdCallbacks(): String = """
+    # Resolve MaxRewardedAd's implementation field first. The listener is stored by
+    # MaxFullscreenAdImpl, not as a field declared on the public wrapper.
     const-class v0, Lcom/applovin/mediation/ads/MaxRewardedAd;
     invoke-virtual {v0}, Ljava/lang/Class;->getDeclaredFields()[Ljava/lang/reflect/Field;
     move-result-object v0
     array-length v1, v0
     const/4 v2, 0x0
-    :loop_ck
-    if-ge v2, v1, :loop_done
+    :implementation_loop
+    if-ge v2, v1, :callback_done
     aget-object v3, v0, v2
     invoke-virtual {v3}, Ljava/lang/reflect/Field;->getType()Ljava/lang/Class;
-    move-result-object v4
-    const-class v5, Lcom/applovin/mediation/MaxRewardedAdListener;
-    invoke-virtual {v5, v4}, Ljava/lang/Class;->isAssignableFrom(Ljava/lang/Class;)Z
+    move-result-object v5
+    const-class v6, Lcom/applovin/impl/mediation/ads/MaxFullscreenAdImpl;
+    invoke-virtual {v6, v5}, Ljava/lang/Class;->isAssignableFrom(Ljava/lang/Class;)Z
     move-result v6
-    if-nez v6, :found
-    const-class v5, Lcom/applovin/mediation/MaxAdListener;
-    invoke-virtual {v5, v4}, Ljava/lang/Class;->isAssignableFrom(Ljava/lang/Class;)Z
-    move-result v6
-    if-nez v6, :found
-    add-int/lit8 v2, v2, 0x1
-    goto :loop_ck
-    :found
-    const/4 v4, 0x1
-    invoke-virtual {v3, v4}, Ljava/lang/reflect/Field;->setAccessible(Z)V
+    if-eqz v6, :implementation_next
+    const/4 v5, 0x1
+    invoke-virtual {v3, v5}, Ljava/lang/reflect/Field;->setAccessible(Z)V
     invoke-virtual {v3, p0}, Ljava/lang/reflect/Field;->get(Ljava/lang/Object;)Ljava/lang/Object;
     move-result-object v4
-    if-eqz v4, :loop_done
+    if-eqz v4, :callback_done
+    invoke-virtual {v4}, Ljava/lang/Object;->getClass()Ljava/lang/Class;
+    move-result-object v0
+    invoke-virtual {v0}, Ljava/lang/Class;->getDeclaredFields()[Ljava/lang/reflect/Field;
+    move-result-object v0
+    array-length v1, v0
+    const/4 v2, 0x0
+    :listener_loop
+    if-ge v2, v1, :listener_super
+    aget-object v3, v0, v2
+    const/4 v5, 0x1
+    invoke-virtual {v3, v5}, Ljava/lang/reflect/Field;->setAccessible(Z)V
+    invoke-virtual {v3, v4}, Ljava/lang/reflect/Field;->get(Ljava/lang/Object;)Ljava/lang/Object;
+    move-result-object v5
+    instance-of v6, v5, Lcom/applovin/mediation/MaxRewardedAdListener;
+    if-nez v6, :listener_found
+    add-int/lit8 v2, v2, 0x1
+    goto :listener_loop
+    :listener_super
+    invoke-virtual {v0}, Ljava/lang/Class;->getSuperclass()Ljava/lang/Class;
+    move-result-object v0
+    if-eqz v0, :callback_done
+    invoke-virtual {v0}, Ljava/lang/Class;->getDeclaredFields()[Ljava/lang/reflect/Field;
+    move-result-object v0
+    array-length v1, v0
+    const/4 v2, 0x0
+    goto :listener_loop
+    :listener_found
+    move-object v4, v5
     check-cast v4, Lcom/applovin/mediation/MaxRewardedAdListener;
     invoke-interface {v4, p0}, Lcom/applovin/mediation/MaxRewardedAdListener;->onAdDisplayed(Lcom/applovin/mediation/MaxAd;)V
     invoke-interface {v4, p0}, Lcom/applovin/mediation/MaxRewardedAdListener;->onRewardedVideoStarted(Lcom/applovin/mediation/MaxAd;)V
@@ -46,9 +69,18 @@ fun fireRewardedAdCallbacks(): String = """
     invoke-interface {v4, p0, v5}, Lcom/applovin/mediation/MaxRewardedAdListener;->onUserRewarded(Lcom/applovin/mediation/MaxAd;Lcom/applovin/mediation/MaxReward;)V
     invoke-interface {v4, p0}, Lcom/applovin/mediation/MaxRewardedAdListener;->onRewardedVideoCompleted(Lcom/applovin/mediation/MaxAd;)V
     invoke-interface {v4, p0}, Lcom/applovin/mediation/MaxRewardedAdListener;->onAdHidden(Lcom/applovin/mediation/MaxAd;)V
-    :loop_done
+    goto :callback_done
+    :implementation_next
+    add-int/lit8 v2, v2, 0x1
+    goto :implementation_loop
+    :callback_done
     return-void
 """.trimIndent()
+
+/** Same request-scoped native callback sequence, without completion or dismissal. */
+fun fireRewardedAdImmediateCallbacks(): String = fireRewardedAdCallbacks()
+    .substringBefore("    invoke-interface {v4, p0}, Lcom/applovin/mediation/MaxRewardedAdListener;->onRewardedVideoCompleted")
+    .trimEnd()
 
 /**
  * Generates Smali bytecode that uses reflection to find the
