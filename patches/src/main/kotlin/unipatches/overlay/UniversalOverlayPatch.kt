@@ -500,12 +500,13 @@ private fun validate(
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v2.4.9 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v2.5.0 (Experimental)",
     description = """
         A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual
         preset, select the overlay modules you want, optionally supply an icon image, then patch. Modules
         are excluded and disabled by default. Monitor modules show information, Activity modules control
-        the current Activity, and Hook modules make best-effort changes to app behavior. Text is the
+        the current Activity, Hook modules make best-effort changes to app behavior, System modules
+        control Android capabilities, and Advanced modules provide opt-in diagnostics. Text is the
         default legacy icon; an optional image replaces it completely, while the advanced Multi-parts editor
         supports custom drawn icons, and can be conveniently made in Icon Builder local website in UniPatches repo.
         
@@ -654,6 +655,30 @@ val universalOverlayPatch = bytecodePatch(
         key = "runtimeOverlayIncludeDisableAnimations",
         description = "Risk: broad runtime hook. Include a best-effort animation suppression module only if the app needs it.",
     )
+    val includeDoNotDisturb by booleanOption(
+        title = "Quick setup > Module settings > System > Do Not Disturb",
+        default = false,
+        key = "runtimeOverlayIncludeDoNotDisturb",
+        description = "Include a system module for controlling Do Not Disturb. Android notification-policy access is required before it can change the system state.",
+    )
+    val includeOverlayRuntimeLogs by booleanOption(
+        title = "Quick setup > Module settings > Advanced > Overlay Runtime Logs",
+        default = false,
+        key = "runtimeOverlayIncludeOverlayRuntimeLogs",
+        description = "Include an opt-in, bounded diagnostic buffer containing logs emitted by Universal Overlay and its runtime modules. This does not read system logcat.",
+    )
+    val enableOverlayRuntimeLogsOnLaunch by booleanOption(
+        title = "Quick setup > Settings to modules > Advanced > Enable Overlay Runtime Logs at app launch",
+        default = false,
+        key = "runtimeOverlayEnableOverlayRuntimeLogsOnLaunch",
+        description = "Start Overlay Runtime Logs active when the overlay session begins. The module must also be included above.",
+    )
+    val showExtraPopupHeaders by booleanOption(
+        title = "Quick setup > UI settings > Extra popups > Show headers",
+        default = false,
+        key = "runtimeOverlayShowExtraPopupHeaders",
+        description = "Show title header boxes in settings, logs, confirmation, and module action popups. The main overlay menu title is always shown. LuckyPatcher-inspired preset enables this by default.",
+    )
     val activateStatisticsOnLaunch by booleanOption(
         title = "Quick setup > Settings to modules > Monitor behavior > Activate statistics on launch",
         default = false,
@@ -664,7 +689,7 @@ val universalOverlayPatch = bytecodePatch(
         title = "Quick setup > Settings to modules > General > Show empty-module message",
         default = true,
         key = "runtimeOverlayShowNoModulesWarning",
-        description = "Show a message in the overlay when no Statistic, Activity, Hook, app-specific, or integrated module is selected. Control App Ads modules count only when that patch was also configured and patched successfully.",
+        description = "Show a message in the overlay when no Statistic, Activity, Hook, app-specific, System, Advanced, or integrated module is selected. Control App Ads modules count only when that patch was also configured and patched successfully.",
     )
     val enableMonitorsOnLaunch by booleanOption(
         title = "Quick setup > Settings to modules > Monitor behavior > Enable monitors on launch",
@@ -724,7 +749,7 @@ val universalOverlayPatch = bytecodePatch(
         title = "UI settings > Controls > Foreground color",
         default = "#FF5656",
         key = "runtimeOverlayControlForeground",
-        description = "Foreground color for control contents, such as text, slider progress, and checked checkbox state.",
+        description = "Foreground color for control contents, such as text, slider progress, and checked checkbox state. Unchecked checkbox state uses the configured control background color.",
     )
     val bottomButtonStyle by stringOption(
         title = "UI settings > Bottom buttons > Style",
@@ -1194,7 +1219,7 @@ val universalOverlayPatch = bytecodePatch(
             bottomButtonShape = bottomButtonShape.orEmpty().ifBlank { "square" },
             bottomButtonPadding = bottomButtonPadding == true,
             bottomButtonTextColor = bottomButtonTextColor.orEmpty().ifBlank {
-                menuTextColor1.orEmpty().ifBlank { "#FFFFFF" }
+                menuTextColor1.orEmpty().ifBlank { "#FF5656" }
             },
             bottomButtonBackground1 = bottomButtonBackground1.orEmpty().ifBlank { "#FF5656" },
             bottomButtonBackground2 = bottomButtonBackground2.orEmpty().ifBlank { "#FF5656" },
@@ -1489,6 +1514,10 @@ val universalOverlayPatch = bytecodePatch(
             trailingFields = listOf(
                 iconPartsValue.joinToString("\n"), "", menuTextColor7Value,
                 iconTextFontValue, menuTextFontValue, legacyIconJsonValue,
+                if (includeDoNotDisturb == true) "1" else "0",
+                if (includeOverlayRuntimeLogs == true) "1" else "0",
+                if (enableOverlayRuntimeLogsOnLaunch == true) "1" else "0",
+                if (showExtraPopupHeaders == true || selectedPreset.orEmpty() == "luckyPatcher") "1" else "0",
             ),
         )
 

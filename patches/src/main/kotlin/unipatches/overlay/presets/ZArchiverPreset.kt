@@ -14,7 +14,7 @@ internal val zArchiverPreset = OverlayPresetDefinition(
             "text|59|50|45|70|0|solid|#FFFFFF|#FFFFFF|0|100|1|A|true|default",
         ),
         iconBackgroundStyle = "faceted", iconBackgroundColor3 = "#3D7806", iconBackgroundColor4 = "#69B90A",
-        controlBackground = "#666666", controlForeground = "#FFFFFF",
+        controlBackground = "#FFFFFF", controlForeground = "#FFFFFF",
         menuTextColor7 = "#FFFFFF",
         bottomButtonStyle = "text", bottomButtonTextColor = "#FFFFFF",
         bottomButtonBackground1 = "#FFFFFF", bottomButtonBackground2 = "#FFFFFF",

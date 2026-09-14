@@ -5,4 +5,7 @@ public interface OverlayModule {
     String key();
     String label();
     String description();
+
+    /** Stable family name used by the common menu presentation layer. */
+    default String category() { return "custom"; }
 }
