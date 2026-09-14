@@ -384,10 +384,11 @@ class AdsRuntimePolicyPayloadTest {
 
     @Test
     fun injectedLabelsAreNamespacedToAvoidTargetMethodCollisions() {
-        val body = "if-eqz v0, :cond_0\n:cond_0\nreturn-void"
+        val body = "if-eqz v0, :cond_0\n:cond_0\nsget-object v0, Lcom/example/Ads${'$'}State;->READY:Lcom/example/Ads${'$'}State;\nreturn-void"
         val namespaced = uniquifyInjectedLabels(body, "Lcom/example/Target;->show")
         assertEquals(false, namespaced.contains(":cond_0"))
         assertEquals(true, namespaced.contains("return-void"))
+        assertEquals(true, namespaced.contains("Lcom/example/Ads${'$'}State;->READY:Lcom/example/Ads${'$'}State;"))
         assertEquals(2, Regex(":unipatch_ads_[A-Za-z0-9_]+_cond_0").findAll(namespaced).count())
     }
 

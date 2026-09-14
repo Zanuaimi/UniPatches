@@ -15,7 +15,10 @@ private val parameterWriteInstruction = Regex(
     "(?:const(?:/[0-9]+)?|move(?:-object|-wide)?(?:/(?:from16|16))?|move-result(?:-object|-wide)?|new-instance|iget(?:-object|-boolean|-byte|-char|-short|-wide)?|sget(?:-object|-boolean|-byte|-char|-short|-wide)?)\\s+p\\d+\\b",
 )
 
-private val injectedLabel = Regex(":([A-Za-z0-9_.$-]+)")
+private val labelDeclaration = Regex("(?m)^(\\s*):([A-Za-z0-9_.$-]+)(\\s*)$")
+private val branchLabel = Regex(
+    "(?m)(\\b(?:goto(?:/[0-9]+)?|if-[a-z-]+)\\s+(?:[^\\n,]+,\\s*)?):([A-Za-z0-9_.$-]+)\\b",
+)
 
 /** Prevent injected labels from colliding with labels already present in a target method. */
 internal fun uniquifyInjectedLabels(body: String, namespace: String): String {
@@ -23,7 +26,12 @@ internal fun uniquifyInjectedLabels(body: String, namespace: String): String {
         .replace(Regex("[^A-Za-z0-9_]"), "_")
         .takeLast(72)
     val prefix = "unipatch_ads_${safeNamespace}_"
-    return body.replace(injectedLabel) { match -> ":$prefix${match.groupValues[1]}" }
+    val withDeclarations = body.replace(labelDeclaration) { match ->
+        "${match.groupValues[1]}:$prefix${match.groupValues[2]}${match.groupValues[3]}"
+    }
+    return withDeclarations.replace(branchLabel) { match ->
+        "${match.groupValues[1]}:$prefix${match.groupValues[2]}"
+    }
 }
 
 internal fun hasGuardParameterWrite(body: String): Boolean =
