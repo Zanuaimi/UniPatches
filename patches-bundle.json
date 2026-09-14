@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-14T08:47:50",
-  "description": "## [1.26.0](https://github.com/Zanuaimi/UniPatches/compare/v1.25.0...v1.26.0) (2026-09-14)\n\n### 🐛 Bug Fixes\n\n* **overlay:** keep controls inside Activity bounds ([7d6776f](https://github.com/Zanuaimi/UniPatches/commit/7d6776fec4cdd531d632f8b0a663c2af2775e1b1))\n\n### ✨ New Features\n\n* **overlay:** add configurable adaptive menu limits ([a2fe7fe](https://github.com/Zanuaimi/UniPatches/commit/a2fe7fe3cfc812de4bf71276d92d408aac7ee528))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.26.0/patches-1.26.0.mpp",
+  "created_at": "2026-09-14T10:01:48",
+  "description": "## [1.26.1](https://github.com/Zanuaimi/UniPatches/compare/v1.26.0...v1.26.1) (2026-09-14)\n\n### 🐛 Bug Fixes\n\n* **overlay:** fix problems with drag, header and overlay menu size ([d3b43ad](https://github.com/Zanuaimi/UniPatches/commit/d3b43ad38c82319c8cfecf585cb5809d3ec55f8b))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.26.1/patches-1.26.1.mpp",
   "signature_download_url": "",
-  "version": "1.26.0"
+  "version": "1.26.1"
 }

@@ -1,3 +1,9 @@
+## [1.26.1](https://github.com/Zanuaimi/UniPatches/compare/v1.26.0...v1.26.1) (2026-09-14)
+
+### 🐛 Bug Fixes
+
+* **overlay:** fix problems with drag, header and overlay menu size ([d3b43ad](https://github.com/Zanuaimi/UniPatches/commit/d3b43ad38c82319c8cfecf585cb5809d3ec55f8b))
+
 ## [1.26.0](https://github.com/Zanuaimi/UniPatches/compare/v1.25.0...v1.26.0) (2026-09-14)
 
 ### 🐛 Bug Fixes
