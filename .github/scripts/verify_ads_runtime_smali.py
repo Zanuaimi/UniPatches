@@ -13,6 +13,7 @@ Options:
   --require-runtime-method <regex>  Require matching methods to contain a guarded original body.
   --forbid-runtime-method <regex>   Require matching methods to contain no AdsRuntimePolicy call.
   --expected-module-mask <integer>  Require the module-mask field in the policy to match.
+  --require-max-runtime-rewards     Require guarded MAX Unity and native rewarded show methods.
 """
 
 from __future__ import annotations
@@ -92,7 +93,7 @@ def check_file(path: Path) -> list[str]:
     return errors
 
 
-def parse_options(args: list[str]) -> tuple[Path, str | None, Path | None, list[re.Pattern[str]], bool, list[re.Pattern[str]], list[re.Pattern[str]], int | None] | None:
+def parse_options(args: list[str]) -> tuple[Path, str | None, Path | None, list[re.Pattern[str]], bool, list[re.Pattern[str]], list[re.Pattern[str]], int | None, bool] | None:
     if not args:
         return None
     root = Path(args[0])
@@ -103,6 +104,7 @@ def parse_options(args: list[str]) -> tuple[Path, str | None, Path | None, list[
     required_runtime_methods: list[re.Pattern[str]] = []
     forbidden_runtime_methods: list[re.Pattern[str]] = []
     expected_module_mask: int | None = None
+    require_max_runtime_rewards = False
     index = 1
     while index < len(args):
         option = args[index]
@@ -135,9 +137,12 @@ def parse_options(args: list[str]) -> tuple[Path, str | None, Path | None, list[
         elif option == "--forbid-runtime-rewards":
             forbid_runtime_rewards = True
             index += 1
+        elif option == "--require-max-runtime-rewards":
+            require_max_runtime_rewards = True
+            index += 1
         else:
             return None
-    return root, expected_policy, baseline, allowed_paths, forbid_runtime_rewards, required_runtime_methods, forbidden_runtime_methods, expected_module_mask
+    return root, expected_policy, baseline, allowed_paths, forbid_runtime_rewards, required_runtime_methods, forbidden_runtime_methods, expected_module_mask, require_max_runtime_rewards
 
 
 def main() -> int:
@@ -148,7 +153,7 @@ def main() -> int:
     if options is None:
         print(f"usage: {Path(sys.argv[0]).name} <decompiled-directory> [options]", file=sys.stderr)
         return 2
-    root, expected_policy, baseline, allowed_paths, forbid_runtime_rewards, required_runtime_methods, forbidden_runtime_methods, expected_module_mask = options
+    root, expected_policy, baseline, allowed_paths, forbid_runtime_rewards, required_runtime_methods, forbidden_runtime_methods, expected_module_mask, require_max_runtime_rewards = options
     if not root.is_dir():
         print(f"not a decompiled directory: {root}", file=sys.stderr)
         return 2
@@ -179,6 +184,25 @@ def main() -> int:
         for path, header, body in methods:
             if pattern.search(f"{path.relative_to(root)} {header}") and "AdsRuntimePolicy;->" in body:
                 errors.append(f"{path}: forbidden runtime instrumentation: {header}")
+    if require_max_runtime_rewards:
+        max_targets = {
+            "Unity bridge": re.compile(
+                r"com/applovin/mediation/unity/MaxUnityAdManager\.smali .*\.method public showRewardedAd\(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;\)V"
+            ),
+            "native": re.compile(
+                r"com/applovin/mediation/ads/MaxRewardedAd\.smali .*\.method public showAd\(Ljava/lang/String;Ljava/lang/String;Landroid/app/Activity;\)V"
+            ),
+        }
+        for name, pattern in max_targets.items():
+            matches = [(path, header, body) for path, header, body in methods
+                       if pattern.search(f"{path.relative_to(root)} {header}")]
+            if not matches:
+                errors.append(f"no eligible MAX {name} rewarded show method found")
+            for path, header, body in matches:
+                if "AdsRuntimePolicy;->shouldSkipRewarded" not in body:
+                    errors.append(f"{path}: MAX rewarded show method lacks skip guard: {header}")
+                if not re.search(r"^\s*:[A-Za-z0-9_.$-]*original\s*$", body, re.MULTILINE):
+                    errors.append(f"{path}: MAX rewarded show method lacks original fallback: {header}")
     if expected_policy is not None:
         found_policy = any(
             expected_policy in path.read_text(errors="replace")
