@@ -1,3 +1,13 @@
+## [1.28.0](https://github.com/Zanuaimi/UniPatches/compare/v1.27.6...v1.28.0) (2026-09-15)
+
+### 🐛 Bug Fixes
+
+* **ads:** replace MAX callback smali injection ([f20b00c](https://github.com/Zanuaimi/UniPatches/commit/f20b00c8b13661fac777390b7c67285a28fc4643))
+
+### ✨ New Features
+
+* **ads:** add safe MAX runtime bridge ([968a4ba](https://github.com/Zanuaimi/UniPatches/commit/968a4baa0b233ff7d72fec79e8ea3fdf46da8a1f))
+
 ## [1.27.6](https://github.com/Zanuaimi/UniPatches/compare/v1.27.5...v1.27.6) (2026-09-14)
 
 ### 🐛 Bug Fixes
