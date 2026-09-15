@@ -203,8 +203,8 @@ internal fun BytecodePatchContext.applyRuntimeMaxUnityRewardedShow(logger: Logge
     val patched = if (addRuntimeMaxShowGuard(
             method,
             mutableClass,
-            maxUnityRewardedCallbacks(),
-            maxUnityImmediateRewardedCallbacks(),
+            "invoke-static {p1}, Lunipatch/overlaycore/MaxRuntimeBridge;->dispatchUnitySyntheticReward(Ljava/lang/String;)V",
+            "invoke-static {p1}, Lunipatch/overlaycore/MaxRuntimeBridge;->dispatchUnityImmediateReward(Ljava/lang/String;)V",
             "move-object v7, p1\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
             "v7",
             "morphe_max_unity_runtime",
@@ -251,8 +251,8 @@ internal fun BytecodePatchContext.applyRuntimeNativeMaxRewardedShows(logger: Log
         if (addRuntimeMaxShowGuard(
                 method,
                 mutableClass,
-                fireRewardedAdCallbacks(),
-                fireRewardedAdImmediateCallbacks(),
+                "invoke-static {p0}, Lunipatch/overlaycore/MaxRuntimeBridge;->dispatchNativeSyntheticReward(Ljava/lang/Object;)V",
+                "invoke-static {p0}, Lunipatch/overlaycore/MaxRuntimeBridge;->dispatchNativeImmediateReward(Ljava/lang/Object;)V",
                 "invoke-virtual {p0}, Lcom/applovin/mediation/ads/MaxRewardedAd;->getAdUnitId()Ljava/lang/String;\nmove-result-object v7\ninvoke-static {v7}, Lunipatch/overlaycore/AdsRuntimePolicy;->beginInstantReward(Ljava/lang/String;)V",
                 "v7",
                 "morphe_max_native_runtime_${count}",
@@ -353,7 +353,13 @@ internal fun BytecodePatchContext.applyLegacyNativeMaxStrategy(logger: Logger, u
     if (instantReward == true || adsFreeRewardsRuntimeGuardEnabled) {
         val rc = nativeShow.implementation?.registerCount ?: 0
         if (rc >= 7) {
-            nativeShow.addInstructions(0, guardedInstantReward(fireRewardedAdCallbacks(), "morphe_native_max_original"))
+            nativeShow.addInstructions(
+                0,
+                guardedInstantReward(
+                    "invoke-static {p0}, Lunipatch/overlaycore/MaxRuntimeBridge;->dispatchNativeSyntheticReward(Ljava/lang/Object;)V\nreturn-void",
+                    "morphe_native_max_original",
+                ),
+            )
         } else logger.warning("Ads Free Rewards: native MAX showAd() needs seven local registers; skipped to avoid an unsafe bytecode rewrite.")
     }
 }
