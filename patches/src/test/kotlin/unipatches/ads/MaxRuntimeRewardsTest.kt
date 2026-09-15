@@ -31,8 +31,8 @@ class MaxRuntimeRewardsTest {
     @Test
     fun runtimeMaxShowGuardDoesNotDuplicateCallbackLabels() {
         val guard = maxRuntimeShowGuard(
-            skipCallbacks = fireRewardedAdCallbacks(),
-            instantCallbacks = fireRewardedAdImmediateCallbacks(),
+            skipCallbacks = "invoke-static {p0}, Lunipatch/overlaycore/MaxRuntimeBridge;->dispatchNativeSyntheticReward(Ljava/lang/Object;)V",
+            instantCallbacks = "invoke-static {p0}, Lunipatch/overlaycore/MaxRuntimeBridge;->dispatchNativeImmediateReward(Ljava/lang/Object;)V",
             requestSetup = "const-string v7, \"unit\"",
             requestRegister = "v7",
             originalLabel = "max_show",
@@ -41,6 +41,7 @@ class MaxRuntimeRewardsTest {
         val declarations = Regex("(?m)^:([^\\s]+)$").findAll(guard).map { it.groupValues[1] }.toList()
         assertTrue(declarations.size == declarations.toSet().size)
         assertTrue(hasResolvedLabels(guard))
+        assertTrue(guard.contains("MaxRuntimeBridge;->dispatchNativeImmediateReward(Ljava/lang/Object;)V"))
     }
 
     @Test
