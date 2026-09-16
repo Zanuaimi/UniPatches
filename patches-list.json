@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.29.0-dev.1",
+  "version": "1.29.0-dev.2",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -452,6 +452,193 @@
           "key": "adsBroadAudioHeuristics",
           "title": "Advanced > Heuristic matching > Enable broad audio-ad heuristics",
           "description": "Normal SDK coverage changes only exact, known ad-SDK methods. Enable this only when an audio or radio app still plays inserted ads after normal controls find nothing: it additionally looks for stream-like classes and ad-metadata methods such as adsIdentityToken, adsResponse, adsDuration, adsId, or cuepoints, then returns empty metadata so detected server-inserted audio ad breaks may be skipped. It does not block every audio ad, visual ad, network request, or unknown SDK. Because it matches names rather than an exact fingerprint, unrelated playback or stream code can match and break app features; disabled by default.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        }
+      ]
+    },
+    {
+      "name": "Control Embedded Auth / Stores Patch ( Enhanced )",
+      "category": "Embedded Auth / Stores",
+      "description": "Control embedded Google Play, Firebase, Google Pay, location, licensing, sign-in, and store availability behavior.\n\nChoose real Google Play Services, GmsCore, or Zero Google Play behavior. GmsCore mode includes Maps-on-MicroG compatibility and supports package and main-activity overrides.\n\nAll controls are optional and apply only to matching methods or manifest components.\n\nCredits to Nai64 for the majority of the original Google Services, Firebase, licensing, location, store, and GmsCore functionality. UniPatches provides the merged settings, compatibility guards, and patch organization.",
+      "default": false,
+      "dependencies": [],
+      "compatiblePackages": null,
+      "options": [
+        {
+          "key": "embeddedProviderMode",
+          "title": "Google services provider",
+          "description": "Choose real Google Play Services, GmsCore / MicroG, or Zero Google Play behavior.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "real",
+          "values": {
+            "Real Google Play Services (default)": "real",
+            "GmsCore / MicroG": "gmscore",
+            "Zero Google Play": "zero"
+          }
+        },
+        {
+          "key": "embeddedGmsCorePackage",
+          "title": "GmsCore package",
+          "description": "Select the GmsCore package used by GmsCore mode.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "app.morphe.android.gms",
+          "values": {
+            "Morphe GmsCore (app.morphe.android.gms)": "app.morphe.android.gms",
+            "ReVanced GmsCore (app.revanced.android.gms)": "app.revanced.android.gms",
+            "Official MicroG (org.microg.gms)": "org.microg.gms",
+            "MG MicroG (com.mgoogle.android.gms)": "com.mgoogle.android.gms",
+            "Google Play Services (com.google.android.gms)": "com.google.android.gms"
+          }
+        },
+        {
+          "key": "embeddedCustomGmsCorePackage",
+          "title": "Custom GmsCore package (optional)",
+          "description": "A non-empty valid package overrides the GmsCore dropdown selection.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "",
+          "values": null
+        },
+        {
+          "key": "embeddedMainActivityClass",
+          "title": "Main Activity class (optional)",
+          "description": "Inject a GmsCore startup check into this Activity's onCreate method. Leave empty to disable.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "",
+          "values": null
+        },
+        {
+          "key": "embeddedStoreAvailability",
+          "title": "Store availability",
+          "description": "Choose which recognized store checks should be reported as available.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "real",
+          "values": {
+            "Leave app checks unchanged (default)": "real",
+            "Google Play Store": "google",
+            "Amazon Appstore": "amazon",
+            "No recognized store": "none"
+          }
+        },
+        {
+          "key": "embeddedBypassLicenseVerification",
+          "title": "Bypass License Verification",
+          "description": "Force legacy LicenseChecker verification to allow.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedShowPlayServicesAvailable",
+          "title": "Show Google Play Services as available",
+          "description": "Report recognized Google Play Services availability checks as successful.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedBypassPlayServicesCheck",
+          "title": "Bypass Google Play Services Check",
+          "description": "Bypass recognized Google Play Services availability checks.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedBypassPlayLicenseCheck",
+          "title": "Bypass Play License Check",
+          "description": "Answer the legacy LVL checkAccess callback as licensed.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedDisableFirebaseAutoInit",
+          "title": "Disable Firebase Auto Init",
+          "description": "Disable Firebase collection metadata and automatic measurement components.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedDisableFirebasePerformance",
+          "title": "Disable Firebase Performance",
+          "description": "No-op Firebase Performance traces and HTTP metrics.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedDisableGooglePay",
+          "title": "Disable Google Pay",
+          "description": "Report Google Pay readiness as unavailable.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedDisableRemoteConfig",
+          "title": "Disable Remote Config Fetch",
+          "description": "Use bundled Remote Config defaults without fetching updates.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedForceSignedOut",
+          "title": "Force Google Signed Out",
+          "description": "Make Google sign-in checks report signed out.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedFixMaps",
+          "title": "Fix Maps on MicroG",
+          "description": "Report Maps initialization success and notify its initialized callback.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedNullLocation",
+          "title": "Null Play Location",
+          "description": "Return empty Play Services location results.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedSilenceErrors",
+          "title": "Silence Play Services Errors",
+          "description": "Suppress recognized Play Services error UI and messages.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedSpoofVersion",
+          "title": "Spoof Play Services Version",
+          "description": "Report a high Play Services version.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,

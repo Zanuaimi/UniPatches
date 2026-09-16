@@ -1,3 +1,9 @@
+## [1.29.0-dev.2](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.1...v1.29.0-dev.2) (2026-09-16)
+
+### ✨ New Features
+
+* **controlembedded:** New enhanced patch called Control Embedded Auth / Stores patch. This is where you can bypass LVL checks, or use MicroG instead of Google Play, or use zero google play services, and spoof what store is available to app. ([6c2c245](https://github.com/Zanuaimi/UniPatches/commit/6c2c24577096f77f5c1511243a8a17c2728b1a30))
+
 ## [1.29.0-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.28.0...v1.29.0-dev.1) (2026-09-16)
 
 ### ✨ New Features
