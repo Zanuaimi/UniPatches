@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-16T05:18:39",
-  "description": "## [1.29.0-dev.2](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.1...v1.29.0-dev.2) (2026-09-16)\n\n### ✨ New Features\n\n* **controlembedded:** New enhanced patch called Control Embedded Auth / Stores patch. This is where you can bypass LVL checks, or use MicroG instead of Google Play, or use zero google play services, and spoof what store is available to app. ([6c2c245](https://github.com/Zanuaimi/UniPatches/commit/6c2c24577096f77f5c1511243a8a17c2728b1a30))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.2/patches-1.29.0-dev.2.mpp",
+  "created_at": "2026-09-16T05:36:35",
+  "description": "## [1.29.0-dev.3](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.2...v1.29.0-dev.3) (2026-09-16)\n\n### 🐛 Bug Fixes\n\n* **inapp:** Fix missing catalog in legacy SDKs, and add a new patch option ([9709eac](https://github.com/Zanuaimi/UniPatches/commit/9709eac7426db7ddc3bd41e4c9d2090b52deec8a))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.3/patches-1.29.0-dev.3.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.2"
+  "version": "1.29.0-dev.3"
 }

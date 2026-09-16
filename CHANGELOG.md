@@ -1,3 +1,9 @@
+## [1.29.0-dev.3](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.2...v1.29.0-dev.3) (2026-09-16)
+
+### 🐛 Bug Fixes
+
+* **inapp:** Fix missing catalog in legacy SDKs, and add a new patch option ([9709eac](https://github.com/Zanuaimi/UniPatches/commit/9709eac7426db7ddc3bd41e4c9d2090b52deec8a))
+
 ## [1.29.0-dev.2](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.1...v1.29.0-dev.2) (2026-09-16)
 
 ### ✨ New Features

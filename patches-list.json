@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.29.0-dev.2",
+  "version": "1.29.0-dev.3",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -993,8 +993,8 @@
       "options": [
         {
           "key": "nativeIl2CppMode",
-          "title": "Native IL2CPP mode",
-          "description": "Select automatic, managed-only, or native enhancement behavior for supported libil2cpp.so files.",
+          "title": "Patch Mode",
+          "description": "Automatic runs all managed compatibility patches first, then safely attempts verified native IL2CPP patches for supported libraries. Managed compatibility only runs bytecode patches and disables native patching, which is useful for diagnosing native-related crashes. Native enhancement runs the managed patches and attempts the same validated native phase. Native patching is fail-closed and only supported ABI signatures are used.",
           "required": false,
           "type": "kotlin.String",
           "default": "auto",
@@ -1007,11 +1007,24 @@
         {
           "key": "fakeStartupPurchases",
           "title": "Fake owned purchases at startup",
-          "description": "Deliver a fake owned purchase on every inventory query. Helps games that only grant at boot, but can stall strict Unity titles. Leave off if a game hangs on loading.",
+          "description": "Deliver a fake owned purchase through modern callback inventory queries. Helps games that only grant at boot, but can stall strict Unity titles. Leave off if a game hangs on loading.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,
           "values": null
+        },
+        {
+          "key": "legacyInventoryMode",
+          "title": "Legacy inventory behavior",
+          "description": "Preserve catalog and owned-purchase queries keeps legacy billing behavior unchanged and is recommended for compatibility. Return empty owned purchases suppresses restored purchases while leaving catalog lookup available. Return a fake owned purchase injects a synthetic purchase for older wrappers that grant content only from startup inventory. These legacy modes affect owned-inventory responses, not SKU catalog discovery.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "preserve",
+          "values": {
+            "Preserve catalog and owned purchases (default)": "preserve",
+            "Return empty owned purchases": "empty",
+            "Return a fake owned purchase": "fake"
+          }
         }
       ]
     },
