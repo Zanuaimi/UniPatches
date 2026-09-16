@@ -9,7 +9,7 @@ import helpers.bytecode.cloneMutable
 import java.util.logging.Logger
 
 @Suppress("unused")
-internal fun emulateInAppManagedPatch(fakeStartupPurchasesProvider: () -> Boolean) = bytecodePatch(
+internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Pair<Boolean, String>) = bytecodePatch(
     name = null,
     description = """
         Get paid items free: buying grants items without charging. Best for offline games.
@@ -496,19 +496,9 @@ internal fun emulateInAppManagedPatch(fakeStartupPurchasesProvider: () -> Boolea
             }
         }
 
-        // getBuyIntent -> OK bundle (legacy AIDL v5/v7)
-        patchAll(Fingerprint(name = "getBuyIntent", returnType = "Landroid/os/Bundle;", custom = { _, c -> isBillingNamespace(c.type) }), "getBuyIntent", 3) {
-            if (it.parameterTypes.size >= 2) {
-                it.addInstructions(0, """
-                    new-instance v0, Landroid/os/Bundle;
-                    invoke-direct {v0}, Landroid/os/Bundle;-><init>()V
-                    const-string v1, "BUY_INTENT"
-                    const/4 v2, 0x0
-                    invoke-virtual {v0, v1, v2}, Landroid/os/Bundle;->putInt(Ljava/lang/String;I)V
-                    return-object v0
-                """.trimIndent())
-            }
-        }
+        // Legacy getBuyIntent() must remain stock. Its BUY_INTENT value is a
+        // PendingIntent, not an integer, and replacing it prevents old AIDL
+        // clients from opening the billing flow.
 
         // isBillingSupported (AIDL) -> 0 = BILLING_RESPONSE_RESULT_OK
         patchAll(Fingerprint(name = "isBillingSupported", custom = { _, c -> isBillingNamespace(c.type) }), "isBillingSupported") {
@@ -519,20 +509,28 @@ internal fun emulateInAppManagedPatch(fakeStartupPurchasesProvider: () -> Boolea
             it.addInstructions(0, "const/4 v0, 0x0\nreturn v0")
         }
 
-        // getPurchases / queryPurchases -> empty list or empty bundle.
-        // Listener callbacks get OK + EMPTY list by default (MOD-menu
-        // behavior: inventory restores nothing, the grant happens at buy
-        // time). The fakeStartupPurchases option restores the old fake
-        // PURCHASED delivery for games that only grant at boot.
+        val (fakeStartupPurchases, legacyInventoryMode) = inventoryOptionsProvider()
+        val emulateInventory = fakeStartupPurchases || legacyInventoryMode != "preserve"
+
+        // Preserve legacy getPurchases() and all catalog-related methods by
+        // default. Empty or fake owned inventory is opt-in because old
+        // OpenIAB-style wrappers commonly use this path before displaying
+        // their store UI. Modern callback inventory can still be emulated
+        // independently with fakeStartupPurchases.
         for (qn in listOf("getPurchases", "queryPurchases", "queryPurchasesAsync", "queryPurchaseHistory", "queryPurchaseHistoryAsync", "queryPurchasesHistory")) {
+            if (!emulateInventory) continue
             patchAll(Fingerprint(name = qn, custom = { m, c -> c.type.contains("BillingClient") || m.definingClass.contains("billing") || isBillingNamespace(c.type) }), qn, 3) {
+                // fakeStartupPurchases is intended for modern callback-based
+                // inventory. Do not let it alter legacy Bundle APIs while
+                // the dedicated legacy setting remains in preserve mode.
+                if (it.returnType == "Landroid/os/Bundle;" && legacyInventoryMode == "preserve") return@patchAll
                 val listenerIdx = it.parameterTypes.indexOfFirst { p -> p.contains("PurchasesResponseListener") || p.contains("PurchaseHistoryResponseListener") }
                 if (listenerIdx >= 0 && it.returnType == "V") {
                     val isHistory = it.parameterTypes[listenerIdx].contains("History")
                     val listenerReg = parameterRegister(it, listenerIdx)
                     val iface = if (isHistory) "Lcom/android/billingclient/api/PurchaseHistoryResponseListener;" else "Lcom/android/billingclient/api/PurchasesResponseListener;"
                     val cb = if (isHistory) "onPurchaseHistoryResponse" else "onQueryPurchasesResponse"
-                    if (!fakeStartupPurchasesProvider()) {
+                    if (!fakeStartupPurchases) {
                         it.addInstructions(0, """
                             invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
                             move-result-object v0
@@ -611,6 +609,7 @@ internal fun emulateInAppManagedPatch(fakeStartupPurchasesProvider: () -> Boolea
                         const-string v1, "INAPP_PURCHASE_DATA_LIST"
                         new-instance v2, Ljava/util/ArrayList;
                         invoke-direct {v2}, Ljava/util/ArrayList;-><init>()V
+                        ${if (legacyInventoryMode == "fake") "const-string v3, \"{\\\"productId\\\":\\\"morphe_fake\\\",\\\"purchaseToken\\\":\\\"morphe_fake\\\"}\"\n                        invoke-virtual {v2, v3}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z\n                        invoke-virtual {v0, v1, v2}, Landroid/os/Bundle;->putStringArrayList(Ljava/lang/String;Ljava/util/ArrayList;)V\n                        const-string v1, \"INAPP_SIGNATURE_LIST\"\n                        new-instance v2, Ljava/util/ArrayList;\n                        invoke-direct {v2}, Ljava/util/ArrayList;-><init>()V\n                        const-string v3, \"morphe_fake\"\n                        invoke-virtual {v2, v3}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z" else ""}
                         invoke-virtual {v0, v1, v2}, Landroid/os/Bundle;->putStringArrayList(Ljava/lang/String;Ljava/util/ArrayList;)V
                         return-object v0
                     """.trimIndent())

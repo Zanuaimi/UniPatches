@@ -27,10 +27,10 @@ val emulateInAppPatch = rawResourcePatch(
     try { category("InApp Emulation") } catch (_: NoSuchMethodError) {}
 
     val nativeMode by stringOption(
-        title = "Native IL2CPP mode",
+        title = "Patch Mode",
         default = "auto",
         key = "nativeIl2CppMode",
-        description = "Select automatic, managed-only, or native enhancement behavior for supported libil2cpp.so files.",
+        description = "Automatic runs all managed compatibility patches first, then safely attempts verified native IL2CPP patches for supported libraries. Managed compatibility only runs bytecode patches and disables native patching, which is useful for diagnosing native-related crashes. Native enhancement runs the managed patches and attempts the same validated native phase. Native patching is fail-closed and only supported ABI signatures are used.",
         values = linkedMapOf(
             "Automatic (recommended)" to "auto",
             "Managed compatibility only" to "managed",
@@ -42,10 +42,22 @@ val emulateInAppPatch = rawResourcePatch(
         title = "Fake owned purchases at startup",
         default = false,
         key = "fakeStartupPurchases",
-        description = "Deliver a fake owned purchase on every inventory query. Helps games that only grant at boot, but can stall strict Unity titles. Leave off if a game hangs on loading.",
+        description = "Deliver a fake owned purchase through modern callback inventory queries. Helps games that only grant at boot, but can stall strict Unity titles. Leave off if a game hangs on loading.",
     )
 
-    dependsOn(emulateInAppManagedPatch { fakeStartupPurchases == true })
+    val legacyInventoryMode by stringOption(
+        title = "Legacy inventory behavior",
+        default = "preserve",
+        key = "legacyInventoryMode",
+        description = "Preserve catalog and owned-purchase queries keeps legacy billing behavior unchanged and is recommended for compatibility. Return empty owned purchases suppresses restored purchases while leaving catalog lookup available. Return a fake owned purchase injects a synthetic purchase for older wrappers that grant content only from startup inventory. These legacy modes affect owned-inventory responses, not SKU catalog discovery.",
+        values = linkedMapOf(
+            "Preserve catalog and owned purchases (default)" to "preserve",
+            "Return empty owned purchases" to "empty",
+            "Return a fake owned purchase" to "fake",
+        ),
+    )
+
+    dependsOn(emulateInAppManagedPatch { Pair(fakeStartupPurchases == true, legacyInventoryMode ?: "preserve") })
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)
