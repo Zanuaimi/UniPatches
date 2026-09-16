@@ -1,3 +1,9 @@
+## [1.29.0-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.28.0...v1.29.0-dev.1) (2026-09-16)
+
+### ✨ New Features
+
+* **inapp:** New Patch added to UniPatches, called Emulate InApp Patch. This is based on Nai64's FreeIAP patch, but merged MiguelNinja19's Cocos2D and GameMaker and ILL2CPP native HEX patch into it, and enhanced it for compatibility, stability and it has a new patch setting for choosing between Auto Mode, Managed Mode and Native Mode. ([34c6c2a](https://github.com/Zanuaimi/UniPatches/commit/34c6c2a4f79fbbfa6b99eaa3e2b45d252941f920))
+
 ## [1.28.0](https://github.com/Zanuaimi/UniPatches/compare/v1.27.6...v1.28.0) (2026-09-15)
 
 ### 🐛 Bug Fixes
