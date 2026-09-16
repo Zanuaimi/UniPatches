@@ -1,3 +1,13 @@
+## [1.29.0-dev.8](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.7...v1.29.0-dev.8) (2026-09-16)
+
+### 🐛 Bug Fixes
+
+* **output:** centralize target SDK compatibility ([5a3eb27](https://github.com/Zanuaimi/UniPatches/commit/5a3eb27007a428ef1448e9b2d26642051d6ee9f8))
+
+### ✨ New Features
+
+* **compatibility:** add exported component controls ([8268ef7](https://github.com/Zanuaimi/UniPatches/commit/8268ef753ff17e19454920b617a3b9146c513a45))
+
 ## [1.29.0-dev.7](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.6...v1.29.0-dev.7) (2026-09-16)
 
 ### ✨ New Features

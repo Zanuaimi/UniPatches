@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-16T09:43:53",
-  "description": "## [1.29.0-dev.7](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.6...v1.29.0-dev.7) (2026-09-16)\n\n### ✨ New Features\n\n* **overlay:** Enable header boxes in popups by default ([9e61a8a](https://github.com/Zanuaimi/UniPatches/commit/9e61a8a0a5d59b06bbf55c081dff3218cb831841))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.7/patches-1.29.0-dev.7.mpp",
+  "created_at": "2026-09-16T10:12:12",
+  "description": "## [1.29.0-dev.8](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.7...v1.29.0-dev.8) (2026-09-16)\n\n### 🐛 Bug Fixes\n\n* **output:** centralize target SDK compatibility ([5a3eb27](https://github.com/Zanuaimi/UniPatches/commit/5a3eb27007a428ef1448e9b2d26642051d6ee9f8))\n\n### ✨ New Features\n\n* **compatibility:** add exported component controls ([8268ef7](https://github.com/Zanuaimi/UniPatches/commit/8268ef753ff17e19454920b617a3b9146c513a45))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.8/patches-1.29.0-dev.8.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.7"
+  "version": "1.29.0-dev.8"
 }
