@@ -99,7 +99,13 @@ public final class DoNotDisturbModule extends OverlaySystemModule {
             IntentFilter filter = new IntentFilter();
             filter.addAction(NotificationManager.ACTION_NOTIFICATION_POLICY_CHANGED);
             filter.addAction(NotificationManager.ACTION_NOTIFICATION_POLICY_ACCESS_GRANTED_CHANGED);
-            try { activity.registerReceiver(stateReceiver, filter); }
+            try {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    activity.registerReceiver(stateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+                } else {
+                    activity.registerReceiver(stateReceiver, filter);
+                }
+            }
             catch (RuntimeException ignored) { stateReceiver = null; }
             stateHandler.postDelayed(statePoll, 5000L);
         }

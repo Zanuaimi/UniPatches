@@ -11,7 +11,12 @@ import helpers.startup.StartupHooks
 
 internal const val OVERLAY_RUNTIME_CLASS = "Lunipatch/overlaycore/OverlayRuntime;"
 
-/** Inserts the shared runtime bridge and optional Control App Ads policy at one safe entry point. */
+private fun MutableMethod.hasRuntimePolicy(policyClass: String): Boolean =
+    implementation?.instructions?.any { instruction ->
+        instruction.toString().contains("$policyClass;->configure")
+    } == true
+
+/** Inserts the shared runtime bridge and optional policies at one safe entry point. */
 internal fun injectOverlayBridge(
     context: BytecodePatchContext,
     owner: MutableClass,
@@ -20,7 +25,7 @@ internal fun injectOverlayBridge(
     application: Boolean,
     adsRuntimePolicy: String?,
     inAppRuntimePolicy: String?,
-) {
+): MutableMethod {
     val temporaryBase = method.implementation?.registerCount
         ?: error("Cannot inject into ${owner.type}->${method.name} without an implementation")
     val temporaryCount = 2 + (if (adsRuntimePolicy != null) 1 else 0) + (if (inAppRuntimePolicy != null) 1 else 0)
@@ -82,6 +87,40 @@ internal fun injectOverlayBridge(
         )
     }
     OverlayPatchRunMarker.publish(context, owner, cloned)
+    return cloned
+}
+
+/** Adds only missing queued policies to an existing verified shared bridge. */
+internal fun attachExistingOverlayPolicies(
+    owner: MutableClass,
+    method: MutableMethod,
+    adsRuntimePolicy: String?,
+    inAppRuntimePolicy: String?,
+): MutableMethod {
+    val missingAds = adsRuntimePolicy != null && !method.hasRuntimePolicy("AdsRuntimePolicy")
+    val missingInApp = inAppRuntimePolicy != null && !method.hasRuntimePolicy("InAppRuntimePolicy")
+    if (!missingAds && !missingInApp) return method
+
+    val base = method.implementation?.registerCount
+        ?: error("Cannot attach overlay policies to ${owner.type}->${method.name} without an implementation")
+    val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters +
+        (if (missingAds) 1 else 0) + (if (missingInApp) 1 else 0))
+    var register = base
+    val policies = buildString {
+        if (missingAds) {
+            appendLine("const-string v$register, \"${helpers.startup.StartupHooks.escapeSmali(adsRuntimePolicy)}\"")
+            appendLine("invoke-static/range {v$register .. v$register}, Lunipatch/overlaycore/AdsRuntimePolicy;->configure(Ljava/lang/String;)V")
+            register++
+        }
+        if (missingInApp) {
+            appendLine("const-string v$register, \"${helpers.startup.StartupHooks.escapeSmali(inAppRuntimePolicy)}\"")
+            appendLine("invoke-static/range {v$register .. v$register}, Lunipatch/overlaycore/InAppRuntimePolicy;->configure(Ljava/lang/String;)V")
+        }
+    }.trim()
+    cloned.addInstructionsWithLabels(0, policies)
+    owner.methods.remove(method)
+    owner.methods.add(cloned)
+    return cloned
 }
 
 /** Adds app-specific module selection to the bridge previously injected by Universal Overlay. */
@@ -157,8 +196,13 @@ internal fun BytecodePatchContext.findOverlayFallbackActivity(
 ): MutableClass? {
     val parents = mutableMapOf<String, String>()
     classDefForEach { classDef -> classDef.superclass?.let { parents[classDef.type] = it } }
+    fun isPackagedFrameworkActivity(type: String): Boolean {
+        val frameworkNamespace = type.startsWith("Landroid/app/") ||
+            type.startsWith("Landroid/support/") || type.startsWith("Landroidx/")
+        return frameworkNamespace && type.endsWith("Activity;")
+    }
     fun isActivity(type: String, seen: MutableSet<String> = mutableSetOf()): Boolean = when {
-        type == "Landroid/app/Activity;" -> true
+        type == "Landroid/app/Activity;" || isPackagedFrameworkActivity(type) -> true
         type == "Ljava/lang/Object;" || !seen.add(type) -> false
         else -> parents[type]?.let { isActivity(it, seen) } == true
     }
@@ -180,6 +224,23 @@ internal fun BytecodePatchContext.findOverlayFallbackActivity(
                     it.parameterTypes == listOf("Landroid/os/Bundle;") && it.implementation != null
             }) candidates += candidate
     }
-    return candidates.firstOrNull { it.type == preferredDescriptor }
+    // The manifest has already identified this component as an Activity. Prefer it even
+    // when its final framework superclass is not present in the APK's class pool.
+    val preferred = preferredDescriptor?.let { descriptor ->
+        mutableClassDefByOrNull(descriptor)?.takeIf { candidate ->
+            candidate.type == descriptor &&
+                candidate.type.removePrefix("L").removeSuffix(";").replace('/', '.')
+                    .let { binaryName ->
+                        !packageName.isNullOrBlank() &&
+                            (binaryName == packageName || binaryName.startsWith("$packageName."))
+                    } &&
+                candidate.type !in noHistory &&
+                candidate.methods.any {
+                    it.name == "onCreate" && it.returnType == "V" &&
+                        it.parameterTypes == listOf("Landroid/os/Bundle;") && it.implementation != null
+                }
+        }
+    }
+    return preferred ?: candidates.firstOrNull { it.type == preferredDescriptor }
         ?: candidates.firstOrNull()
 }
