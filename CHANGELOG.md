@@ -1,3 +1,9 @@
+## [1.29.0-dev.17](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.16...v1.29.0-dev.17) (2026-09-16)
+
+### 🐛 Bug Fixes
+
+* **overlay:** Improve injection strategy for some legacy APKs ([8ec6835](https://github.com/Zanuaimi/UniPatches/commit/8ec6835771d71ef3c45f5e472bc1319dbefb3f34))
+
 ## [1.29.0-dev.16](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.15...v1.29.0-dev.16) (2026-09-16)
 
 ### 🐛 Bug Fixes
