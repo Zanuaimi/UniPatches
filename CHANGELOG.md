@@ -1,3 +1,11 @@
+## [1.29.0-dev.18](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.17...v1.29.0-dev.18) (2026-09-16)
+
+### 🐛 Bug Fixes
+
+* **inapp:** Harden purchase callback delivery ([2073291](https://github.com/Zanuaimi/UniPatches/commit/207329162fc8239d766d1f902c08f7d0c4156fce))
+* **overlay:** Harden launcher result forwarding ([057afcb](https://github.com/Zanuaimi/UniPatches/commit/057afcbfd0095376f264f468382005e3239fa661))
+* **overlay:** Make runtime lifecycle attachment safe ([43eb7bd](https://github.com/Zanuaimi/UniPatches/commit/43eb7bd38ca596c01912e41b4e735932eae58dc5))
+
 ## [1.29.0-dev.17](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.16...v1.29.0-dev.17) (2026-09-16)
 
 ### 🐛 Bug Fixes
