@@ -66,13 +66,20 @@ internal object StartupHooks {
                     resolvedLauncherActivityDescriptor = findLauncherActivity(doc.documentElement)
                     resolvedNoHistoryActivityDescriptors = findNoHistoryActivities(doc.documentElement)
                     overlayApplicationBridgeOwner = null
+                    println(
+                        "Universal Overlay startup resolution: package=$resolvedPackageName " +
+                            "application=$resolvedApplicationDescriptor " +
+                            "launcher=$resolvedLauncherActivityDescriptor " +
+                            "noHistory=${resolvedNoHistoryActivityDescriptors.size}",
+                    )
                 }
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 resolvedApplicationDescriptor = null
                 resolvedPackageName = null
                 resolvedLauncherActivityDescriptor = null
                 resolvedNoHistoryActivityDescriptors = emptySet()
                 overlayApplicationBridgeOwner = null
+                println("Universal Overlay startup resolution failed: ${error.javaClass.simpleName}: ${error.message}")
             }
         }
     }
@@ -80,9 +87,7 @@ internal object StartupHooks {
     private fun findNoHistoryActivities(root: Element): Set<String> {
         val packageName = root.getAttribute("package")
         val result = mutableSetOf<String>()
-        val activities = root.getElementsByTagName("activity")
-        for (i in 0 until activities.length) {
-            val activity = activities.item(i) as? Element ?: continue
+        for (activity in descendants(root, "activity")) {
             val noHistory = activity.getAttributeNS(NS_ANDROID, "noHistory")
                 .ifEmpty { activity.getAttribute("android:noHistory") }
             if (noHistory == "true") {
@@ -94,30 +99,29 @@ internal object StartupHooks {
         return result
     }
 
+    private fun descendants(root: Element, localName: String): List<Element> {
+        val plain = root.getElementsByTagName(localName)
+        if (plain.length > 0) return (0 until plain.length).mapNotNull { plain.item(it) as? Element }
+        val namespaced = root.getElementsByTagNameNS("*", localName)
+        return (0 until namespaced.length).mapNotNull { namespaced.item(it) as? Element }
+    }
+
     /** Returns the descriptor of the activity with a MAIN/LAUNCHER filter, or null. */
     private fun findLauncherActivity(root: Element): String? {
         val packageName = root.getAttribute("package")
         fun attr(element: Element, name: String): String =
             element.getAttributeNS(NS_ANDROID, name).ifEmpty { element.getAttribute("android:$name") }
-        val activities = root.getElementsByTagName("activity")
-        for (i in 0 until activities.length) {
-            val activity = activities.item(i) as? Element ?: continue
+        for (activity in descendants(root, "activity")) {
             if (attr(activity, "enabled") == "false") continue
             var hasMain = false
             var hasLauncher = false
-            val filters = activity.getElementsByTagName("intent-filter")
-            for (j in 0 until filters.length) {
-                val filter = filters.item(j) as? Element ?: continue
-                val actions = filter.getElementsByTagName("action")
-                for (k in 0 until actions.length) {
-                    val action = actions.item(k) as? Element ?: continue
+            for (filter in descendants(activity, "intent-filter")) {
+                for (action in descendants(filter, "action")) {
                     if (attr(action, "name") == "android.intent.action.MAIN") {
                         hasMain = true
                     }
                 }
-                val categories = filter.getElementsByTagName("category")
-                for (k in 0 until categories.length) {
-                    val category = categories.item(k) as? Element ?: continue
+                for (category in descendants(filter, "category")) {
                     if (attr(category, "name") == "android.intent.category.LAUNCHER") {
                         hasLauncher = true
                     }
@@ -129,23 +133,15 @@ internal object StartupHooks {
                 if (!name.isNullOrEmpty()) return componentDescriptor(name, packageName)
             }
         }
-        val aliases = root.getElementsByTagName("activity-alias")
-        for (i in 0 until aliases.length) {
-            val alias = aliases.item(i) as? Element ?: continue
+        for (alias in descendants(root, "activity-alias")) {
             if (attr(alias, "enabled") == "false") continue
             var hasMain = false
             var hasLauncher = false
-            val filters = alias.getElementsByTagName("intent-filter")
-            for (j in 0 until filters.length) {
-                val filter = filters.item(j) as? Element ?: continue
-                val actions = filter.getElementsByTagName("action")
-                for (k in 0 until actions.length) {
-                    val action = actions.item(k) as? Element ?: continue
+            for (filter in descendants(alias, "intent-filter")) {
+                for (action in descendants(filter, "action")) {
                     if (attr(action, "name") == "android.intent.action.MAIN") hasMain = true
                 }
-                val categories = filter.getElementsByTagName("category")
-                for (k in 0 until categories.length) {
-                    val category = categories.item(k) as? Element ?: continue
+                for (category in descendants(filter, "category")) {
                     if (attr(category, "name") == "android.intent.category.LAUNCHER") hasLauncher = true
                 }
             }

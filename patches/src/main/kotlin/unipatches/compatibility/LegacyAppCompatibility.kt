@@ -261,6 +261,24 @@ private fun resolvedOpenIabActions(
     instructions: List<com.android.tools.smali.dexlib2.iface.instruction.Instruction>,
     endIndex: Int,
 ): Set<String>? {
+    fun reachingString(register: Int, beforeIndex: Int): String? {
+        for (index in beforeIndex - 1 downTo 0) {
+            val previous = instructions[index]
+            if (previous.opcode == Opcode.CONST_STRING || previous.opcode == Opcode.CONST_STRING_JUMBO) {
+                val destination = (previous as? OneRegisterInstruction)?.registerA
+                if (destination == register) {
+                    return ((previous as? ReferenceInstruction)?.reference as? StringReference)?.string
+                }
+            }
+            val destination = when (previous) {
+                is TwoRegisterInstruction -> previous.registerA
+                is OneRegisterInstruction -> previous.registerA
+                else -> null
+            }
+            if (destination == register) return null
+        }
+        return null
+    }
     val actions = mutableSetOf<String>()
     for (index in 0..endIndex) {
         val instruction = instructions[index]
@@ -272,14 +290,7 @@ private fun resolvedOpenIabActions(
         ) continue
 
         val argumentRegister = intentFilterActionArgumentRegister(instruction) ?: return null
-        val candidates = instructions.subList(0, index).mapNotNull { previous ->
-            val string = (previous as? ReferenceInstruction)?.reference as? StringReference ?: return@mapNotNull null
-            if (previous.opcode != Opcode.CONST_STRING && previous.opcode != Opcode.CONST_STRING_JUMBO) return@mapNotNull null
-            val register = (previous as? OneRegisterInstruction)?.registerA ?: return@mapNotNull null
-            if (register == argumentRegister) string.string else null
-        }.toSet()
-        if (candidates.size != 1) return null
-        actions += candidates.single()
+        actions += reachingString(argumentRegister, index) ?: return null
     }
     return actions.takeIf { it.isNotEmpty() }
 }
