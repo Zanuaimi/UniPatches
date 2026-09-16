@@ -1,3 +1,9 @@
+## [1.29.0-dev.16](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.15...v1.29.0-dev.16) (2026-09-16)
+
+### 🐛 Bug Fixes
+
+* Make proper resolve for overlay injection, and add UnityPlugin hooks ([b93c9c3](https://github.com/Zanuaimi/UniPatches/commit/b93c9c344f6b6b1475e4489987801433676a3577))
+
 ## [1.29.0-dev.15](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.14...v1.29.0-dev.15) (2026-09-16)
 
 ### 🔧 Improvements
