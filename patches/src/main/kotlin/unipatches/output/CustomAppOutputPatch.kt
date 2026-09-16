@@ -2,7 +2,6 @@ package unipatches.output
 
 import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.imageOption
-import app.morphe.patcher.patch.intOption
 import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.patch.stringOption
 import helpers.manifest.NS_ANDROID
@@ -36,7 +35,7 @@ val customAppOutputPatch = resourcePatch(
     description = """
         Customize an APK's install identity and launcher presentation in one patch. Start with the
         launcher name or icon; enable Clone only when you need a side-by-side copy. Name, icon,
-        hide-icon, and target-SDK options are
+        hide-icon, and clone options are
         independent. This cannot preserve original-app data when a package or signing identity
         changes. Clone mode rewrites supported manifest identifiers only; it does not rewrite
         bytecode strings, explicit process names, task affinities, or arbitrary SDK configuration.
@@ -45,8 +44,9 @@ val customAppOutputPatch = resourcePatch(
         licenses may therefore not work and cannot be repaired safely by this patch. If PairIP
         Bypass is also enabled, server/package-bound PairIP enforcement can still reject the clone.
 
-        Inspired by Nai64Patches from Nai64: Clone, Custom App Icon, Hide App Icon, and target
-        SDK customization patches.
+        Inspired by Nai64Patches from Nai64: Clone, Custom App Icon, and Hide App Icon patches.
+        For target SDK compatibility, use Improve Legacy App / Game Compatibility for Modern
+        Android Patch. Keeping target SDK handling there avoids duplicate manifest changes.
     """.trimIndent(),
     default = false,
 ) {
@@ -128,19 +128,6 @@ val customAppOutputPatch = resourcePatch(
         default = "",
         key = "customAppOutputCustomIconInput",
         description = "Fallback icon source when Local image is empty: a raw Base64 image string, data:image/...;base64,..., or an HTTPS image URL. Example Base64 input: <base64 string here>. You can encode an image at https://base64.guru/converter/encode/image.",
-    )
-
-    val targetSdkEnabled by booleanOption(
-        title = "Advanced > Android compatibility > Override target SDK",
-        default = false,
-        key = "customAppOutputTargetSdkEnabled",
-        description = "Write a targetSdkVersion into the manifest. Enable only when you need to address an installer compatibility issue, because changing it can alter Android behavior.",
-    )
-    val targetSdk by intOption(
-        title = "Advanced > Android compatibility > Target SDK version",
-        default = 35,
-        key = "customAppOutputTargetSdk",
-        description = "Target SDK used when Override target SDK is enabled. Common current values are 34 or 35. Valid range: 1 to 100.",
     )
 
     execute {
@@ -234,23 +221,6 @@ val customAppOutputPatch = resourcePatch(
                     logger.info("Custom App Output: updated $iconReferences icon reference(s)")
                 }
             } ?: logger.warning("Custom App Output: no <application> element found; name and icon changes were skipped.")
-
-            if (targetSdkEnabled == true) {
-                val requestedTarget = (targetSdk ?: 35).coerceIn(1, 100)
-                val usesSdk = root.getElementsByTagName("uses-sdk").item(0) as? Element
-                val minSdk = usesSdk?.getAttributeNS(NS_ANDROID, "minSdkVersion")?.toIntOrNull()
-                val target = maxOf(requestedTarget, minSdk ?: 1)
-                if (target != requestedTarget) logger.warning("Custom App Output: requested target SDK $requestedTarget is below minSdkVersion $minSdk; using $target instead.")
-                if (usesSdk != null) {
-                    usesSdk.setAttributeNS(NS_ANDROID, "android:targetSdkVersion", target.toString())
-                } else {
-                    val created = manifest.createElement("uses-sdk")
-                    created.setAttributeNS(NS_ANDROID, "android:targetSdkVersion", target.toString())
-                    root.insertBefore(created, root.applicationOrNull())
-                }
-                logger.info("Custom App Output: targetSdkVersion set to $target")
-                logger.info("Custom App Output compatibility: test runtime overlay installation and display overrides after changing target SDK, because Android window and compatibility behavior can vary by target level.")
-            }
         }
     }
 }
