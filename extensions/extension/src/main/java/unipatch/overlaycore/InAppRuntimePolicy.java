@@ -78,7 +78,7 @@ public final class InAppRuntimePolicy {
                 deliver(listener, product, 0, true);
                 return;
             }
-            pending = new Pending(listener, product);
+            pending = new Pending(listener, product, false);
             lastEvent = "Waiting for confirmation: " + product;
         }
         final Pending request;
@@ -87,6 +87,25 @@ public final class InAppRuntimePolicy {
         if (!OverlayRuntime.showInAppPurchaseConfirmation(product)) {
             cancelPending();
         }
+    }
+
+    /** Exact OpenIAB callback bridge used only by the optional overlay addon. */
+    public static void dispatchLegacy(Object listener, String product) {
+        if (listener == null) return;
+        String normalized = valid(product) ? normalize(product) : "morphe_fake";
+        synchronized (InAppRuntimePolicy.class) {
+            if (!configured || !popupEnabled || SAVED.contains(normalized) || pending != null) {
+                lastEvent = "Emulated legacy purchase delivered: " + normalized;
+                deliverLegacy(listener, normalized, true);
+                return;
+            }
+            pending = new Pending(listener, normalized, true);
+            lastEvent = "Waiting for legacy confirmation: " + normalized;
+        }
+        final Pending request;
+        synchronized (InAppRuntimePolicy.class) { request = pending; }
+        MAIN.postDelayed(() -> timeout(request), 30000L);
+        if (!OverlayRuntime.showInAppPurchaseConfirmation(normalized)) cancelPending();
     }
 
     private static void timeout(Pending request) {
@@ -102,7 +121,8 @@ public final class InAppRuntimePolicy {
         if (request == null) return;
         if (save && SAVED.size() < MAX_SAVED_PURCHASES) SAVED.add(request.product);
         lastEvent = "Emulated purchase delivered: " + request.product;
-        deliver(request.listener, request.product, 0, true);
+        if (request.legacy) deliverLegacy(request.listener, request.product, true);
+        else deliver(request.listener, request.product, 0, true);
     }
 
     public static synchronized void cancelPending() {
@@ -110,7 +130,8 @@ public final class InAppRuntimePolicy {
         pending = null;
         if (request == null) return;
         lastEvent = "Purchase cancelled: " + request.product;
-        deliver(request.listener, request.product, 1, false);
+        if (request.legacy) deliverLegacy(request.listener, request.product, false);
+        else deliver(request.listener, request.product, 1, false);
     }
 
     private static String productId(Object first, Object second) {
@@ -175,6 +196,26 @@ public final class InAppRuntimePolicy {
         } catch (ReflectiveOperationException | RuntimeException ignored) { }
     }
 
+    private static void deliverLegacy(Object listener, String product, boolean includePurchase) {
+        try {
+            Class<?> resultClass = Class.forName("org.onepf.oms.appstore.googleUtils.IabResult");
+            Object result = resultClass.getConstructor(int.class, String.class)
+                    .newInstance(includePurchase ? 0 : 1, includePurchase ? "Success" : "Cancelled");
+            Object purchase = null;
+            if (includePurchase) {
+                Class<?> purchaseClass = Class.forName("org.onepf.oms.appstore.googleUtils.Purchase");
+                String json = "{\"productId\":\"" + jsonEscape(product) + "\",\"orderId\":\"morphe_fake\",\"purchaseToken\":\"morphe_fake\",\"purchaseState\":0,\"purchaseTime\":0}";
+                purchase = purchaseClass.getConstructor(String.class).newInstance(json);
+            }
+            for (Method method : listener.getClass().getMethods()) {
+                if ("onIabPurchaseFinished".equals(method.getName()) && method.getParameterTypes().length == 2) {
+                    method.invoke(listener, result, purchase);
+                    return;
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException ignored) { }
+    }
+
     private static String jsonEscape(String value) {
         StringBuilder result = new StringBuilder(value.length() + 8);
         for (int i = 0; i < value.length(); i++) {
@@ -196,7 +237,9 @@ public final class InAppRuntimePolicy {
     }
 
     private static final class Pending {
-        final Object listener; final String product;
-        Pending(Object listener, String product) { this.listener = listener; this.product = product; }
+        final Object listener; final String product; final boolean legacy;
+        Pending(Object listener, String product, boolean legacy) {
+            this.listener = listener; this.product = product; this.legacy = legacy;
+        }
     }
 }

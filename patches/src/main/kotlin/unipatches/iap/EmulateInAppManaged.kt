@@ -258,6 +258,47 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
             }
         }
 
+        // OpenIAB legacy purchase flow. Keep this phase exact and optional:
+        // it only replaces the public OpenIabHelper overloads when the InApp
+        // overlay is enabled, leaving normal legacy store behavior untouched
+        // when the addon is not selected.
+        if (inventoryOptionsProvider().third) {
+            val openIabHelper = "Lorg/onepf/oms/OpenIabHelper;"
+            val legacyPurchaseSignatures = listOf(
+                listOf(
+                    "Landroid/app/Activity;", "Ljava/lang/String;", "I",
+                    "Lorg/onepf/oms/appstore/googleUtils/IabHelper${'$'}OnIabPurchaseFinishedListener;",
+                ),
+                listOf(
+                    "Landroid/app/Activity;", "Ljava/lang/String;", "I",
+                    "Lorg/onepf/oms/appstore/googleUtils/IabHelper${'$'}OnIabPurchaseFinishedListener;", "Ljava/lang/String;",
+                ),
+                listOf(
+                    "Landroid/app/Activity;", "Ljava/lang/String;", "Ljava/lang/String;", "I",
+                    "Lorg/onepf/oms/appstore/googleUtils/IabHelper${'$'}OnIabPurchaseFinishedListener;", "Ljava/lang/String;",
+                ),
+            )
+            for (signature in legacyPurchaseSignatures) {
+                patchAll(Fingerprint(
+                    name = "launchPurchaseFlow",
+                    definingClass = openIabHelper,
+                    returnType = "V",
+                    custom = { method, _ -> method.parameterTypes == signature },
+                ), "OpenIAB.launchPurchaseFlow", 2) { method ->
+                    val skuIndex = 1
+                    val listenerIndex = signature.indexOfFirst { it.contains("OnIabPurchaseFinishedListener") }
+                    val sku = parameterRegister(method, skuIndex)
+                    val listener = parameterRegister(method, listenerIndex)
+                    method.addInstructions(0, """
+                        move-object/from16 v0, $listener
+                        move-object/from16 v1, $sku
+                        invoke-static {v0, v1}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatchLegacy(Ljava/lang/Object;Ljava/lang/String;)V
+                        return-void
+                    """.trimIndent())
+                }
+            }
+        }
+
         // Unity IL2CPP native bridge (BillingClientImpl.launchBillingFlowCpp):
         // exact-name fingerprint above misses it, so cover by return type.
         patchAll(Fingerprint(name = "launchBillingFlowCpp", custom = { _, c -> isBillingNamespace(c.type) }), "launchBillingFlowCpp", 2) {
@@ -924,9 +965,6 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
             }
         }
 
-        patchAll(Fingerprint(returnType = "Z", custom = { m, c -> c.type.contains("Security") && m.name.lowercase().contains("verify") }), "Security.verify") {
-            it.addInstructions(0, "const/4 v0, 0x1\nreturn v0")
-        }
         // Unity CrossPlatformValidator
         patchAll(Fingerprint(returnType = "Z", custom = { m, c -> c.type.contains("CrossPlatformValidator") || (c.type.contains("Validator") && m.name.lowercase().contains("valid")) }), "CrossPlatformValidator") {
             it.addInstructions(0, "const/4 v0, 0x1\nreturn v0")
