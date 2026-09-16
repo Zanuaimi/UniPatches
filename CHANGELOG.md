@@ -1,3 +1,9 @@
+## [1.29.0-dev.10](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.9...v1.29.0-dev.10) (2026-09-16)
+
+### ✨ New Features
+
+* **compatibility:** Add OpenIAB parameter handling fix for older android, especially when used with Target SDK spoof. ([2fb98b2](https://github.com/Zanuaimi/UniPatches/commit/2fb98b2a454ed745aee6c0265b3b3872268780e8))
+
 ## [1.29.0-dev.9](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.8...v1.29.0-dev.9) (2026-09-16)
 
 ### ✨ New Features

@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.29.0-dev.9",
+  "version": "1.29.0-dev.10",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -1052,7 +1052,7 @@
     {
       "name": "Improve Legacy App / Game Compatibility for Modern Android Patch ( Enhanced )",
       "category": "Legacy App Compatibility",
-      "description": "Improve compatibility for older apps and games on modern Android versions. This patch combines\nlegacy manifest, storage, screen, native runtime, network, shared-library, and optional device\nidentity compatibility controls. Spoof Target SDK can help older apps that modern Android may\nrefuse to install or launch, but changing the reported target can also enable newer platform\nbehavior and cannot repair incompatible application code.\n\nFor Google Play license checks or Google Play Services checks, use Control Embedded Auth / Stores\nPatch. Those options are intentionally kept separate to prevent overlapping injections.\n\nThis patch cannot restore shut-down servers, missing CPU architecture support, server licensing,\nPlay Integrity, or unsupported native code. Conservative compatibility features are enabled by\ndefault; more invasive native, network, storage, library, and identity options remain disabled.\n\nCredits: Nai64Patches from Nai64 for the original legacy compatibility functionality. UniPatches\nprovides the merged settings, validation, manifest safeguards, and compatibility organization.",
+      "description": "Improve compatibility for older apps and games on modern Android versions. This patch combines\nlegacy manifest, storage, screen, native runtime, network, shared-library, and optional device\nidentity compatibility controls, including a configurable OpenIAB dynamic receiver compatibility\nfix. Spoof Target SDK can help older apps that modern Android may\nrefuse to install or launch, but changing the reported target can also enable newer platform\nbehavior and cannot repair incompatible application code.\n\nFor Google Play license checks or Google Play Services checks, use Control Embedded Auth / Stores\nPatch. Those options are intentionally kept separate to prevent overlapping injections.\n\nThis patch cannot restore shut-down servers, missing CPU architecture support, server licensing,\nPlay Integrity, or unsupported native code. Conservative compatibility features are enabled by\ndefault; more invasive native, network, storage, library, and identity options remain disabled.\n\nCredits: Nai64Patches from Nai64 for the original legacy compatibility functionality. UniPatches\nprovides the merged settings, validation, manifest safeguards, and compatibility organization.",
       "default": false,
       "dependencies": [],
       "compatiblePackages": null,
@@ -1119,6 +1119,19 @@
           "type": "kotlin.Boolean",
           "default": true,
           "values": null
+        },
+        {
+          "key": "legacyCompatibilityOpenIabReceiverRegistrationMode",
+          "title": "Legacy App Compatibility > Runtime compatibility > Fix OpenIAB dynamic receiver registration",
+          "description": "Automatic applies the fix only when the exact OpenIAB UnityPlugin call, receiver ownership, resolvable IntentFilter actions, app-local or system actions, no known external-store actions, and safe register layout are confirmed. Disabled leaves OpenIAB unchanged. Force applies the exact OpenIAB method fix for troubleshooting. Automatic is recommended.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "automatic",
+          "values": {
+            "Automatic (recommended)": "automatic",
+            "Disabled": "disabled",
+            "Force OpenIAB receiver fix": "force"
+          }
         },
         {
           "key": "legacyCompatibilityRepairExportFlags",

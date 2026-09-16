@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-16T10:19:54",
-  "description": "## [1.29.0-dev.9](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.8...v1.29.0-dev.9) (2026-09-16)\n\n### ✨ New Features\n\n* **output:** Add patch option to preserve app data after uninstall ([c39c411](https://github.com/Zanuaimi/UniPatches/commit/c39c4113728feb8730210b52d14be1198cc2d5ef))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.9/patches-1.29.0-dev.9.mpp",
+  "created_at": "2026-09-16T10:59:28",
+  "description": "## [1.29.0-dev.10](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.9...v1.29.0-dev.10) (2026-09-16)\n\n### ✨ New Features\n\n* **compatibility:** Add OpenIAB parameter handling fix for older android, especially when used with Target SDK spoof. ([2fb98b2](https://github.com/Zanuaimi/UniPatches/commit/2fb98b2a454ed745aee6c0265b3b3872268780e8))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.10/patches-1.29.0-dev.10.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.9"
+  "version": "1.29.0-dev.10"
 }
