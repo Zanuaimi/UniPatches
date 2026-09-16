@@ -97,6 +97,57 @@ or partially configured. Their provider should return an empty list instead of t
 runtime must isolate provider and module failures from universal modules. Session settings belong in
 `OverlaySessionState`; they must not be persisted in Android storage.
 
+The InApp provider is `modules/iap/InAppEmulationRuntimeProvider.java`, registered under the
+`inAppEmulation` profile. It contributes one `InApp Emulation` module when `InAppRuntimePolicy`
+has been configured by Emulate InApp. Its enable toggle controls purchase-time confirmation
+popups, while its Settings popup presents saved product identifiers as checkbox rows. Unchecking a
+row removes it after confirmation. The saved list is bounded, normalized, duplicate-free, and
+process-local.
+
+`InAppRuntimePolicy.java` receives the listener and product-related arguments from the managed
+billing patch. It either delivers the emulated result immediately or retains one pending callback
+while the shared confirmation popup is displayed. Saved products and disabled popups bypass the
+prompt. `No` delivers a cancellation result without a purchase; `Yes` delivers the emulated purchase
+and may save the identifier. Timeout and Activity-detach paths cancel pending requests. This policy
+does not control catalog discovery, legacy inventory behavior, receipt verification, billing
+availability, or native IL2CPP patching.
+
+## Popup windows
+
+All runtime popup windows must use `OverlayPopupFrame` and the controller's shared helpers. This
+includes module Settings, runtime log viewing, close confirmation, and InApp purchase confirmation.
+Popup windows inherit the configured overlay context, background, foreground and text colors,
+corners, outline, spacing, typography, animations, and bottom-button styling.
+
+Headers must be added through `OverlayPopupFrame.addHeader`, which honors `Show extra popup headers`.
+Popup code must not create platform dialogs, system-level windows, persistent storage, or
+app-specific theme assumptions. Popup creation is dispatched to the Android main thread and must
+reject finishing or destroyed Activities.
+
+The InApp confirmation popup has this exact contract:
+
+- optional header: `Emulate InApp Purchase Confirmation`;
+- description using UI color 3: `Do you want to try to emulate in-app purchase for this product?`;
+- checkbox: `Save purchase for skipping purchase popup`;
+- bottom buttons: `No` and `Yes`.
+
+The module Settings popup reuses the existing `OverlayActionModule` checkbox-list contract and has
+no one-shot action button. Saved purchases are cleared when the app process ends or the overlay is
+fully closed.
+
+## Current built-in module inventory
+
+Universal Overlay currently provides:
+
+- Statistic modules: FPS, battery, memory, network, device information, temperature, system time,
+  and session time, with optional floating monitors.
+- Activity modules: keep awake, fullscreen, screenshots, brightness, rotation, and app audio mute.
+- Hook modules: disable haptics and disable animations.
+- System modules: Do Not Disturb, guarded by notification-policy access.
+- Advanced modules: Overlay Runtime Logs, with optional activation at app launch.
+- Integrated modules: Control App Ads runtime controls and InApp Emulation when their companion
+  policies are configured.
+
 ## Statistic modules
 
 Menu values update only while the menu is visible. Floating monitors update only while the menu is

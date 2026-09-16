@@ -13,6 +13,12 @@ The patch adds an in-app floating button and an optional menu. The menu is confi
 patching, while selected modules can be enabled, disabled, and customized at runtime. The overlay
 belongs to the patched app's Activity content; it is not an Android system-level window.
 
+The runtime also owns overlay-styled popups for module settings, confirmation prompts, runtime
+logs, and integrated modules. These popups inherit the configured overlay colors, corner style,
+outline, animations, spacing, typography, header visibility, and bottom-button style. The
+`Show extra popup headers` setting controls popup headers while the main overlay menu title remains
+visible.
+
 ## Overlay variants
 
 Every overlay variant uses the same Overlay Core. A variant supplies identity, configuration defaults,
@@ -182,28 +188,29 @@ then select Universal Overlay or an app-specific overlay patch. The complete use
 1. Select `Control App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` and `UniPatches Universal Overlay Patch`, or select the HCR
    companion together with Universal Overlay when building the HCR example. App-specific companions
    add modules to Universal; they do not install a second shared overlay bridge.
-2. In Control App Ads, enable `Overlay integration > Enable runtime controls`.
-3. Under `Overlay integration > Runtime controls`, enable `Block Ads`, `Ads Free Rewards`,
+2. Under `Overlay integration > Runtime controls`, enable `Block Ads`, `Ads Free Rewards`,
    and/or `Block Ads / Tracking Hosts`. These module switches are disabled by default. `Block Ads`
    requires `Enable No Ads`, and `Ads Free Rewards` requires `Enable Ads Free Rewards`; disabling
    either master prevents its runtime module from being exposed. The host module requires only
    runtime policy and starts according to `Enable Block Ads / Tracking Hosts`. The runtime controls
    mirror the relevant Ads patch settings initially.
-4. Patch the APK. Control App Ads initializes the session policy from its ordinary settings during
+3. Selecting at least one runtime control automatically enables the Ads runtime policy. Patch the
+   APK. Control App Ads initializes the session policy from its ordinary settings during
    Application startup, and the overlay reads that policy when its menu opens. The two patches do
-   not depend on patch ordering. If runtime controls are enabled without selecting any runtime
-   module, the request is logged and normal permanent patching is used instead.
-5. Open the overlay. A section named `Ad control hook modules` appears only when the policy was
+   not depend on patch ordering. If no runtime control is selected, no Ads runtime policy is
+   created and the ordinary static patch behavior is used.
+4. Open the overlay. A section named `Ad control hook modules` appears only when the policy was
    initialized and at least one runtime module was selected. Use its Settings popup or checkbox to
    change the policy for the current app process.
 
-The runtime module is an optional bridge, not a second ad patch. When runtime controls are enabled
-with at least one selected module, static behavior is replaced by guarded instrumentation for the
+The runtime module is an optional bridge, not a second ad patch. When at least one eligible runtime
+control is selected, static behavior is replaced by guarded instrumentation for the
 selected capabilities and the initial control values mirror the corresponding Control App Ads
 settings. The selected runtime module controls which instrumented paths are policy-aware; unrelated
 SDK initialization and unsupported paths retain their original behavior. Later changes are
-session-local and reset when the process restarts. If runtime controls are enabled without modules,
-the patch falls back to ordinary permanent behavior and logs that decision. Only SDK methods,
+session-local and reset when the process restarts. If a selected control is incompatible with its
+master setting, that control is not exposed and unaffected paths retain their ordinary behavior.
+Only SDK methods,
 availability checks, and literal hosts successfully instrumented by Control App Ads can respond;
 native, encrypted, dynamically generated, or unsupported paths remain unchanged. If no overlay patch
 is selected, Control App Ads still applies its normal static changes, but no runtime menu can be
@@ -222,6 +229,21 @@ after the Application superclass startup completes so SDK initialization runs wi
 The Ads provider is registered by `OverlayRuntime`, and its modules are added only when the decoded
 policy is integrated and contains a selected module bit. Malformed policies fail open and produce no
 Ads modules.
+
+`Emulate InApp Patch ( Experimental, Enhanced, Has Overlay Addon )` can optionally add the
+`InApp Emulation` integrated module. Its `Enable Overlay Module` setting requires Universal Overlay
+in the same patch operation. The separate initial-popup setting controls the first process-session
+state and can later be changed from the module toggle. The module Settings popup manages saved
+product identifiers for the current session.
+
+Its purchase confirmation popup uses the shared `OverlayPopupFrame`, UI color 3 for the description,
+the configured bottom-button styling, and the optional header
+`Emulate InApp Purchase Confirmation`. The description is
+`Do you want to try to emulate in-app purchase for this product?`. The save checkbox is
+`Save purchase for skipping purchase popup`, with exactly `No` and `Yes` buttons. `No` cancels the
+pending request; `Yes` completes the emulated purchase and optionally saves its product identifier.
+This overlay behavior remains separate from catalog discovery, legacy inventory behavior, receipt
+verification, billing availability, and native IL2CPP patching.
 
 `Import UI preset` accepts a path to a JSON file and is used only in Custom mode. A valid supported
 preset overrides the visible settings during patching; an empty, unreadable, malformed, or
@@ -249,8 +271,11 @@ This is the Morphe patch entry point. It:
 - validates user configuration;
 - serializes configuration into a Base64-delimited payload;
 - includes the extension DEX through extensions/extension.mpe;
+- exposes optional Statistic, Activity, Hook, System, and Advanced module settings;
+- supports Do Not Disturb and Overlay Runtime Logs as optional built-in modules;
+- supports popup-window header, typography, color, spacing, animation, and bottom-button settings;
 - finds the real Application onCreate method when possible;
-- configures the optional Ads Runtime Policy after Application superclass startup completes;
+- configures optional Ads and InApp runtime policies after Application superclass startup completes;
 - injects a small bridge call using safe temporary registers;
 - falls back to a suitable Activity onCreate method when an Application entry point is unavailable.
 
@@ -263,10 +288,21 @@ This contains the shared safe-register bridge injection and Application/Activity
 It also attaches a queued Ads policy to the exact overlay bridge when Control App Ads is selected.
 App-specific patch entries should call these helpers rather than implementing a second injector.
 
+It also attaches a queued InApp policy to the exact bridge when Emulate InApp is selected. The
+bridge identity includes the patch context, owner type, method name, return type, and parameter
+types, allowing either patch to run first without selecting a second Activity or injecting a second
+startup bridge.
+
 patches/src/main/kotlin/unipatches/overlay/OverlayAdsRuntimeIntegration.kt
 
 This is the patch-process-only coordination layer between Control App Ads and an overlay patch. It stores the
 pending policy and exact bridge identity temporarily; it does not become part of the patched APK.
+
+patches/src/main/kotlin/unipatches/overlay/OverlayInAppRuntimeIntegration.kt
+
+This is the equivalent patch-process coordination layer for InApp Emulation. It queues the session
+policy when Emulate InApp runs first and records an exact unconfigured bridge when Universal Overlay
+runs first.
 
 patches/src/main/kotlin/unipatches/overlay/OverlayConfigPayload.kt
 
@@ -301,6 +337,7 @@ UniPatches
 |   |-- HillClimbRacingOverlayExamplePatch.kt app-specific shared-core example
 |   |-- OverlayInjection.kt             shared bridge injection and fallback helpers
 |   |-- OverlayAdsRuntimeIntegration.kt patch-process Ads policy coordination
+|   |-- OverlayInAppRuntimeIntegration.kt patch-process InApp policy coordination
 |   |-- presets/OverlayPreset.kt         Shared preset model and value builder
 |   |-- presets/OverlayPresetCatalog.kt Central preset registry
 |   |-- presets/UniPatchesPreset.kt     UniPatches preset
@@ -322,7 +359,9 @@ UniPatches
     |-- OverlayLifecycle.java Lifecycle callback adapter
     |-- OverlayConfig.java    Configuration decoder and fallbacks
     |-- AdsRuntimePolicy.java process-local Ads runtime policy
+    |-- InAppRuntimePolicy.java session-local InApp callback and popup policy
     |-- OverlayViews.java     Shared view and style construction
+    |-- OverlayPopupFrame.java shared popup card and header styling
     `-- modules/
         |-- OverlayModule.java          common contract
         |-- OverlayActionModule.java    settings and optional one-shot action contract
@@ -335,7 +374,8 @@ UniPatches
         |-- activity/                            Activity implementations
         |-- statistic/                           statistic implementations
         |-- hook/                                hook implementations
-        `-- ads/                                 integrated Ads runtime provider and modules
+        |-- ads/                                 integrated Ads runtime provider and modules
+        `-- iap/                                 integrated InApp Emulation provider
 ```
 
 Module inheritance is intentionally separated by responsibility:
@@ -377,6 +417,7 @@ This is the runtime coordinator. It:
 - coordinates module state, lifecycle state, and restoration;
 - isolates failures so an unsupported feature does not crash the host app;
 - fully closes and unregisters the overlay across all Activities.
+- provides the shared main-thread entry point for integrated confirmation popups.
 
 The controller is Activity-specific. Shared state is used only for intentional cross-Activity
 settings such as module toggles, monitor toggles, button position, and temporary Activity feature
@@ -426,6 +467,10 @@ checkboxes, and dropdowns.
 Overlay views use an isolated Android theme context and then apply configured colors explicitly. This
 prevents a host app's legacy or custom theme from changing checkbox, spinner, slider, or overlay
 button appearance.
+
+`OverlayPopupFrame.java` is the shared card container for settings, confirmation, log, and close
+popups. Popup code should use it and the controller's shared text, action, animation, and checkbox
+helpers rather than platform dialogs or duplicate theme code.
 
 ### Action-module settings lifecycle
 
@@ -483,6 +528,27 @@ The base class owns hook isolation. Hooks must tolerate unsupported APIs, unexpe
 dynamic host behavior. Hook failures are contained so they do not propagate to the app or prevent
 other module categories from operating.
 
+### System and advanced modules
+
+System modules use `OverlaySystemModule` for controlled device or window services. The current
+`Do Not Disturb` module requires Android notification-policy access before changing system state
+and restores its prior state when stopped.
+
+Advanced modules use `OverlayAdvancedModule`. The current `Overlay Runtime Logs` module exposes
+session diagnostics from the shared logger, supports clearing the log, and can be enabled at app
+launch independently from other modules. Runtime logging is best-effort and isolated from the host.
+
+### Integrated modules
+
+Integrated providers are registered centrally by `OverlayRuntime` and activated by a policy from
+another patch. The current providers are Control App Ads and InApp Emulation. They appear in
+separate menu sections only when their policy is valid and active. Provider and module failures are
+isolated from universal modules.
+
+InApp Emulation uses the shared `OverlayActionModule` settings flow for popup enablement and
+session-only saved product management. Its asynchronous purchase confirmation is a separate
+runtime popup, not a one-shot module action.
+
 ## Runtime flow
 
 1. Morphe builds the patch with the selected settings and, in Custom mode, optionally imports a UI preset.
@@ -495,7 +561,9 @@ other module categories from operating.
 7. Menu and monitor updates follow their separate visibility rules.
 8. Pause stops visible-work updates, destruction removes the controller, and full close removes all
    controllers and unregisters the runtime.
-9. In Custom mode, an optional UI preset is exported after patching. Export errors do not affect the
+9. Integrated purchase callbacks can request a shared confirmation popup; creation is marshaled to
+   the main UI thread and cancelled if its Activity is destroyed.
+10. In Custom mode, an optional UI preset is exported after patching. Export errors do not affect the
    patched APK.
 
 If content attachment is unavailable for an unusual Activity, setup failure is caught and the host
