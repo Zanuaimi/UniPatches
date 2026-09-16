@@ -19,6 +19,27 @@ outline, animations, spacing, typography, header visibility, and bottom-button s
 `Show extra popup headers` setting controls popup headers while the main overlay menu title remains
 visible.
 
+Extra popup headers are enabled by default in the current Universal Overlay settings. Presets and
+imported Custom configurations may explicitly disable them.
+
+## Startup bridge and patch coordination
+
+Universal Overlay uses one shared startup bridge per patch operation. It prefers the resolved
+Application `onCreate()` method, then the manifest-resolved launcher Activity, and finally a
+restricted application-owned Activity fallback. The resolver accepts framework ancestors that are
+not packaged in the APK, including `android.app.NativeActivity`, while excluding no-history and
+unrelated framework or SDK Activities.
+
+After injection, the final cloned method is verified to contain `OverlayRuntime.install()` or
+`installActivity()`. Control App Ads and InApp Emulation policies are marked attached only when
+their configuration calls are also present in that same verified bridge. Companion patches share
+the exact owner, method, return type, and parameter list through the temporary patch-run marker,
+so they do not guess separate Activities or create another runtime. If verification fails, runtime
+addons are not exposed even when their provider classes are bundled.
+
+The floating button is Activity-content UI, not a system-level window. It requires a successful
+bridge installation and a compatible resumed Activity.
+
 ## Overlay variants
 
 Every overlay variant uses the same Overlay Core. A variant supplies identity, configuration defaults,
@@ -244,6 +265,20 @@ the configured bottom-button styling, and the optional header
 pending request; `Yes` completes the emulated purchase and optionally saves its product identifier.
 This overlay behavior remains separate from catalog discovery, legacy inventory behavior, receipt
 verification, billing availability, and native IL2CPP patching.
+
+If the InApp policy was not configured through a verified shared bridge, the provider remains hidden
+and the InApp module is not shown. Managed purchase emulation and catalog behavior remain separate
+from popup presentation.
+
+Universal Overlay also includes the `Do Not Disturb` system module. Selecting it adds
+`android.permission.ACCESS_NOTIFICATION_POLICY` when needed, but the user must still grant
+notification-policy access in Android system settings. The module does not grant access silently.
+Battery, temperature, and DND receivers use API-gated receiver flags on Android 13 and newer while
+retaining the legacy overload on older Android versions.
+
+The `Overlay Runtime Logs` advanced module records runtime diagnostics for the current process. It
+can be included and optionally activated at launch. Logs can be viewed and cleared from the shared
+popup UI and are cleared when the overlay is fully closed or the process ends.
 
 `Import UI preset` accepts a path to a JSON file and is used only in Custom mode. A valid supported
 preset overrides the visible settings during patching; an empty, unreadable, malformed, or

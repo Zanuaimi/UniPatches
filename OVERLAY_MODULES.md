@@ -18,6 +18,19 @@ Activity controllers, view attachment, state restoration, update scheduling, pro
 and failure isolation. It is shared by ordinary Android apps, Unity games, Godot games, and apps
 with multiple Activities.
 
+Universal Overlay installs one shared startup bridge. It prefers the manifest-resolved Application
+entry point, then the manifest-resolved launcher Activity, and finally a restricted application-owned
+Activity fallback. The launcher resolver is namespace-safe and accepts valid framework ancestors
+that are not packaged in the APK, such as `android.app.NativeActivity`. It excludes no-history and
+unrelated framework or SDK Activities. The patch verifies the final `install()` or
+`installActivity()` call before treating the runtime as installed.
+
+Companion patches coordinate through the exact temporary bridge marker containing the owner, method,
+return type, and parameter list. Control App Ads and InApp Emulation attach their policies to that
+bridge only after it is verified. A missing or unverified bridge produces a diagnostic and no
+dependent runtime module is exposed. Providers can be bundled in the extension without appearing in
+the menu until their process-local policy is configured.
+
 Use the matching base class:
 
 - OverlayActivityModule for temporary Activity/window behavior.
@@ -102,7 +115,7 @@ The InApp provider is `modules/iap/InAppEmulationRuntimeProvider.java`, register
 has been configured by Emulate InApp. Its enable toggle controls purchase-time confirmation
 popups, while its Settings popup presents saved product identifiers as checkbox rows. Unchecking a
 row removes it after confirmation. The saved list is bounded, normalized, duplicate-free, and
-process-local.
+process-local. The provider also rejects null or unsupported Activities safely.
 
 `InAppRuntimePolicy.java` receives the listener and product-related arguments from the managed
 billing patch. It either delivers the emulated result immediately or retains one pending callback
@@ -123,6 +136,10 @@ Headers must be added through `OverlayPopupFrame.addHeader`, which honors `Show 
 Popup code must not create platform dialogs, system-level windows, persistent storage, or
 app-specific theme assumptions. Popup creation is dispatched to the Android main thread and must
 reject finishing or destroyed Activities.
+
+Extra popup headers are enabled by default in the current Universal Overlay settings, although a
+preset or imported Custom configuration may explicitly disable them. Header titles use the shared
+title typography, alignment, icon placement, separator, and colors.
 
 The InApp confirmation popup has this exact contract:
 
@@ -147,6 +164,12 @@ Universal Overlay currently provides:
 - Advanced modules: Overlay Runtime Logs, with optional activation at app launch.
 - Integrated modules: Control App Ads runtime controls and InApp Emulation when their companion
   policies are configured.
+
+The Do Not Disturb module also requires the Android notification-policy permission and a user-granted
+system access setting. Universal Overlay adds the manifest declaration when the module is selected,
+but it cannot grant the access itself. Battery, temperature, and DND dynamic receivers use
+`RECEIVER_NOT_EXPORTED` on Android 13 and newer where they are internal or system-state observers,
+while older Android releases use the two-argument compatibility overload.
 
 ## Statistic modules
 
@@ -202,6 +225,12 @@ to valid bounds, and patch-time warnings identify values that were clamped.
 ## Review checklist
 
 - No target-package, class-name, engine, or APK-specific assumptions.
+- Startup injection must prefer the manifest-resolved Application or launcher and verify the final
+  bridge before dependent policies are marked attached.
+- Integrated providers must return no modules until their policy is configured and the shared bridge
+  has succeeded.
+- Dynamic receivers must use API-appropriate flags and must not broaden export scope without a
+  verified external broadcast requirement.
 - No local patch build is required for normal development; the release workflow builds the patch.
 - git diff --check passes.
 - New UI uses the overlay context and configured colors, not the host Activity theme.
