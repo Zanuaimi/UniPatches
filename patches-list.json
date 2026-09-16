@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.29.0-dev.8",
+  "version": "1.29.0-dev.9",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -765,7 +765,7 @@
     {
       "name": "Custom App Output Patch (Experimental, Enhanced)",
       "category": "Custom App Output Enhanced",
-      "description": "Customize an APK's install identity and launcher presentation in one patch. Start with the\nlauncher name or icon; enable Clone only when you need a side-by-side copy. Name, icon,\nhide-icon, and clone options are\nindependent. This cannot preserve original-app data when a package or signing identity\nchanges. Clone mode rewrites supported manifest identifiers only; it does not rewrite\nbytecode strings, explicit process names, task affinities, or arbitrary SDK configuration.\nA clone has a new Android package identity and normally a new signing identity: package- or\ncertificate-bound OAuth, Firebase, Google Play Games, billing, deep links, and server\nlicenses may therefore not work and cannot be repaired safely by this patch. If PairIP\nBypass is also enabled, server/package-bound PairIP enforcement can still reject the clone.\n\nInspired by Nai64Patches from Nai64: Clone, Custom App Icon, and Hide App Icon patches.\nFor target SDK compatibility, use Improve Legacy App / Game Compatibility for Modern\nAndroid Patch. Keeping target SDK handling there avoids duplicate manifest changes.",
+      "description": "Customize an APK's install identity and launcher presentation in one patch. Start with the\nlauncher name or icon; enable Clone only when you need a side-by-side copy. Name, icon,\nhide-icon, and clone options are\nindependent. This cannot preserve original-app data when a package or signing identity\nchanges. Clone mode rewrites supported manifest identifiers only; it does not rewrite\nbytecode strings, explicit process names, task affinities, or arbitrary SDK configuration.\nA clone has a new Android package identity and normally a new signing identity: package- or\ncertificate-bound OAuth, Firebase, Google Play Games, billing, deep links, and server\nlicenses may therefore not work and cannot be repaired safely by this patch. If PairIP\nBypass is also enabled, server/package-bound PairIP enforcement can still reject the clone.\n\nInspired by Nai64Patches from Nai64: Clone, Custom App Icon, and Hide App Icon patches.\nThe optional Preserve App Data After Uninstall setting applies Android's fragile-user-data\nand backup compatibility flags. It does not guarantee data retention, and it cannot carry\ndata from the original package into a clone with a different package identity.\nFor target SDK compatibility, use Improve Legacy App / Game Compatibility for Modern\nAndroid Patch. Keeping target SDK handling there avoids duplicate manifest changes.",
       "default": false,
       "dependencies": [],
       "compatiblePackages": null,
@@ -834,6 +834,15 @@
           "required": false,
           "type": "kotlin.Boolean",
           "default": true,
+          "values": null
+        },
+        {
+          "key": "customAppOutputPreserveAppData",
+          "title": "Advanced > App data compatibility > Preserve App Data After Uninstall",
+          "description": "Ask Android to preserve app data when uninstalling and offer it for restoration on reinstall. This is best-effort, may be affected by Android version and backup policy, and cannot preserve data across a changed clone package identity.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
           "values": null
         },
         {

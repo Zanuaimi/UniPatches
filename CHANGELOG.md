@@ -1,3 +1,9 @@
+## [1.29.0-dev.9](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.8...v1.29.0-dev.9) (2026-09-16)
+
+### ✨ New Features
+
+* **output:** Add patch option to preserve app data after uninstall ([c39c411](https://github.com/Zanuaimi/UniPatches/commit/c39c4113728feb8730210b52d14be1198cc2d5ef))
+
 ## [1.29.0-dev.8](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.7...v1.29.0-dev.8) (2026-09-16)
 
 ### 🐛 Bug Fixes
