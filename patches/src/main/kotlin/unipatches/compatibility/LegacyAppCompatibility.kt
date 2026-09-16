@@ -239,7 +239,7 @@ private const val OPEN_IAB_AUTOMATIC = "automatic"
 private const val OPEN_IAB_DISABLED = "disabled"
 private const val OPEN_IAB_FORCE = "force"
 
-private fun addActionArgumentRegister(instruction: ReferenceInstruction): Int? = when (instruction) {
+private fun intentFilterActionArgumentRegister(instruction: ReferenceInstruction): Int? = when (instruction) {
     is BuilderInstruction35c -> if (instruction.registerCount == 2) instruction.registerD else null
     is BuilderInstruction3rc -> if (instruction.registerCount == 2) instruction.startRegister + 1 else null
     else -> null
@@ -254,12 +254,12 @@ private fun resolvedOpenIabActions(
         val instruction = instructions[index]
         val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference ?: continue
         if (reference.definingClass != "Landroid/content/IntentFilter;" ||
-            reference.name != "addAction" ||
+            reference.name !in setOf("<init>", "addAction") ||
             reference.returnType != "V" ||
             reference.parameterTypes != listOf("Ljava/lang/String;")
         ) continue
 
-        val argumentRegister = addActionArgumentRegister(instruction) ?: return null
+        val argumentRegister = intentFilterActionArgumentRegister(instruction) ?: return null
         val candidates = instructions.subList(0, index).mapNotNull { previous ->
             val string = (previous as? ReferenceInstruction)?.reference as? StringReference ?: return@mapNotNull null
             if (previous.opcode != Opcode.CONST_STRING && previous.opcode != Opcode.CONST_STRING_JUMBO) return@mapNotNull null
