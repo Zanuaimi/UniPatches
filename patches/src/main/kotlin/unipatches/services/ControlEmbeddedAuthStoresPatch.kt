@@ -25,7 +25,7 @@ val controlEmbeddedAuthStoresPatch = rawResourcePatch(
     try { category("Embedded Auth / Stores") } catch (_: NoSuchMethodError) {}
 
     val providerMode by stringOption(
-        title = "Google services provider",
+        title = "Embedded Auth / Stores > Provider and store behavior > Google services provider",
         default = "real",
         key = "embeddedProviderMode",
         description = "Choose real Google Play Services, GmsCore / MicroG, or Zero Google Play behavior.",
@@ -36,7 +36,7 @@ val controlEmbeddedAuthStoresPatch = rawResourcePatch(
         ),
     )
     val gmsCorePackage by stringOption(
-        title = "GmsCore package",
+        title = "Embedded Auth / Stores > Provider and store behavior > GmsCore package",
         default = "app.morphe.android.gms",
         key = "embeddedGmsCorePackage",
         description = "Select the GmsCore package used by GmsCore mode.",
@@ -49,19 +49,19 @@ val controlEmbeddedAuthStoresPatch = rawResourcePatch(
         ),
     )
     val customGmsCorePackage by stringOption(
-        title = "Custom GmsCore package (optional)",
+        title = "Embedded Auth / Stores > Provider and store behavior > Custom GmsCore package (optional)",
         default = "",
         key = "embeddedCustomGmsCorePackage",
         description = "A non-empty valid package overrides the GmsCore dropdown selection.",
     )
     val mainActivityClass by stringOption(
-        title = "Main Activity class (optional)",
+        title = "Embedded Auth / Stores > Provider and store behavior > Main Activity class (optional)",
         default = "",
         key = "embeddedMainActivityClass",
         description = "Inject a GmsCore startup check into this Activity's onCreate method. Leave empty to disable.",
     )
     val storeAvailability by stringOption(
-        title = "Store availability",
+        title = "Embedded Auth / Stores > Provider and store behavior > Store availability",
         default = "real",
         key = "embeddedStoreAvailability",
         description = "Choose which recognized store checks should be reported as available.",
@@ -73,19 +73,19 @@ val controlEmbeddedAuthStoresPatch = rawResourcePatch(
         ),
     )
 
-    val bypassLicenseVerification by booleanOption(title = "Bypass License Verification", default = false, key = "embeddedBypassLicenseVerification", description = "Force legacy LicenseChecker verification to allow.")
-    val showPlayServicesAvailable by booleanOption(title = "Show Google Play Services as available", default = false, key = "embeddedShowPlayServicesAvailable", description = "Report recognized Google Play Services availability checks as successful.")
-    val bypassPlayServicesCheck by booleanOption(title = "Bypass Google Play Services Check", default = false, key = "embeddedBypassPlayServicesCheck", description = "Bypass recognized Google Play Services availability checks.")
-    val bypassPlayLicenseCheck by booleanOption(title = "Bypass Play License Check", default = false, key = "embeddedBypassPlayLicenseCheck", description = "Answer the legacy LVL checkAccess callback as licensed.")
-    val disableFirebaseAutoInit by booleanOption(title = "Disable Firebase Auto Init", default = false, key = "embeddedDisableFirebaseAutoInit", description = "Disable Firebase collection metadata and automatic measurement components.")
-    val disableFirebasePerformance by booleanOption(title = "Disable Firebase Performance", default = false, key = "embeddedDisableFirebasePerformance", description = "No-op Firebase Performance traces and HTTP metrics.")
-    val disableGooglePay by booleanOption(title = "Disable Google Pay", default = false, key = "embeddedDisableGooglePay", description = "Report Google Pay readiness as unavailable.")
-    val disableRemoteConfig by booleanOption(title = "Disable Remote Config Fetch", default = false, key = "embeddedDisableRemoteConfig", description = "Use bundled Remote Config defaults without fetching updates.")
-    val forceSignedOut by booleanOption(title = "Force Google Signed Out", default = false, key = "embeddedForceSignedOut", description = "Make Google sign-in checks report signed out.")
-    val fixMaps by booleanOption(title = "Fix Maps on MicroG", default = false, key = "embeddedFixMaps", description = "Report Maps initialization success and notify its initialized callback.")
-    val nullLocation by booleanOption(title = "Null Play Location", default = false, key = "embeddedNullLocation", description = "Return empty Play Services location results.")
-    val silenceErrors by booleanOption(title = "Silence Play Services Errors", default = false, key = "embeddedSilenceErrors", description = "Suppress recognized Play Services error UI and messages.")
-    val spoofVersion by booleanOption(title = "Spoof Play Services Version", default = false, key = "embeddedSpoofVersion", description = "Report a high Play Services version.")
+    val bypassLicenseVerification by booleanOption(title = "Embedded Auth / Stores > Licensing > Bypass License Verification", default = false, key = "embeddedBypassLicenseVerification", description = "Force legacy LicenseChecker verification to allow.")
+    val bypassPlayLicenseCheck by booleanOption(title = "Embedded Auth / Stores > Licensing > Bypass Play License Check", default = false, key = "embeddedBypassPlayLicenseCheck", description = "Answer the legacy LVL checkAccess callback as licensed.")
+    val showPlayServicesAvailable by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Show Google Play Services as available", default = false, key = "embeddedShowPlayServicesAvailable", description = "Report recognized Google Play Services availability checks as successful.")
+    val bypassPlayServicesCheck by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Bypass Google Play Services Check", default = false, key = "embeddedBypassPlayServicesCheck", description = "Bypass recognized Google Play Services availability checks.")
+    val forceSignedOut by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Force Google Signed Out", default = false, key = "embeddedForceSignedOut", description = "Make Google sign-in checks report signed out.")
+    val silenceErrors by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Silence Play Services Errors", default = false, key = "embeddedSilenceErrors", description = "Suppress recognized Play Services error UI and messages.")
+    val spoofVersion by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Spoof Play Services Version", default = false, key = "embeddedSpoofVersion", description = "Report a high Play Services version.")
+    val fixMaps by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Fix Maps on MicroG", default = false, key = "embeddedFixMaps", description = "Report Maps initialization success and notify its initialized callback.")
+    val nullLocation by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Null Play Location", default = false, key = "embeddedNullLocation", description = "Return empty Play Services location results.")
+    val disableGooglePay by booleanOption(title = "Embedded Auth / Stores > Google Pay > Disable Google Pay", default = false, key = "embeddedDisableGooglePay", description = "Report Google Pay readiness as unavailable.")
+    val disableFirebaseAutoInit by booleanOption(title = "Embedded Auth / Stores > Firebase > Disable Firebase Auto Init", default = false, key = "embeddedDisableFirebaseAutoInit", description = "Disable Firebase collection metadata and automatic measurement components.")
+    val disableFirebasePerformance by booleanOption(title = "Embedded Auth / Stores > Firebase > Disable Firebase Performance", default = false, key = "embeddedDisableFirebasePerformance", description = "No-op Firebase Performance traces and HTTP metrics.")
+    val disableRemoteConfig by booleanOption(title = "Embedded Auth / Stores > Firebase > Disable Remote Config Fetch", default = false, key = "embeddedDisableRemoteConfig", description = "Use bundled Remote Config defaults without fetching updates.")
 
     dependsOn(controlEmbeddedAuthStoresManagedPatch {
         val selectedProvider = providerMode ?: "real"
