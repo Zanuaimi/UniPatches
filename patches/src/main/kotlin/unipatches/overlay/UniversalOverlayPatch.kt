@@ -723,9 +723,9 @@ val universalOverlayPatch = bytecodePatch(
     )
     val showExtraPopupHeaders by booleanOption(
         title = "Quick setup > UI settings > Extra popups > Show headers",
-        default = false,
+        default = true,
         key = "runtimeOverlayShowExtraPopupHeaders",
-        description = "Show title header boxes in settings, logs, confirmation, and module action popups. The main overlay menu title is always shown. LuckyPatcher-inspired preset enables this by default.",
+        description = "Show title header boxes in settings, logs, confirmation, and module action popups. The main overlay menu title is always shown. Enabled by default for a clearer, more polished popup appearance.",
     )
     val activateStatisticsOnLaunch by booleanOption(
         title = "Quick setup > Settings to modules > Monitor behavior > Activate statistics on launch",
@@ -1569,8 +1569,7 @@ val universalOverlayPatch = bytecodePatch(
                 if (includeDoNotDisturb == true) "1" else "0",
                 if (includeOverlayRuntimeLogs == true) "1" else "0",
                 if (enableOverlayRuntimeLogsOnLaunch == true) "1" else "0",
-                if (showExtraPopupHeaders == true || selectedUiPreset.showExtraPopupHeaders
-                    || selectedPreset.orEmpty() == "luckyPatcher") "1" else "0",
+                if (selectedUiPreset.showExtraPopupHeaders) "1" else "0",
                 selectedUiPreset.menuWidthLimit.toString(),
                 selectedUiPreset.menuHeightLimit.toString(),
             ),
