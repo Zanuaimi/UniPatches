@@ -12,11 +12,18 @@ import java.io.InputStream
 import java.net.URI
 import java.util.Base64
 import java.util.logging.Logger
+import org.w3c.dom.Document
 import org.w3c.dom.Element
 
 private const val CUSTOM_ICON_RESOURCE = "unipatches_custom_output_icon"
 private const val HIDDEN_ICON_RESOURCE = "unipatches_hidden_output_icon"
 private const val MAX_ICON_BYTES = 4 * 1024 * 1024
+
+private val restrictedBackupAttributes = listOf(
+    "dataExtractionRules",
+    "fullBackupContent",
+    "fullBackupOnly",
+)
 
 private val PACKAGE_NAME = Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$")
 private val PACKAGE_SUFFIX = Regex("^(\\.[a-z][a-z0-9_]*)+$")
@@ -28,6 +35,29 @@ private const val TRANSPARENT_ICON_XML = """
         <size android:width="1dp" android:height="1dp" />
     </shape>
 """
+
+private fun enableAppDataPreservation(document: Document): Int? {
+    val application = document.documentElement.applicationOrNull() ?: return null
+    var changed = 0
+
+    fun setApplicationAttribute(name: String, value: String) {
+        if (application.getAttributeNS(NS_ANDROID, name) == value) return
+        application.setAttributeNS(NS_ANDROID, "android:$name", value)
+        changed++
+    }
+
+    setApplicationAttribute("hasFragileUserData", "true")
+    setApplicationAttribute("allowBackup", "true")
+    setApplicationAttribute("restoreAnyVersion", "true")
+
+    for (attribute in restrictedBackupAttributes) {
+        if (application.hasAttributeNS(NS_ANDROID, attribute)) {
+            application.removeAttributeNS(NS_ANDROID, attribute)
+            changed++
+        }
+    }
+    return changed
+}
 
 @Suppress("unused")
 val customAppOutputPatch = resourcePatch(
@@ -45,6 +75,9 @@ val customAppOutputPatch = resourcePatch(
         Bypass is also enabled, server/package-bound PairIP enforcement can still reject the clone.
 
         Inspired by Nai64Patches from Nai64: Clone, Custom App Icon, and Hide App Icon patches.
+        The optional Preserve App Data After Uninstall setting applies Android's fragile-user-data
+        and backup compatibility flags. It does not guarantee data retention, and it cannot carry
+        data from the original package into a clone with a different package identity.
         For target SDK compatibility, use Improve Legacy App / Game Compatibility for Modern
         Android Patch. Keeping target SDK handling there avoids duplicate manifest changes.
     """.trimIndent(),
@@ -94,6 +127,12 @@ val customAppOutputPatch = resourcePatch(
         default = true,
         key = "customAppOutputExpandRelativeComponents",
         description = "Expand relative Activity, Service, Receiver, Provider, and alias class names to the original package before cloning. This prevents Android from searching for classes in the new package.",
+    )
+    val preserveAppData by booleanOption(
+        title = "Advanced > App data compatibility > Preserve App Data After Uninstall",
+        default = false,
+        key = "customAppOutputPreserveAppData",
+        description = "Ask Android to preserve app data when uninstalling and offer it for restoration on reinstall. This is best-effort, may be affected by Android version and backup policy, and cannot preserve data across a changed clone package identity.",
     )
 
     val appName by stringOption(
@@ -221,6 +260,18 @@ val customAppOutputPatch = resourcePatch(
                     logger.info("Custom App Output: updated $iconReferences icon reference(s)")
                 }
             } ?: logger.warning("Custom App Output: no <application> element found; name and icon changes were skipped.")
+
+            if (preserveAppData == true) {
+                val changes = enableAppDataPreservation(manifest)
+                when {
+                    changes == null -> logger.warning("Custom App Output: no <application> element found; app-data preservation was skipped.")
+                    changes == 0 -> logger.info("Custom App Output: app-data preservation settings were already applied.")
+                    else -> logger.info("Custom App Output: enabled app-data preservation with $changes manifest change(s).")
+                }
+                if (changes != null && clonedPackage != null) {
+                    logger.warning("Custom App Output: app-data preservation applies to the cloned package only; it cannot transfer data from the original package.")
+                }
+            }
         }
     }
 }
