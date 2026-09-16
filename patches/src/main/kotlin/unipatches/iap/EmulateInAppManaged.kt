@@ -291,9 +291,11 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                     val listener = parameterRegister(method, listenerIndex)
                     method.addInstructions(0, """
                         move-object/from16 v0, $listener
+                        if-eqz v0, :morphe_openiab_original_purchase_flow
                         move-object/from16 v1, $sku
                         invoke-static {v0, v1}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatchLegacy(Ljava/lang/Object;Ljava/lang/String;)V
                         return-void
+                        :morphe_openiab_original_purchase_flow
                     """.trimIndent())
                 }
             }

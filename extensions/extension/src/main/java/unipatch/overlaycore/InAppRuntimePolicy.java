@@ -73,9 +73,14 @@ public final class InAppRuntimePolicy {
         if (listener == null) return;
         String product = productId(first, second);
         synchronized (InAppRuntimePolicy.class) {
-            if (!configured || !popupEnabled || SAVED.contains(product) || pending != null) {
+            if (!configured || !popupEnabled || SAVED.contains(product)) {
                 lastEvent = "Emulated purchase delivered: " + product;
                 deliver(listener, product, 0, true);
+                return;
+            }
+            if (pending != null) {
+                lastEvent = "Purchase request rejected while another confirmation is pending: " + product;
+                deliver(listener, product, 1, false);
                 return;
             }
             pending = new Pending(listener, product, false);
@@ -94,9 +99,14 @@ public final class InAppRuntimePolicy {
         if (listener == null) return;
         String normalized = valid(product) ? normalize(product) : "morphe_fake";
         synchronized (InAppRuntimePolicy.class) {
-            if (!configured || !popupEnabled || SAVED.contains(normalized) || pending != null) {
+            if (!configured || !popupEnabled || SAVED.contains(normalized)) {
                 lastEvent = "Emulated legacy purchase delivered: " + normalized;
                 deliverLegacy(listener, normalized, true);
+                return;
+            }
+            if (pending != null) {
+                lastEvent = "Legacy purchase request rejected while another confirmation is pending: " + normalized;
+                deliverLegacy(listener, normalized, false);
                 return;
             }
             pending = new Pending(listener, normalized, true);
