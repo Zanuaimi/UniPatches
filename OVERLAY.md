@@ -230,7 +230,7 @@ The Ads provider is registered by `OverlayRuntime`, and its modules are added on
 policy is integrated and contains a selected module bit. Malformed policies fail open and produce no
 Ads modules.
 
-`Emulate InApp Patch ( Experimental, Enhanced, Has Overlay Addon )` can optionally add the
+`InApp Emulation Patch ( Experimental, Enhanced, Has Overlay Addon )` can optionally add the
 `InApp Emulation` integrated module. Its `Enable Overlay Module` setting requires Universal Overlay
 in the same patch operation. The separate initial-popup setting controls the first process-session
 state and can later be changed from the module toggle. The module Settings popup manages saved

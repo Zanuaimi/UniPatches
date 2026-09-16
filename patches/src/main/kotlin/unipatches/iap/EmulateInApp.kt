@@ -7,7 +7,7 @@ import java.util.logging.Logger
 
 @Suppress("unused")
 val emulateInAppPatch = rawResourcePatch(
-    name = "Emulate InApp Patch ( Experimental, Enhanced, Has Overlay Addon )",
+    name = "InApp Emulation Patch ( Experimental, Enhanced, Has Overlay Addon )",
     description = """
         InApp emulation modifies in app buying behavior to make pressing buy grant items without charging! Best for offline games.
         
@@ -20,6 +20,11 @@ val emulateInAppPatch = rawResourcePatch(
         Credits to Nai64Patches from Nai64 for original IAP patch functionality, and credits to MiguelNinja19's billing patches, as it was used to enhance original IAP patch with Cocos2D and GameMaker and Native ILL2CPP Hex Patch.
         
         UniPatches enhances this patch by improving compatibility, stability, and adding patch strategy via Auto Mode ( default ) or Managed or Native mode. UniPatches also adds an optional overlay addon for use with Universal Overlay Patch.
+
+        Compatibility: the overlay addon requires Universal Overlay in the same patch operation. If using
+        Control Embedded Auth / Stores, keep its licensing and Google Play Services controls separate
+        from this patch's purchase emulation controls. If using Custom App Display, avoid applying broad
+        Activity changes to third-party billing or sign-in screens unless required.
     """.trimIndent(),
     default = false,
 ) {
