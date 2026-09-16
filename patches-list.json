@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.29.0-dev.6",
+  "version": "1.29.0-dev.7",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -1979,10 +1979,10 @@
         {
           "key": "runtimeOverlayShowExtraPopupHeaders",
           "title": "Quick setup > UI settings > Extra popups > Show headers",
-          "description": "Show title header boxes in settings, logs, confirmation, and module action popups. The main overlay menu title is always shown. LuckyPatcher-inspired preset enables this by default.",
+          "description": "Show title header boxes in settings, logs, confirmation, and module action popups. The main overlay menu title is always shown. Enabled by default for a clearer, more polished popup appearance.",
           "required": false,
           "type": "kotlin.Boolean",
-          "default": false,
+          "default": true,
           "values": null
         },
         {

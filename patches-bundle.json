@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-16T09:35:43",
-  "description": "## [1.29.0-dev.6](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.5...v1.29.0-dev.6) (2026-09-16)\n\n### ✨ New Features\n\n* **inapp:** Add attribution to module description ([9df450e](https://github.com/Zanuaimi/UniPatches/commit/9df450e903e705950028126b4aba14198443efcf))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.6/patches-1.29.0-dev.6.mpp",
+  "created_at": "2026-09-16T09:43:53",
+  "description": "## [1.29.0-dev.7](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.6...v1.29.0-dev.7) (2026-09-16)\n\n### ✨ New Features\n\n* **overlay:** Enable header boxes in popups by default ([9e61a8a](https://github.com/Zanuaimi/UniPatches/commit/9e61a8a0a5d59b06bbf55c081dff3218cb831841))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.7/patches-1.29.0-dev.7.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.6"
+  "version": "1.29.0-dev.7"
 }

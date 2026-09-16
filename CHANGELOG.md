@@ -1,3 +1,9 @@
+## [1.29.0-dev.7](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.6...v1.29.0-dev.7) (2026-09-16)
+
+### ✨ New Features
+
+* **overlay:** Enable header boxes in popups by default ([9e61a8a](https://github.com/Zanuaimi/UniPatches/commit/9e61a8a0a5d59b06bbf55c081dff3218cb831841))
+
 ## [1.29.0-dev.6](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.5...v1.29.0-dev.6) (2026-09-16)
 
 ### ✨ New Features
