@@ -27,7 +27,7 @@ val emulateInAppPatch = rawResourcePatch(
     try { category("InApp Emulation") } catch (_: NoSuchMethodError) {}
 
     val nativeMode by stringOption(
-        title = "Patch Mode",
+        title = "InApp Emulation > Patch behavior > Patch Mode",
         default = "auto",
         key = "nativeIl2CppMode",
         description = "Automatic runs all managed compatibility patches first, then safely attempts verified native IL2CPP patches for supported libraries. Managed compatibility only runs bytecode patches and disables native patching, which is useful for diagnosing native-related crashes. Native enhancement runs the managed patches and attempts the same validated native phase. Native patching is fail-closed and only supported ABI signatures are used.",
@@ -39,14 +39,14 @@ val emulateInAppPatch = rawResourcePatch(
     )
 
     val fakeStartupPurchases by booleanOption(
-        title = "Fake owned purchases at startup",
+        title = "InApp Emulation > Patch behavior > Fake owned purchases at startup",
         default = false,
         key = "fakeStartupPurchases",
         description = "Deliver a fake owned purchase through modern callback inventory queries. Helps games that only grant at boot, but can stall strict Unity titles. Leave off if a game hangs on loading.",
     )
 
     val legacyInventoryMode by stringOption(
-        title = "Legacy inventory behavior",
+        title = "InApp Emulation > Patch behavior > Legacy inventory behavior",
         default = "preserve",
         key = "legacyInventoryMode",
         description = "Preserve catalog and owned-purchase queries keeps legacy billing behavior unchanged and is recommended for compatibility. Return empty owned purchases suppresses restored purchases while leaving catalog lookup available. Return a fake owned purchase injects a synthetic purchase for older wrappers that grant content only from startup inventory. These legacy modes affect owned-inventory responses, not SKU catalog discovery.",
@@ -57,7 +57,21 @@ val emulateInAppPatch = rawResourcePatch(
         ),
     )
 
-    dependsOn(emulateInAppManagedPatch { Pair(fakeStartupPurchases == true, legacyInventoryMode ?: "preserve") })
+    val enableOverlayModule by booleanOption(
+        title = "InApp Emulation > Overlay addon > Enable Overlay Module",
+        default = false,
+        key = "inAppEnableOverlayModule",
+        description = "Add the session-only InApp Emulation module to Universal Overlay. Requires Universal Overlay in the same patch operation.",
+    )
+    val initiallyEnablePopups by booleanOption(
+        title = "InApp Emulation > Overlay addon > Initially enable popups before buying products",
+        default = true,
+        key = "inAppInitiallyEnablePopups",
+        description = "Set the initial state of purchase confirmation popups in the overlay module. You can change it later from the module settings. Ignored when Enable Overlay Module is disabled.",
+    )
+
+    dependsOn(emulateInAppManagedPatch { Triple(fakeStartupPurchases == true, legacyInventoryMode ?: "preserve", enableOverlayModule == true) })
+    dependsOn(emulateInAppOverlayBridgePatch { Pair(enableOverlayModule == true, initiallyEnablePopups == true) })
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)

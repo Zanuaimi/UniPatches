@@ -516,7 +516,7 @@ private fun validate(
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v2.5.3 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v2.6.0 (Experimental)",
     description = """
         A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual
         preset, select the overlay modules you want, optionally supply an icon image, then patch. Modules
@@ -531,10 +531,23 @@ val universalOverlayPatch = bytecodePatch(
         controlled by the visible Morphe settings. Module selections and module behavior are excluded
         because hook and module combinations can be app-specific. 
         
-        If Control App Ads is patched with its optional runtime policy enabled, its selected ad-control modules appear here
-        automatically; Universal Overlay does not patch ad SDKs by itself. When both patches are
-        selected, Control App Ads attaches its runtime policy to this overlay's exact startup bridge,
-        including an explicit Activity override, instead of selecting a separate Activity.
+        InApp Emulation has an optional overlay addon that adds an InApp Emulation module to this menu.
+        The module can show a themed confirmation popup before emulated purchases, let you save product
+        identifiers to skip later popups during the current app session, and manage those saved products
+        from its Settings button. To enable it, select Emulate InApp Patch, enable its Enable Overlay
+        Module setting, enable Universal Overlay in the same patch operation, and keep Initially enable
+        popups before buying products enabled if popups should start enabled. The addon does not control
+        catalog discovery, receipt verification, legacy inventory behavior, or native IL2CPP patching.
+
+        Control App Ads can also add runtime ad-control modules here, but Universal Overlay does not
+        patch ad SDKs by itself. To use them, select Control App Ads Patch and Universal Overlay,
+        enable the desired options under Control App Ads' Overlay integration > Runtime controls. The
+        Ads runtime policy is enabled automatically when at least one of those modules is selected.
+        The available modules are Block
+        Ads, Ads Free Rewards, and Block Ads / Tracking Hosts. Their initial runtime values come from
+        the Control App Ads settings, and later changes are session-only. When both patches are selected,
+        Control App Ads attaches its policy to this overlay's exact startup bridge, including an explicit
+        Activity override, instead of selecting a separate Activity.
 
         Attribution: The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.
     """.trimIndent(),
@@ -1175,6 +1188,7 @@ val universalOverlayPatch = bytecodePatch(
         key = "runtimeOverlayResetIconToText",
         description = "Use the configured text icon for this patched APK and ignore image and Multi-parts icon inputs.",
     )
+    dependsOn(universalOverlayManifestPatch { includeDoNotDisturb == true })
     execute {
         val logger = Logger.getLogger(this::class.java.name)
         val rawAnimationDuration = animationDuration ?: 180
@@ -1564,13 +1578,15 @@ val universalOverlayPatch = bytecodePatch(
         var bridgeInstalled = false
         var adsPolicyAttached = false
         val adsRuntimePolicy = OverlayAdsRuntimeIntegration.pendingPolicy()
+        val inAppRuntimePolicy = OverlayInAppRuntimeIntegration.pendingPolicy()
         if (!explicitActivityFirst && appMethod != null) {
             val (appOwner, appOnCreate) = appMethod
             if (appOnCreate.implementation?.instructions?.any { it.toString().contains(RUNTIME_CLASS) } == true) {
                 logger.info("Runtime overlay bridge already exists in ${appOwner.type}->onCreate")
                 bridgeInstalled = true
             } else {
-                injectOverlayBridge(this, appOwner, appOnCreate, config, application = true, adsRuntimePolicy = adsRuntimePolicy)
+                injectOverlayBridge(this, appOwner, appOnCreate, config, application = true, adsRuntimePolicy = adsRuntimePolicy, inAppRuntimePolicy = inAppRuntimePolicy)
+                if (inAppRuntimePolicy != null) OverlayInAppRuntimeIntegration.markInjected()
                 logger.info("Runtime overlay bridge injected into ${appOwner.type}->onCreate")
                 bridgeInstalled = true
                 adsPolicyAttached = adsRuntimePolicy != null
@@ -1595,7 +1611,8 @@ val universalOverlayPatch = bytecodePatch(
                 logger.info("Runtime overlay bridge already exists in ${fallback.type}->onCreate")
                 bridgeInstalled = true
             } else {
-                injectOverlayBridge(this, fallback, onCreate, config, application = false, adsRuntimePolicy = adsRuntimePolicy)
+                injectOverlayBridge(this, fallback, onCreate, config, application = false, adsRuntimePolicy = adsRuntimePolicy, inAppRuntimePolicy = inAppRuntimePolicy)
+                if (inAppRuntimePolicy != null) OverlayInAppRuntimeIntegration.markInjected()
                 logger.warning("Runtime overlay used Activity fallback: ${fallback.type}->onCreate")
                 bridgeInstalled = true
                 adsPolicyAttached = adsRuntimePolicy != null

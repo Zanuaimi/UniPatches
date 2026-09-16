@@ -13,6 +13,8 @@ import android.graphics.Typeface;
 import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -68,6 +70,7 @@ import unipatch.overlaycore.modules.OverlayHookModuleRegistry;
 import unipatch.overlaycore.modules.OverlayAppSpecificModuleRegistry;
 import unipatch.overlaycore.modules.example.HillClimbRacingExampleProvider;
 import unipatch.overlaycore.modules.ads.AdsControlRuntimeProvider;
+import unipatch.overlaycore.modules.iap.InAppEmulationRuntimeProvider;
 import unipatch.overlaycore.modules.system.DoNotDisturbModule;
 import unipatch.overlaycore.modules.advanced.OverlayRuntimeLogsModule;
 import unipatch.overlaycore.modules.advanced.OverlayRuntimeLogger;
@@ -115,12 +118,14 @@ public final class OverlayRuntime {
     private static Integer rotationModeState;
     private static boolean fullyClosedToastShown;
     private static final List<OverlayAppSpecificModuleProvider> APP_SPECIFIC_PROVIDERS = new ArrayList<>();
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static String pendingAppSpecificProfile;
     private static String pendingAppSpecificModules;
 
     static {
         registerAppSpecificProvider(new HillClimbRacingExampleProvider());
         registerAppSpecificProvider(new AdsControlRuntimeProvider());
+        registerAppSpecificProvider(new InAppEmulationRuntimeProvider());
     }
 
     private OverlayRuntime() { }
@@ -201,6 +206,19 @@ public final class OverlayRuntime {
         if (configuration == null || pendingAppSpecificProfile == null) return;
         configuration.appSpecificProfile = pendingAppSpecificProfile;
         configuration.appSpecificModules = pendingAppSpecificModules == null ? "" : pendingAppSpecificModules;
+    }
+
+    /** Shows the IAP confirmation popup on the currently attached overlay Activity. */
+    public static synchronized boolean showInAppPurchaseConfirmation(String productId) {
+        for (Controller controller : new ArrayList<>(CONTROLLERS.values())) {
+            if (controller == null || !controller.canShowInAppPurchaseConfirmation()) continue;
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                return controller.showInAppPurchaseConfirmation(productId);
+            }
+            MAIN.post(() -> controller.showInAppPurchaseConfirmation(productId));
+            return true;
+        }
+        return false;
     }
 
     static synchronized void showActivity(Activity activity) {
@@ -284,6 +302,7 @@ public final class OverlayRuntime {
         sharedButtonPositionInitialized = false;
         appBrightnessState = null;
         rotationModeState = null;
+        InAppRuntimePolicy.reset();
     }
 
     private static Boolean rememberedState(String key) {
@@ -453,6 +472,7 @@ public final class OverlayRuntime {
         void detach() {
             if (detached) return;
             detached = true;
+            InAppRuntimePolicy.cancelPending();
             root.removeCallbacks(dragVisibilityFade);
             dismissSettingsPopupsImmediately();
             if (menuOutline != null) menuOutline.stop();
@@ -1287,7 +1307,7 @@ public final class OverlayRuntime {
         }
 
         private boolean hasIntegratedModules() {
-            return AdsRuntimePolicy.hasAnyModule();
+            return AdsRuntimePolicy.hasAnyModule() || InAppRuntimePolicy.isConfigured();
         }
 
         private void addAppSpecificModules(LinearLayout parent) {
@@ -1650,6 +1670,65 @@ public final class OverlayRuntime {
             });
         }
 
+        private boolean showInAppPurchaseConfirmation(String productId) {
+            if (!canShowInAppPurchaseConfirmation()) return false;
+            final FrameLayout layer = new FrameLayout(overlayContext);
+            layer.setBackgroundColor(0xB3000000);
+            layer.setClickable(true);
+            layer.setFocusable(true);
+            OverlayPopupFrame card = new OverlayPopupFrame(overlayContext, config);
+            card.addHeader("Emulate InApp Purchase Confirmation", config, popupTitleIcon(true), popupTitleIcon(false));
+            layer.setOnClickListener(v -> {
+                InAppRuntimePolicy.cancelPending();
+                dismissModuleSettingsPopup(layer, card);
+            });
+            TextView description = text("Do you want to try to emulate in-app purchase for this product?", 14, config.menuTextColor3);
+            description.setSingleLine(false);
+            description.setPadding(0, dp(8), 0, 0);
+            card.addView(description, new LinearLayout.LayoutParams(-1, -2));
+            CheckBox save = new CheckBox(overlayContext);
+            save.setText("Save purchase for skipping purchase popup");
+            save.setTextColor(config.menuTextColor2);
+            save.setSingleLine(false);
+            styleCheckBox(save);
+            LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(-1, -2);
+            saveParams.topMargin = dp(8);
+            card.addView(save, saveParams);
+            LinearLayout actions = new LinearLayout(overlayContext);
+            actions.setOrientation(LinearLayout.HORIZONTAL);
+            actions.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(-1, -2);
+            actionParams.topMargin = dp(8);
+            card.addView(actions, actionParams);
+            addAction(actions, "No", v -> {
+                InAppRuntimePolicy.complete(false);
+                dismissModuleSettingsPopup(layer, card);
+            });
+            addAction(actions, "Yes", v -> {
+                InAppRuntimePolicy.complete(save.isChecked());
+                dismissModuleSettingsPopup(layer, card);
+            });
+            FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(
+                    boundedOverlayPanelWidth(), -2, Gravity.CENTER);
+            cardParams.setMargins(dp(20), dp(20), dp(20), dp(20));
+            layer.addView(card, cardParams);
+            layer.setAlpha(0f);
+            root.addView(layer);
+            settingsPopupLayers.add(layer);
+            root.post(() -> {
+                if (layer.getParent() == root) {
+                    prepareOpeningAnimation(card);
+                    animatePopupOpening(layer, card);
+                }
+            });
+            return true;
+        }
+
+        private boolean canShowInAppPurchaseConfirmation() {
+            return !detached && root != null && !activity.isFinishing()
+                    && (android.os.Build.VERSION.SDK_INT < 17 || !activity.isDestroyed());
+        }
+
         private void dismissModuleSettingsPopup(FrameLayout layer, View card) {
             if (layer.getParent() == null) return;
             settingsPopupLayers.remove(layer);
@@ -1679,13 +1758,20 @@ public final class OverlayRuntime {
             if (!hasIntegratedModules()) return;
             for (OverlayAppSpecificModuleProvider provider : APP_SPECIFIC_PROVIDERS) {
                 try {
-                    if (!AdsControlRuntimeProvider.PROFILE_ID.equals(provider.profileId())) continue;
+                    String profileId = provider.profileId();
+                    String section;
+                    if (AdsControlRuntimeProvider.PROFILE_ID.equals(profileId) && AdsRuntimePolicy.hasAnyModule()) {
+                        section = "Ad control hook modules";
+                    } else if (InAppEmulationRuntimeProvider.PROFILE_ID.equals(profileId) && InAppRuntimePolicy.isConfigured()) {
+                        section = "InApp Emulation";
+                    } else {
+                        continue;
+                    }
                     List<OverlayAppSpecificModule> modules = provider.create(activity);
-                    if (modules == null || modules.isEmpty()) return;
-                    addSectionLabel(parent, "Ad control hook modules");
-                    for (OverlayAppSpecificModule module : modules) addAppSpecificModuleSafely(parent, () -> module, "Ads");
+                    if (modules == null || modules.isEmpty()) continue;
+                    addSectionLabel(parent, section);
+                    for (OverlayAppSpecificModule module : modules) addAppSpecificModuleSafely(parent, () -> module, section);
                 } catch (RuntimeException ignored) { }
-                return;
             }
         }
 
