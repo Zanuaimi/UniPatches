@@ -136,6 +136,63 @@ private fun relaxSharedLibraries(document: Document): Int {
     return changed
 }
 
+private val exportedComponentTags = listOf("activity", "activity-alias", "service", "receiver")
+
+private fun Element.hasIntentFilter(): Boolean =
+    getElementsByTagName("intent-filter").length > 0
+
+private fun Element.isLauncherComponent(): Boolean {
+    val actions = getElementsByTagName("action")
+    var hasMainAction = false
+    for (index in 0 until actions.length) {
+        val action = actions.item(index) as? Element ?: continue
+        if (action.getAttributeNS(NS_ANDROID, "name") == "android.intent.action.MAIN") {
+            hasMainAction = true
+            break
+        }
+    }
+    if (!hasMainAction) return false
+
+    val categories = getElementsByTagName("category")
+    for (index in 0 until categories.length) {
+        val category = categories.item(index) as? Element ?: continue
+        if (category.getAttributeNS(NS_ANDROID, "name") == "android.intent.category.LAUNCHER") {
+            return true
+        }
+    }
+    return false
+}
+
+private fun repairMissingComponentExportFlags(document: Document): Int {
+    var repaired = 0
+    for (tagName in exportedComponentTags) {
+        val components = document.getElementsByTagName(tagName)
+        for (index in 0 until components.length) {
+            val component = components.item(index) as? Element ?: continue
+            if (component.hasAttributeNS(NS_ANDROID, "exported") || !component.hasIntentFilter()) continue
+
+            val exported = component.isLauncherComponent().toString()
+            component.setAttributeNS(NS_ANDROID, "android:exported", exported)
+            repaired++
+        }
+    }
+    return repaired
+}
+
+private fun exportAllActivities(document: Document): Int {
+    var changed = 0
+    for (tagName in listOf("activity", "activity-alias")) {
+        val activities = document.getElementsByTagName(tagName)
+        for (index in 0 until activities.length) {
+            val activity = activities.item(index) as? Element ?: continue
+            if (activity.getAttributeNS(NS_ANDROID, "exported") == "true") continue
+            activity.setAttributeNS(NS_ANDROID, "android:exported", "true")
+            changed++
+        }
+    }
+    return changed
+}
+
 private fun legacyImeiPatch(imeiProvider: () -> Pair<Boolean, String>) = bytecodePatch(
     name = null,
     description = "Internal legacy device compatibility phase.",
@@ -176,7 +233,8 @@ val legacyAppCompatibilityPatch = rawResourcePatch(
         Patch. Those options are intentionally kept separate to prevent overlapping injections.
 
         This patch cannot restore shut-down servers, missing CPU architecture support, server licensing,
-        Play Integrity, or unsupported native code. All main compatibility features are disabled by default.
+        Play Integrity, or unsupported native code. Conservative compatibility features are enabled by
+        default; more invasive native, network, storage, library, and identity options remain disabled.
 
         Credits: Nai64Patches from Nai64 for the original legacy compatibility functionality. UniPatches
         provides the merged settings, validation, manifest safeguards, and compatibility organization.
@@ -226,6 +284,18 @@ val legacyAppCompatibilityPatch = rawResourcePatch(
         default = true,
         key = "legacyCompatibilityBluetooth",
         description = "When Legacy App Reviver is enabled, declare modern Bluetooth permissions. Declarations do not grant runtime access.",
+    )
+    val repairExportFlags by booleanOption(
+        title = "Legacy App Compatibility > Installation and manifest > Repair Missing Component Export Flags",
+        default = true,
+        key = "legacyCompatibilityRepairExportFlags",
+        description = "Add missing android:exported values to activities, aliases, services, and receivers that have intent filters. Do NOT enable this together with Export All Activities because they overlap. If both are selected accidentally, Export All Activities takes precedence.",
+    )
+    val exportAllActivityComponents by booleanOption(
+        title = "Legacy App Compatibility > Installation and manifest > Export All Activities",
+        default = false,
+        key = "legacyCompatibilityExportAllActivities",
+        description = "Set android:exported=true on every activity and activity-alias. Do NOT enable this together with Repair Missing Component Export Flags because they overlap. If both are selected accidentally, this option takes precedence.",
     )
     val allowCleartext by booleanOption(
         title = "Legacy App Compatibility > Installation and manifest > Allow Cleartext Traffic",
@@ -301,6 +371,31 @@ val legacyAppCompatibilityPatch = rawResourcePatch(
                     alarms = exactAlarms == true,
                     bluetooth = bluetooth == true,
                 )
+            }
+            when {
+                exportAllActivityComponents == true -> {
+                    if (repairExportFlags == true) {
+                        logger.info("Legacy compatibility: both exported-component options selected; Export All Activities takes precedence and repair mode is skipped.")
+                    } else {
+                        logger.info("Legacy compatibility: Export All Activities selected.")
+                    }
+                    val exported = exportAllActivities(manifest)
+                    changed += exported
+                    if (exported == 0) {
+                        logger.info("Legacy compatibility: all activities and aliases already have android:exported=true, or none were found.")
+                    } else {
+                        logger.info("Legacy compatibility: exported $exported activity component(s).")
+                    }
+                }
+                repairExportFlags == true -> {
+                    val repaired = repairMissingComponentExportFlags(manifest)
+                    changed += repaired
+                    if (repaired == 0) {
+                        logger.info("Legacy compatibility: no filtered components with missing android:exported were found.")
+                    } else {
+                        logger.info("Legacy compatibility: repaired $repaired component exported flag(s).")
+                    }
+                }
             }
             if (allowCleartext == true) {
                 if (setApplicationAttribute(manifest, "usesCleartextTraffic", "true")) changed++
