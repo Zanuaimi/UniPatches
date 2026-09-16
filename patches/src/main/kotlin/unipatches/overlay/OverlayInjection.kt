@@ -58,6 +58,7 @@ internal fun injectOverlayBridge(
     """.trimIndent())
     owner.methods.remove(method)
     owner.methods.add(cloned)
+    if (application) StartupHooks.overlayApplicationBridgeOwner = owner.type
     if (adsRuntimePolicy == null) {
         OverlayAdsRuntimeIntegration.recordUnconfiguredBridge(
             OverlayAdsRuntimeIntegration.BridgeTarget(
@@ -162,14 +163,23 @@ internal fun BytecodePatchContext.findOverlayFallbackActivity(
         else -> parents[type]?.let { isActivity(it, seen) } == true
     }
     val noHistory = StartupHooks.resolvedNoHistoryActivityDescriptors
+    val packageName = StartupHooks.resolvedPackageName
     val candidates = mutableListOf<MutableClass>()
     classDefForEach { classDef ->
         if (!isActivity(classDef.type) || classDef.type in noHistory) return@classDefForEach
+        // A missing launcher resolution must not select a support-library,
+        // AndroidX, Google, or other SDK Activity by class-file order. Only
+        // an application-owned Activity is a safe generic fallback.
+        val binaryName = classDef.type.removePrefix("L").removeSuffix(";").replace('/', '.')
+        if (packageName.isNullOrBlank() ||
+            !(binaryName == packageName || binaryName.startsWith("$packageName."))
+        ) return@classDefForEach
         val candidate = mutableClassDefBy(classDef)
         if (candidate.methods.any {
                 it.name == "onCreate" && it.returnType == "V" &&
                     it.parameterTypes == listOf("Landroid/os/Bundle;") && it.implementation != null
             }) candidates += candidate
     }
-    return candidates.firstOrNull { it.type == preferredDescriptor } ?: candidates.firstOrNull()
+    return candidates.firstOrNull { it.type == preferredDescriptor }
+        ?: candidates.firstOrNull()
 }

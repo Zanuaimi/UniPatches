@@ -99,6 +99,12 @@ val pairipBypassPatch = bytecodePatch(
         device-integrity behavior. These identity and server-side conditions cannot be fixed safely
         by combining PairIP Bypass with Custom App Output, Control App Ads, or Emulator Detection.
 
+        Compatibility: when combining this patch with Universal Overlay, the shared overlay startup
+        bridge is preserved. PairIP Application redirect and Application.onCreate bypass strategies
+        may be skipped if they would make that bridge unreachable. If combining this patch with
+        Custom App Output, apply package cloning only when package- or certificate-bound services
+        are not required.
+
         This enhanced patch is a merged product of the PairIP bypass patches from the credited
         developers, with improvements for broader functionality, safer strategy selection, and usability.
 
@@ -206,6 +212,11 @@ val pairipBypassPatch = bytecodePatch(
                     .let { if (!it.isNullOrEmpty()) it else app.getAttribute("android:name") }
                 if (cur != "com.pairip.application.Application") {
                     logger.info("Application class is '$cur' - not PairIP, skipping")
+                    return@execute
+                }
+                val currentDescriptor = "L" + cur.replace('.', '/') + ";"
+                if (StartupHooks.overlayApplicationBridgeOwner == currentDescriptor) {
+                    logger.warning("Universal Overlay is already attached to the PairIP Application; preserving the Application class so the shared overlay bridge remains reachable.")
                     return@execute
                 }
                 app.setAttributeNS(ns, "android:name", real)
@@ -947,6 +958,13 @@ val pairipBypassPatch = bytecodePatch(
             // -- Strategy 14: Application.onCreate --
             // Skip PairIP's Application onCreate startup hook.
             if (isSelected(pairipApplicationOnCreate)) PairipApplicationOnCreateFingerprint.methodOrNull?.let {
+                if (it.implementation?.instructions?.any { instruction ->
+                        instruction.toString().contains("OverlayRuntime;")
+                    } == true
+                ) {
+                    logger.warning("Skipped Pairip Application.onCreate bypass because Universal Overlay already owns this startup bridge.")
+                    return@let
+                }
                 it.addInstructions(
                     0, """
                 invoke-super {p0}, Landroid/app/Application;->onCreate()V
