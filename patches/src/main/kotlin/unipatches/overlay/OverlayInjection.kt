@@ -8,8 +8,14 @@ import helpers.bytecode.cloneMutable
 import helpers.bytecode.numberOfParameterRegisters
 import helpers.bytecode.p0Register
 import helpers.startup.StartupHooks
+import java.util.logging.Logger
 
 internal const val OVERLAY_RUNTIME_CLASS = "Lunipatch/overlaycore/OverlayRuntime;"
+
+internal data class ResolvedOverlayActivity(
+    val owner: MutableClass,
+    val onCreate: MutableMethod,
+)
 
 private fun MutableMethod.hasRuntimePolicy(policyClass: String): Boolean =
     implementation?.instructions?.any { instruction ->
@@ -188,6 +194,86 @@ internal fun BytecodePatchContext.attachQueuedInAppRuntimePolicy(
     owner.methods.remove(method)
     owner.methods.add(cloned)
     return true
+}
+
+/** Validates the manifest-resolved launcher before generic Activity discovery. */
+internal fun BytecodePatchContext.resolveOverlayLauncherActivity(
+    descriptor: String?,
+    logger: Logger,
+): ResolvedOverlayActivity? {
+    if (descriptor.isNullOrBlank()) {
+        logger.info("Universal Overlay launcher validation skipped: no resolved launcher")
+        return null
+    }
+
+    val classDef = classDefByOrNull(descriptor)
+    if (classDef == null) {
+        logger.warning("Universal Overlay launcher validation rejected $descriptor: class lookup failed")
+        return null
+    }
+    logger.info("Universal Overlay launcher class lookup succeeded: $descriptor")
+
+    val chain = mutableListOf<String>()
+    val seen = mutableSetOf<String>()
+    var current: String? = descriptor
+    var hasActivityAncestor = false
+    while (current != null && seen.add(current)) {
+        chain += current
+        if (current == "Landroid/app/Activity;" ||
+            (current.startsWith("Landroid/") && current.endsWith("Activity;")) ||
+            current.startsWith("Landroid/support/") || current.startsWith("Landroidx/")) {
+            hasActivityAncestor = true
+            break
+        }
+        current = if (current == descriptor) classDef.superclass else classDefByOrNull(current)?.superclass
+    }
+    logger.info("Universal Overlay launcher superclass chain: ${chain.joinToString(" -> ")}")
+
+    val binaryName = descriptor.removePrefix("L").removeSuffix(";").replace('/', '.')
+    val packageName = StartupHooks.resolvedPackageName
+    val packageOwned = !packageName.isNullOrBlank() &&
+        (binaryName == packageName || binaryName.startsWith("$packageName."))
+    logger.info("Universal Overlay launcher package ownership: descriptor=$descriptor package=$packageName owned=$packageOwned")
+    if (!packageOwned) {
+        logger.warning("Universal Overlay launcher rejected $descriptor: class is outside the application package")
+        return null
+    }
+
+    val noHistory = descriptor in StartupHooks.resolvedNoHistoryActivityDescriptors
+    logger.info("Universal Overlay launcher noHistory: descriptor=$descriptor value=$noHistory")
+    if (noHistory) {
+        logger.warning("Universal Overlay launcher rejected $descriptor: activity is marked noHistory")
+        return null
+    }
+    if (!hasActivityAncestor) {
+        logger.warning("Universal Overlay launcher rejected $descriptor: no Activity ancestor was resolved")
+        return null
+    }
+
+    val onCreateExists = classDef.methods.any {
+        it.name == "onCreate" && it.returnType == "V" &&
+            it.parameterTypes == listOf("Landroid/os/Bundle;") && it.implementation != null
+    }
+    logger.info("Universal Overlay launcher onCreate(Bundle) lookup: descriptor=$descriptor found=$onCreateExists")
+    if (!onCreateExists) {
+        logger.warning("Universal Overlay launcher rejected $descriptor: onCreate(Bundle) was not found")
+        return null
+    }
+
+    val owner = try { mutableClassDefBy(classDef) } catch (error: Exception) {
+        logger.warning("Universal Overlay launcher rejected $descriptor: mutable class lookup failed: ${error.message}")
+        return null
+    }
+    val onCreate = owner.methods.firstOrNull {
+        it.name == "onCreate" && it.returnType == "V" &&
+            it.parameterTypes == listOf("Landroid/os/Bundle;") && it.implementation != null
+    }
+    if (onCreate == null) {
+        logger.warning("Universal Overlay launcher rejected $descriptor: mutable onCreate(Bundle) lookup failed")
+        return null
+    }
+    logger.info("Universal Overlay launcher validation succeeded: $descriptor->onCreate(Bundle)")
+    return ResolvedOverlayActivity(owner, onCreate)
 }
 
 /** Finds a real, non-transient Activity when an explicit target is unavailable. */

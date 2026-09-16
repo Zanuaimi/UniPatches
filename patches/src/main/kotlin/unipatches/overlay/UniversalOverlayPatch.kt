@@ -1599,6 +1599,23 @@ val universalOverlayPatch = bytecodePatch(
         var adsPolicyAttached = false
         val adsRuntimePolicy = OverlayAdsRuntimeIntegration.pendingPolicy()
         val inAppRuntimePolicy = OverlayInAppRuntimeIntegration.pendingPolicy()
+        fun tryInjectOverlayBridge(
+            owner: MutableClass,
+            method: MutableMethod,
+            application: Boolean,
+        ): MutableMethod? = try {
+            injectOverlayBridge(this, owner, method, config, application, adsRuntimePolicy, inAppRuntimePolicy)
+        } catch (error: Exception) {
+            logger.warning(
+                "Universal Overlay bridge injection failed at ${owner.type}->${method.name}: " +
+                    "${error.javaClass.simpleName}: ${error.message}",
+            )
+            null
+        }
+        val resolvedLauncher = resolveOverlayLauncherActivity(
+            StartupHooks.resolvedLauncherActivityDescriptor,
+            logger,
+        )
         if (!explicitActivityFirst && appMethod != null) {
             val (appOwner, appOnCreate) = appMethod
             if (appOnCreate.hasOverlayBridge(application = true)) {
@@ -1611,16 +1628,18 @@ val universalOverlayPatch = bytecodePatch(
                 adsPolicyAttached = bridgeInstalled && adsRuntimePolicy != null
             } else {
                 bridgeAttempted = true
-                val injected = injectOverlayBridge(this, appOwner, appOnCreate, config, application = true, adsRuntimePolicy = adsRuntimePolicy, inAppRuntimePolicy = inAppRuntimePolicy)
-                bridgeInstalled = injected.hasOverlayBridge(application = true) &&
-                    (adsRuntimePolicy == null || injected.hasRuntimePolicy("Lunipatch/overlaycore/AdsRuntimePolicy")) &&
-                    (inAppRuntimePolicy == null || injected.hasRuntimePolicy("Lunipatch/overlaycore/InAppRuntimePolicy"))
+                val injected = tryInjectOverlayBridge(appOwner, appOnCreate, application = true)
+                bridgeInstalled = injected?.let { candidate ->
+                    candidate.hasOverlayBridge(application = true) &&
+                        (adsRuntimePolicy == null || candidate.hasRuntimePolicy("Lunipatch/overlaycore/AdsRuntimePolicy")) &&
+                        (inAppRuntimePolicy == null || candidate.hasRuntimePolicy("Lunipatch/overlaycore/InAppRuntimePolicy"))
+                } == true
                 if (bridgeInstalled) {
                     if (inAppRuntimePolicy != null) OverlayInAppRuntimeIntegration.markInjected()
                     logger.info("Runtime overlay bridge injected into ${appOwner.type}->onCreate")
                     adsPolicyAttached = adsRuntimePolicy != null
-                } else {
-                    logger.warning("Runtime overlay bridge injection could not be verified in ${appOwner.type}->onCreate")
+                } else if (injected != null) {
+                    logger.warning("Universal Overlay bridge verification failed in ${appOwner.type}->onCreate: expected install call or dependent policy configuration was not found")
                 }
             }
         }
@@ -1632,14 +1651,18 @@ val universalOverlayPatch = bytecodePatch(
         } else {
             selectedUiPreset.activityOverride.trim().takeIf { it.isNotEmpty() }?.let(::descriptor)
                 ?.let { target -> mutableClassDefByOrNull(target) }
+                ?: resolvedLauncher?.owner
                 ?: findOverlayFallbackActivity()
         }
         if (explicitActivityFirst && fallback == null) {
             logger.warning("Explicit Activity injection was requested but no target was found; universal fallback also failed.")
         }
-        val onCreate = fallback?.methods?.firstOrNull {
-            it.name == "onCreate" && it.returnType == "V" && it.parameterTypes == listOf("Landroid/os/Bundle;")
-        }
+        val onCreate = resolvedLauncher
+            ?.takeIf { it.owner.type == fallback?.type }
+            ?.onCreate
+            ?: fallback?.methods?.firstOrNull {
+                it.name == "onCreate" && it.returnType == "V" && it.parameterTypes == listOf("Landroid/os/Bundle;")
+            }
         if (fallback != null && onCreate != null) {
             if (onCreate.hasOverlayBridge(application = false)) {
                 logger.info("Runtime overlay bridge already exists in ${fallback.type}->onCreate")
@@ -1651,16 +1674,18 @@ val universalOverlayPatch = bytecodePatch(
                 adsPolicyAttached = bridgeInstalled && adsRuntimePolicy != null
             } else {
                 bridgeAttempted = true
-                val injected = injectOverlayBridge(this, fallback, onCreate, config, application = false, adsRuntimePolicy = adsRuntimePolicy, inAppRuntimePolicy = inAppRuntimePolicy)
-                bridgeInstalled = injected.hasOverlayBridge(application = false) &&
-                    (adsRuntimePolicy == null || injected.hasRuntimePolicy("Lunipatch/overlaycore/AdsRuntimePolicy")) &&
-                    (inAppRuntimePolicy == null || injected.hasRuntimePolicy("Lunipatch/overlaycore/InAppRuntimePolicy"))
+                val injected = tryInjectOverlayBridge(fallback, onCreate, application = false)
+                bridgeInstalled = injected?.let { candidate ->
+                    candidate.hasOverlayBridge(application = false) &&
+                        (adsRuntimePolicy == null || candidate.hasRuntimePolicy("Lunipatch/overlaycore/AdsRuntimePolicy")) &&
+                        (inAppRuntimePolicy == null || candidate.hasRuntimePolicy("Lunipatch/overlaycore/InAppRuntimePolicy"))
+                } == true
                 if (bridgeInstalled) {
                     if (inAppRuntimePolicy != null) OverlayInAppRuntimeIntegration.markInjected()
                     logger.info("Runtime overlay bridge injected into ${fallback.type}->onCreate")
                     adsPolicyAttached = adsRuntimePolicy != null
-                } else {
-                    logger.warning("Runtime overlay bridge injection could not be verified in ${fallback.type}->onCreate")
+                } else if (injected != null) {
+                    logger.warning("Universal Overlay bridge verification failed in ${fallback.type}->onCreate: expected installActivity call or dependent policy configuration was not found")
                 }
             }
         } else if (!bridgeInstalled) {
