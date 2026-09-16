@@ -1,3 +1,9 @@
+## [1.29.0-dev.14](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.13...v1.29.0-dev.14) (2026-09-16)
+
+### 🐛 Bug Fixes
+
+* fix incorrect action match for universal overlay and openiab compatibility fix ([1808a10](https://github.com/Zanuaimi/UniPatches/commit/1808a103d827f2adfc1b4d57c1f5f22635a00ee6))
+
 ## [1.29.0-dev.13](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.12...v1.29.0-dev.13) (2026-09-16)
 
 ### 🐛 Bug Fixes
