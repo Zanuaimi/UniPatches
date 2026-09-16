@@ -210,15 +210,67 @@ public final class OverlayRuntime {
 
     /** Shows the IAP confirmation popup on the currently attached overlay Activity. */
     public static synchronized boolean showInAppPurchaseConfirmation(String productId) {
-        for (Controller controller : new ArrayList<>(CONTROLLERS.values())) {
-            if (controller == null || !controller.canShowInAppPurchaseConfirmation()) continue;
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                return controller.showInAppPurchaseConfirmation(productId);
+        return showInAppPurchaseConfirmation(null, productId);
+    }
+
+    /** Shows the IAP confirmation popup on the Activity that initiated BillingClient. */
+    public static synchronized boolean showInAppPurchaseConfirmation(Activity target, String productId) {
+        Controller selected = target == null ? null : CONTROLLERS.get(target);
+        if (selected == null && target == null) {
+            for (Controller controller : new ArrayList<>(CONTROLLERS.values())) {
+                if (controller != null && controller.canShowInAppPurchaseConfirmation()) {
+                    selected = controller;
+                    break;
+                }
             }
-            MAIN.post(() -> controller.showInAppPurchaseConfirmation(productId));
-            return true;
         }
-        return false;
+        if (selected == null || !selected.canShowInAppPurchaseConfirmation()) {
+            OverlayRuntimeLogger.log("WARN", "InApp", "No active overlay controller for purchase Activity=" +
+                    (target == null ? "null" : target.getClass().getName()));
+            return false;
+        }
+        final Controller controller = selected;
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            try {
+                return controller.showInAppPurchaseConfirmation(productId);
+            } catch (RuntimeException error) {
+                OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup creation failed: " + error.getClass().getSimpleName());
+                return false;
+            }
+        }
+        boolean posted = MAIN.post(() -> {
+            boolean shown;
+            try {
+                shown = controller.showInAppPurchaseConfirmation(productId);
+            } catch (RuntimeException error) {
+                shown = false;
+                OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup creation failed: " + error.getClass().getSimpleName());
+            }
+            if (!shown) {
+                OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup was not attached on the main thread");
+                InAppRuntimePolicy.cancelPending();
+            }
+        });
+        if (!posted) {
+            OverlayRuntimeLogger.log("WARN", "InApp", "Could not post purchase popup creation to the main thread");
+            InAppRuntimePolicy.cancelPending();
+            return false;
+        }
+        return true;
+    }
+
+    public static void logActivityResultEntry(Activity activity, int requestCode, int resultCode) {
+        logActivityResult("entry", activity, requestCode, resultCode);
+    }
+
+    public static void logActivityResultExit(Activity activity, int requestCode, int resultCode) {
+        logActivityResult("exit", activity, requestCode, resultCode);
+    }
+
+    private static void logActivityResult(String phase, Activity activity, int requestCode, int resultCode) {
+        OverlayRuntimeLogger.log("INFO", "Lifecycle", "onActivityResult " + phase +
+                ": activity=" + (activity == null ? "null" : activity.getClass().getName()) +
+                ", requestCode=" + requestCode + ", resultCode=" + resultCode);
     }
 
     static synchronized void showActivity(Activity activity) {
@@ -228,6 +280,17 @@ public final class OverlayRuntime {
         Controller existing = CONTROLLERS.get(activity);
         if (existing != null) {
             existing.applyRememberedStates();
+            if (existing.needsReattach()) {
+                try {
+                    if (existing.reattach()) {
+                        OverlayRuntimeLogger.log("INFO", "Overlay", "Overlay reattached to resumed Activity: " + activity.getClass().getName());
+                    } else {
+                        OverlayRuntimeLogger.log("WARN", "Overlay", "Overlay reattach did not attach to resumed Activity: " + activity.getClass().getName());
+                    }
+                } catch (RuntimeException error) {
+                    OverlayRuntimeLogger.log("WARN", "Overlay", "Overlay reattach failed: " + error.getClass().getSimpleName());
+                }
+            }
             return;
         }
         Controller controller = null;
@@ -265,6 +328,7 @@ public final class OverlayRuntime {
     static synchronized void removeActivity(Activity activity) {
         Controller controller = CONTROLLERS.remove(activity);
         if (controller != null) controller.detach();
+        else InAppRuntimePolicy.onActivityDetached(activity);
     }
 
     static synchronized void pauseActivity(Activity activity) {
@@ -453,7 +517,8 @@ public final class OverlayRuntime {
                 menuLayer.setVisibility(View.GONE);
                 confirmationLayer.setVisibility(View.GONE);
                 activity.addContentView(root, contentLayoutParams());
-                attached = true;
+                attached = root.getParent() != null;
+                if (!attached) throw new IllegalStateException("Overlay root was not attached to the Activity content view");
                 root.post(this::constrainFloatingButton);
                 for (OverlaySystemModule module : systemRegistry.snapshot()) module.startSafely(activity);
                 for (OverlayAdvancedModule module : advancedRegistry.snapshot()) {
@@ -469,10 +534,28 @@ public final class OverlayRuntime {
             }
         }
 
+        boolean needsReattach() {
+            return !attached || root.getParent() == null;
+        }
+
+        boolean reattach() {
+            if (detached) return false;
+            if (!attached) {
+                attach();
+                return attached;
+            }
+            if (root.getParent() == null) {
+                activity.addContentView(root, contentLayoutParams());
+                attached = root.getParent() != null;
+                if (attached) root.post(this::constrainFloatingButton);
+            }
+            return attached;
+        }
+
         void detach() {
             if (detached) return;
             detached = true;
-            InAppRuntimePolicy.cancelPending();
+            InAppRuntimePolicy.onActivityDetached(activity);
             root.removeCallbacks(dragVisibilityFade);
             dismissSettingsPopupsImmediately();
             if (menuOutline != null) menuOutline.stop();
@@ -1715,6 +1798,13 @@ public final class OverlayRuntime {
             layer.setAlpha(0f);
             root.addView(layer);
             settingsPopupLayers.add(layer);
+            if (layer.getParent() != root) {
+                settingsPopupLayers.remove(layer);
+                OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup view was not attached to the overlay root");
+                return false;
+            }
+            OverlayRuntimeLogger.log("INFO", "InApp", "Purchase popup attached: product=" + productId +
+                    ", activity=" + activity.getClass().getName());
             root.post(() -> {
                 if (layer.getParent() == root) {
                     prepareOpeningAnimation(card);
