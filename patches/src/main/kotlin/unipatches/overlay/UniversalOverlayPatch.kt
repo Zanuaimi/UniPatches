@@ -1616,7 +1616,9 @@ val universalOverlayPatch = bytecodePatch(
             StartupHooks.resolvedLauncherActivityDescriptor,
             logger,
         )
-        if (!explicitActivityFirst && appMethod != null) {
+        // A manifest-resolved launcher is the most reliable process entry point for Activity
+        // injection. Try the Application entry point only when no valid launcher was resolved.
+        if (!explicitActivityFirst && resolvedLauncher == null && appMethod != null) {
             val (appOwner, appOnCreate) = appMethod
             if (appOnCreate.hasOverlayBridge(application = true)) {
                 logger.info("Runtime overlay bridge already exists in ${appOwner.type}->onCreate")

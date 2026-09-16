@@ -17,6 +17,24 @@ internal data class ResolvedOverlayActivity(
     val onCreate: MutableMethod,
 )
 
+internal fun hasRecognizedActivityAncestor(
+    start: String,
+    superclassOf: (String) -> String?,
+): Boolean {
+    val seen = mutableSetOf<String>()
+    var current: String? = start
+    while (current != null && seen.add(current)) {
+        if (current == "Landroid/app/Activity;" || current == "Landroid/app/NativeActivity;") {
+            return true
+        }
+        current = superclassOf(current)
+    }
+    return false
+}
+
+internal fun acceptsLauncherOwnership(manifestResolved: Boolean, packageOwned: Boolean): Boolean =
+    manifestResolved || packageOwned
+
 private fun MutableMethod.hasRuntimePolicy(policyClass: String): Boolean =
     implementation?.instructions?.any { instruction ->
         instruction.toString().contains("$policyClass;->configure")
@@ -212,29 +230,36 @@ internal fun BytecodePatchContext.resolveOverlayLauncherActivity(
         return null
     }
     logger.info("Universal Overlay launcher class lookup succeeded: $descriptor")
+    val manifestResolved = descriptor == StartupHooks.resolvedLauncherActivityDescriptor
+    logger.info("Universal Overlay launcher manifest-resolved: descriptor=$descriptor value=$manifestResolved")
 
     val chain = mutableListOf<String>()
     val seen = mutableSetOf<String>()
     var current: String? = descriptor
-    var hasActivityAncestor = false
     while (current != null && seen.add(current)) {
         chain += current
-        if (current == "Landroid/app/Activity;" ||
-            (current.startsWith("Landroid/") && current.endsWith("Activity;")) ||
-            current.startsWith("Landroid/support/") || current.startsWith("Landroidx/")) {
-            hasActivityAncestor = true
-            break
-        }
         current = if (current == descriptor) classDef.superclass else classDefByOrNull(current)?.superclass
     }
+    val hasActivityAncestor = hasRecognizedActivityAncestor(descriptor) { type ->
+        when {
+            type == descriptor -> classDef.superclass
+            type == "Landroid/app/Activity;" || type == "Landroid/app/NativeActivity;" -> null
+            else -> classDefByOrNull(type)?.superclass
+        }
+    }
     logger.info("Universal Overlay launcher superclass chain: ${chain.joinToString(" -> ")}")
+    logger.info("Universal Overlay launcher Activity ancestor: descriptor=$descriptor resolved=$hasActivityAncestor")
 
     val binaryName = descriptor.removePrefix("L").removeSuffix(";").replace('/', '.')
     val packageName = StartupHooks.resolvedPackageName
     val packageOwned = !packageName.isNullOrBlank() &&
         (binaryName == packageName || binaryName.startsWith("$packageName."))
-    logger.info("Universal Overlay launcher package ownership: descriptor=$descriptor package=$packageName owned=$packageOwned")
-    if (!packageOwned) {
+    val ownershipAccepted = acceptsLauncherOwnership(manifestResolved, packageOwned)
+    logger.info(
+        "Universal Overlay launcher package ownership: descriptor=$descriptor package=$packageName " +
+            "owned=$packageOwned accepted=$ownershipAccepted",
+    )
+    if (!ownershipAccepted) {
         logger.warning("Universal Overlay launcher rejected $descriptor: class is outside the application package")
         return null
     }
@@ -246,7 +271,9 @@ internal fun BytecodePatchContext.resolveOverlayLauncherActivity(
         return null
     }
     if (!hasActivityAncestor) {
-        logger.warning("Universal Overlay launcher rejected $descriptor: no Activity ancestor was resolved")
+        logger.warning(
+            "Universal Overlay launcher rejected $descriptor: no recognized Activity ancestor was resolved",
+        )
         return null
     }
 
@@ -264,6 +291,7 @@ internal fun BytecodePatchContext.resolveOverlayLauncherActivity(
         logger.warning("Universal Overlay launcher rejected $descriptor: mutable class lookup failed: ${error.message}")
         return null
     }
+    logger.info("Universal Overlay launcher mutability: descriptor=$descriptor mutable=true")
     val onCreate = owner.methods.firstOrNull {
         it.name == "onCreate" && it.returnType == "V" &&
             it.parameterTypes == listOf("Landroid/os/Bundle;") && it.implementation != null
