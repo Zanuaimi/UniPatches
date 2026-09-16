@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-16T08:05:22",
-  "description": "## [1.29.0-dev.4](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.3...v1.29.0-dev.4) (2026-09-16)\n\n### 🐛 Bug Fixes\n\n* **ads:** Enable runtime policy from selected modules ([34cec7f](https://github.com/Zanuaimi/UniPatches/commit/34cec7f9d79690e7eae53caef7ca5d48b87c99a9))\n\n### ✨ New Features\n\n* **controlembedded:** Organize auth and store settings ([4bf7ea0](https://github.com/Zanuaimi/UniPatches/commit/4bf7ea0332daa0f9849d907e95e24df081212599))\n* **inapp:** Add InApp Emulation overlay purchase controls ([ccf8574](https://github.com/Zanuaimi/UniPatches/commit/ccf8574befad5291a0bbf969e0a7ad292e901109))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.4/patches-1.29.0-dev.4.mpp",
+  "created_at": "2026-09-16T09:29:35",
+  "description": "## [1.29.0-dev.5](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.4...v1.29.0-dev.5) (2026-09-16)\n\n### 🐛 Bug Fixes\n\n* **overlay:** preserve shared startup bridge ([f4d7e13](https://github.com/Zanuaimi/UniPatches/commit/f4d7e1371e613858c0a16d129bb6d6d0fb1f5f56))\n\n### ✨ New Features\n\n* **compatibility:** add legacy app support patch ([c0b4a77](https://github.com/Zanuaimi/UniPatches/commit/c0b4a7726d3529f41b41b8a740a8583b16643830))\n* **inapp:** add legacy OpenIAB overlay bridge ([72ce177](https://github.com/Zanuaimi/UniPatches/commit/72ce1772bd3f173c8371188cf8e71bacaa020176))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.5/patches-1.29.0-dev.5.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.4"
+  "version": "1.29.0-dev.5"
 }

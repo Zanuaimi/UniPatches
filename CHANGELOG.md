@@ -1,3 +1,14 @@
+## [1.29.0-dev.5](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.4...v1.29.0-dev.5) (2026-09-16)
+
+### 🐛 Bug Fixes
+
+* **overlay:** preserve shared startup bridge ([f4d7e13](https://github.com/Zanuaimi/UniPatches/commit/f4d7e1371e613858c0a16d129bb6d6d0fb1f5f56))
+
+### ✨ New Features
+
+* **compatibility:** add legacy app support patch ([c0b4a77](https://github.com/Zanuaimi/UniPatches/commit/c0b4a7726d3529f41b41b8a740a8583b16643830))
+* **inapp:** add legacy OpenIAB overlay bridge ([72ce177](https://github.com/Zanuaimi/UniPatches/commit/72ce1772bd3f173c8371188cf8e71bacaa020176))
+
 ## [1.29.0-dev.4](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.3...v1.29.0-dev.4) (2026-09-16)
 
 ### 🐛 Bug Fixes
