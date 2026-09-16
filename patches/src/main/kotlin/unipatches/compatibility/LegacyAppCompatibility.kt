@@ -5,8 +5,20 @@ import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.intOption
 import app.morphe.patcher.patch.rawResourcePatch
 import app.morphe.patcher.patch.stringOption
+import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
+import com.android.tools.smali.dexlib2.Opcode
+import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction35c
+import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction3rc
+import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.reference.FieldReference
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
+import com.android.tools.smali.dexlib2.iface.reference.StringReference
+import com.android.tools.smali.dexlib2.iface.reference.TypeReference
 import helpers.manifest.NS_ANDROID
 import helpers.manifest.applicationOrNull
+import helpers.bytecode.cloneMutable
 import helpers.spoof.foldStringGetterConst
 import java.util.logging.Logger
 import org.w3c.dom.Document
@@ -138,42 +150,58 @@ private fun relaxSharedLibraries(document: Document): Int {
 
 private val exportedComponentTags = listOf("activity", "activity-alias", "service", "receiver")
 
-private fun Element.hasIntentFilter(): Boolean =
-    getElementsByTagName("intent-filter").length > 0
+private fun Element.androidAttribute(name: String): String =
+    getAttributeNS(NS_ANDROID, name).ifEmpty { getAttribute("android:$name") }
+
+private fun Element.hasAndroidAttribute(name: String): Boolean =
+    hasAttributeNS(NS_ANDROID, name) || getAttribute("android:$name").isNotEmpty()
+
+private fun Element.intentFilters(): List<Element> {
+    val plain = getElementsByTagName("intent-filter")
+    if (plain.length > 0) {
+        return (0 until plain.length).mapNotNull { plain.item(it) as? Element }
+    }
+    val namespaced = getElementsByTagNameNS("*", "intent-filter")
+    return (0 until namespaced.length).mapNotNull { namespaced.item(it) as? Element }
+}
+
+private fun Element.hasIntentFilter(): Boolean = intentFilters().isNotEmpty()
 
 private fun Element.isLauncherComponent(): Boolean {
-    val actions = getElementsByTagName("action")
-    var hasMainAction = false
-    for (index in 0 until actions.length) {
-        val action = actions.item(index) as? Element ?: continue
-        if (action.getAttributeNS(NS_ANDROID, "name") == "android.intent.action.MAIN") {
-            hasMainAction = true
-            break
+    for (filter in intentFilters()) {
+        val actions = filter.getElementsByTagName("action")
+        val namespacedActions = if (actions.length == 0) filter.getElementsByTagNameNS("*", "action") else null
+        val hasMainAction = (0 until (namespacedActions?.length ?: actions.length)).any { index ->
+            val action = (namespacedActions?.item(index) ?: actions.item(index)) as? Element
+            action?.androidAttribute("name") == "android.intent.action.MAIN"
         }
-    }
-    if (!hasMainAction) return false
+        if (!hasMainAction) continue
 
-    val categories = getElementsByTagName("category")
-    for (index in 0 until categories.length) {
-        val category = categories.item(index) as? Element ?: continue
-        if (category.getAttributeNS(NS_ANDROID, "name") == "android.intent.category.LAUNCHER") {
+        val categories = filter.getElementsByTagName("category")
+        val namespacedCategories = if (categories.length == 0) filter.getElementsByTagNameNS("*", "category") else null
+        val hasLauncherCategory = (0 until (namespacedCategories?.length ?: categories.length)).any { index ->
+            val category = (namespacedCategories?.item(index) ?: categories.item(index)) as? Element
+            category?.androidAttribute("name") == "android.intent.category.LAUNCHER"
+        }
+        if (hasLauncherCategory) {
             return true
         }
     }
     return false
 }
 
-private fun repairMissingComponentExportFlags(document: Document): Int {
+private fun repairMissingComponentExportFlags(document: Document, logger: Logger): Int {
     var repaired = 0
     for (tagName in exportedComponentTags) {
         val components = document.getElementsByTagName(tagName)
         for (index in 0 until components.length) {
             val component = components.item(index) as? Element ?: continue
-            if (component.hasAttributeNS(NS_ANDROID, "exported") || !component.hasIntentFilter()) continue
+            if (component.hasAndroidAttribute("exported") || !component.hasIntentFilter()) continue
 
             val exported = component.isLauncherComponent().toString()
             component.setAttributeNS(NS_ANDROID, "android:exported", exported)
             repaired++
+            logger.info("Legacy compatibility: repaired ${component.androidAttribute("name").ifEmpty { "<unnamed>" }} with android:exported=$exported.")
         }
     }
     return repaired
@@ -191,6 +219,232 @@ private fun exportAllActivities(document: Document): Int {
         }
     }
     return changed
+}
+
+private const val OPEN_IAB_UNITY_PLUGIN = "Lorg/onepf/openiab/UnityPlugin;"
+private const val REGISTER_RECEIVER = "registerReceiver"
+private const val RECEIVER_FLAGS_API = 33
+
+private fun receiverCallRegisters(instruction: ReferenceInstruction): List<Int>? = when (instruction) {
+    is BuilderInstruction35c -> if (instruction.registerCount == 3) {
+        listOf(instruction.registerC, instruction.registerD, instruction.registerE)
+    } else null
+    is BuilderInstruction3rc -> if (instruction.registerCount == 3) {
+        (instruction.startRegister until instruction.startRegister + 3).toList()
+    } else null
+    else -> null
+}
+
+private const val OPEN_IAB_AUTOMATIC = "automatic"
+private const val OPEN_IAB_DISABLED = "disabled"
+private const val OPEN_IAB_FORCE = "force"
+
+private fun addActionArgumentRegister(instruction: ReferenceInstruction): Int? = when (instruction) {
+    is BuilderInstruction35c -> if (instruction.registerCount == 2) instruction.registerD else null
+    is BuilderInstruction3rc -> if (instruction.registerCount == 2) instruction.startRegister + 1 else null
+    else -> null
+}
+
+private fun resolvedOpenIabActions(
+    instructions: List<com.android.tools.smali.dexlib2.iface.instruction.Instruction>,
+    endIndex: Int,
+): Set<String>? {
+    val actions = mutableSetOf<String>()
+    for (index in 0..endIndex) {
+        val instruction = instructions[index]
+        val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference ?: continue
+        if (reference.definingClass != "Landroid/content/IntentFilter;" ||
+            reference.name != "addAction" ||
+            reference.returnType != "V" ||
+            reference.parameterTypes != listOf("Ljava/lang/String;")
+        ) continue
+
+        val argumentRegister = addActionArgumentRegister(instruction) ?: return null
+        val candidates = instructions.subList(0, index).mapNotNull { previous ->
+            val string = (previous as? ReferenceInstruction)?.reference as? StringReference ?: return@mapNotNull null
+            if (previous.opcode != Opcode.CONST_STRING && previous.opcode != Opcode.CONST_STRING_JUMBO) return@mapNotNull null
+            val register = (previous as? OneRegisterInstruction)?.registerA ?: return@mapNotNull null
+            if (register == argumentRegister) string.string else null
+        }.toSet()
+        if (candidates.size != 1) return null
+        actions += candidates.single()
+    }
+    return actions.takeIf { it.isNotEmpty() }
+}
+
+private fun isSafeOpenIabAction(action: String): Boolean {
+    if (action.startsWith("android.")) return true
+    if (action.startsWith("org.onepf.openiab.")) return true
+    return false
+}
+
+private fun isOpenIabReceiverValue(
+    instructions: List<com.android.tools.smali.dexlib2.iface.instruction.Instruction>,
+    endIndex: Int,
+    receiverRegister: Int,
+): Boolean {
+    var register = receiverRegister
+    for (index in endIndex - 1 downTo 0) {
+        val instruction = instructions[index]
+        when (instruction.opcode) {
+            Opcode.NEW_INSTANCE -> {
+                if ((instruction as? OneRegisterInstruction)?.registerA != register) continue
+                val type = (instruction as? ReferenceInstruction)?.reference as? TypeReference
+                return type?.type?.startsWith("Lorg/onepf/openiab/") == true ||
+                    type?.type?.startsWith("Lorg/onepf/oms/") == true
+            }
+            Opcode.MOVE_OBJECT, Opcode.MOVE_OBJECT_FROM16, Opcode.MOVE_OBJECT_16 -> {
+                val move = instruction as? TwoRegisterInstruction ?: continue
+                if (move.registerA == register) register = move.registerB
+            }
+            Opcode.MOVE_RESULT_OBJECT -> {
+                if ((instruction as? OneRegisterInstruction)?.registerA != register) continue
+                val producer = instructions.getOrNull(index - 1)
+                val reference = (producer as? ReferenceInstruction)?.reference as? MethodReference
+                return reference?.definingClass?.startsWith("Lorg/onepf/openiab/") == true ||
+                    reference?.definingClass?.startsWith("Lorg/onepf/oms/") == true
+            }
+            Opcode.IGET_OBJECT, Opcode.SGET_OBJECT -> {
+                val destination = (instruction as? OneRegisterInstruction)?.registerA
+                if (destination != register) continue
+                val field = (instruction as? ReferenceInstruction)?.reference as? FieldReference
+                return field?.definingClass?.startsWith("Lorg/onepf/openiab/") == true ||
+                    field?.definingClass?.startsWith("Lorg/onepf/oms/") == true
+            }
+            else -> Unit
+        }
+    }
+    return false
+}
+
+private fun openIabReceiverFlagsPatch(enabledProvider: () -> String) = bytecodePatch(
+    name = null,
+    description = "Internal OpenIAB dynamic receiver compatibility phase.",
+    default = false,
+) {
+    execute {
+        val logger = Logger.getLogger(this::class.java.name)
+        val mode = enabledProvider().trim().lowercase()
+        if (mode == OPEN_IAB_DISABLED) return@execute
+        if (mode !in setOf(OPEN_IAB_AUTOMATIC, OPEN_IAB_FORCE)) {
+            logger.warning("Legacy compatibility: unknown OpenIAB receiver mode '$mode'; fix skipped.")
+            return@execute
+        }
+        val openIab = mutableClassDefByOrNull(OPEN_IAB_UNITY_PLUGIN)
+        if (openIab == null) {
+            logger.info("Legacy compatibility: OpenIAB UnityPlugin was not found; dynamic receiver fix skipped.")
+            return@execute
+        }
+
+        var patched = 0
+        var skipped = 0
+        for (method in openIab.methods.filter { it.name == "createBroadcasts" }) {
+            val implementation = method.implementation ?: continue
+            val calls = implementation.instructions.mapIndexedNotNull { index, instruction ->
+                val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference ?: return@mapIndexedNotNull null
+                if (reference.definingClass != "Landroid/content/Context;" ||
+                    reference.name != REGISTER_RECEIVER ||
+                    reference.returnType != "Landroid/content/Intent;" ||
+                    reference.parameterTypes != listOf(
+                        "Landroid/content/BroadcastReceiver;",
+                        "Landroid/content/IntentFilter;",
+                    )
+                ) return@mapIndexedNotNull null
+                index to (instruction as? ReferenceInstruction)
+            }
+            if (calls.isEmpty()) continue
+
+            if (mode == OPEN_IAB_AUTOMATIC) {
+                val unverifiedCall = calls.firstOrNull { call ->
+                    val receiverRegisters = receiverCallRegisters(call.second!!)
+                    receiverRegisters == null || !isOpenIabReceiverValue(
+                        implementation.instructions,
+                        call.first,
+                        receiverRegisters[1],
+                    )
+                }
+                if (unverifiedCall != null) {
+                    skipped += calls.size
+                    logger.info("Legacy compatibility: automatic OpenIAB receiver fix skipped ${method.name}; receiver ownership was not proven for every call.")
+                    continue
+                }
+                val actions = resolvedOpenIabActions(implementation.instructions, calls.last().first)
+                if (actions == null) {
+                    skipped += calls.size
+                    logger.info("Legacy compatibility: automatic OpenIAB receiver fix skipped ${method.name}; IntentFilter actions were not uniquely resolved.")
+                    continue
+                }
+                val externalStoreAction = actions.firstOrNull { action ->
+                    listOf(
+                        "com.android.vending.",
+                        "com.amazon.",
+                        "com.sec.",
+                        "com.samsung.",
+                        "com.yandex.",
+                        "com.nokia.",
+                        "com.slideme.",
+                        "com.appland.",
+                        "com.aptoide.",
+                        "com.appmall.",
+                    ).any(action::startsWith)
+                }
+                if (externalStoreAction != null || actions.any { !isSafeOpenIabAction(it) }) {
+                    skipped += calls.size
+                    logger.info("Legacy compatibility: automatic OpenIAB receiver fix skipped ${method.name}; actions are external-store or not proven app-local/system: $actions")
+                    continue
+                }
+            }
+
+            val originalRegisterCount = implementation.registerCount
+            val scratchBase = originalRegisterCount
+            // if-lt is the only API-level branch used here and its 22t format
+            // accepts only v0..v15. Skip larger frames rather than emitting
+            // malformed bytecode; the original call remains untouched.
+            if (scratchBase + 5 > 15) {
+                skipped += calls.size
+                logger.warning("Legacy compatibility: skipped OpenIAB receiver fix in ${method.name}; scratch registers cannot fit the branch-safe v0..v15 range.")
+                continue
+            }
+
+            val cloned = method.cloneMutable(additionalRegisters = 6)
+            val prologueSize = cloned.implementation!!.instructions.size - implementation.instructions.size
+            for ((ordinal, call) in calls.asReversed().withIndex()) {
+                val index = call.first + prologueSize
+                val registers = receiverCallRegisters(call.second!!) ?: run {
+                    skipped++
+                    continue
+                }
+                val oldReference = "Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent;"
+                val oldLabel = ":morphe_openiab_receiver_old_${ordinal}"
+                val doneLabel = ":morphe_openiab_receiver_done_${ordinal}"
+                val block = """
+                    move-object/from16 v$scratchBase, v${registers[0]}
+                    move-object/from16 v${scratchBase + 1}, v${registers[1]}
+                    move-object/from16 v${scratchBase + 2}, v${registers[2]}
+                    sget v${scratchBase + 5}, Landroid/os/Build${'$'}VERSION;->SDK_INT:I
+                    const/16 v${scratchBase + 4}, $RECEIVER_FLAGS_API
+                    if-lt v${scratchBase + 5}, v${scratchBase + 4}, $oldLabel
+                    const/16 v${scratchBase + 3}, 0x4
+                    invoke-virtual/range {v$scratchBase .. v${scratchBase + 3}}, Landroid/content/Context;->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;I)Landroid/content/Intent;
+                    goto $doneLabel
+                    $oldLabel
+                    invoke-virtual/range {v$scratchBase .. v${scratchBase + 2}}, $oldReference
+                    $doneLabel
+                """.trimIndent()
+                cloned.replaceInstruction(index, block)
+                patched++
+            }
+            val mutableClass = mutableClassDefByOrNull(OPEN_IAB_UNITY_PLUGIN) ?: continue
+            mutableClass.methods.remove(method)
+            mutableClass.methods.add(cloned)
+        }
+
+        if (patched == 0) {
+            logger.warning("Legacy compatibility: no exact OpenIAB Context.registerReceiver calls were patched in mode=$mode; skipped=$skipped.")
+        } else {
+            logger.info("Legacy compatibility: patched $patched OpenIAB dynamic receiver registration call(s) in mode=$mode; skipped=$skipped.")
+        }
+    }
 }
 
 private fun legacyImeiPatch(imeiProvider: () -> Pair<Boolean, String>) = bytecodePatch(
@@ -225,7 +479,8 @@ val legacyAppCompatibilityPatch = rawResourcePatch(
     description = """
         Improve compatibility for older apps and games on modern Android versions. This patch combines
         legacy manifest, storage, screen, native runtime, network, shared-library, and optional device
-        identity compatibility controls. Spoof Target SDK can help older apps that modern Android may
+        identity compatibility controls, including a configurable OpenIAB dynamic receiver compatibility
+        fix. Spoof Target SDK can help older apps that modern Android may
         refuse to install or launch, but changing the reported target can also enable newer platform
         behavior and cannot repair incompatible application code.
 
@@ -284,6 +539,17 @@ val legacyAppCompatibilityPatch = rawResourcePatch(
         default = true,
         key = "legacyCompatibilityBluetooth",
         description = "When Legacy App Reviver is enabled, declare modern Bluetooth permissions. Declarations do not grant runtime access.",
+    )
+    val openIabReceiverRegistrationMode by stringOption(
+        title = "Legacy App Compatibility > Runtime compatibility > Fix OpenIAB dynamic receiver registration",
+        default = OPEN_IAB_AUTOMATIC,
+        key = "legacyCompatibilityOpenIabReceiverRegistrationMode",
+        description = "Automatic applies the fix only when the exact OpenIAB UnityPlugin call, receiver ownership, resolvable IntentFilter actions, app-local or system actions, no known external-store actions, and safe register layout are confirmed. Disabled leaves OpenIAB unchanged. Force applies the exact OpenIAB method fix for troubleshooting. Automatic is recommended.",
+        values = linkedMapOf(
+            "Automatic (recommended)" to OPEN_IAB_AUTOMATIC,
+            "Disabled" to OPEN_IAB_DISABLED,
+            "Force OpenIAB receiver fix" to OPEN_IAB_FORCE,
+        ),
     )
     val repairExportFlags by booleanOption(
         title = "Legacy App Compatibility > Installation and manifest > Repair Missing Component Export Flags",
@@ -347,6 +613,7 @@ val legacyAppCompatibilityPatch = rawResourcePatch(
     )
 
     dependsOn(legacyImeiPatch { Pair(spoofImei == true, imei.orEmpty().trim()) })
+    dependsOn(openIabReceiverFlagsPatch { openIabReceiverRegistrationMode ?: OPEN_IAB_AUTOMATIC })
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)
@@ -388,7 +655,7 @@ val legacyAppCompatibilityPatch = rawResourcePatch(
                     }
                 }
                 repairExportFlags == true -> {
-                    val repaired = repairMissingComponentExportFlags(manifest)
+                    val repaired = repairMissingComponentExportFlags(manifest, logger)
                     changed += repaired
                     if (repaired == 0) {
                         logger.info("Legacy compatibility: no filtered components with missing android:exported were found.")
