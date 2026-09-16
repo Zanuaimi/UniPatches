@@ -1,3 +1,11 @@
+## [1.29.0-dev.12](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.11...v1.29.0-dev.12) (2026-09-16)
+
+### 🐛 Bug Fixes
+
+* **iap:** preserve unsafe legacy purchase flows ([8308e7b](https://github.com/Zanuaimi/UniPatches/commit/8308e7b668916edf2da28924421a594342fe76dc))
+* **legacy:** harden OpenIAB receiver compatibility ([627cdde](https://github.com/Zanuaimi/UniPatches/commit/627cdde0c857fc606f3ddcd531b791ed5492ca90))
+* **overlay:** verify startup bridge and receiver safety ([56a3a58](https://github.com/Zanuaimi/UniPatches/commit/56a3a58e8fc7c6215602104918c15e157cadcb45))
+
 ## [1.29.0-dev.11](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.10...v1.29.0-dev.11) (2026-09-16)
 
 ### 🐛 Bug Fixes

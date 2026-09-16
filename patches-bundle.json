@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-16T11:09:17",
-  "description": "## [1.29.0-dev.11](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.10...v1.29.0-dev.11) (2026-09-16)\n\n### 🐛 Bug Fixes\n\n* **compatibility:** Look for Intent Filter and Add Action as well for OpenIAB compatibility fix. ([2b099c5](https://github.com/Zanuaimi/UniPatches/commit/2b099c5828655c1393a56add95773ea08741272f))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.11/patches-1.29.0-dev.11.mpp",
+  "created_at": "2026-09-16T12:22:52",
+  "description": "## [1.29.0-dev.12](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.11...v1.29.0-dev.12) (2026-09-16)\n\n### 🐛 Bug Fixes\n\n* **iap:** preserve unsafe legacy purchase flows ([8308e7b](https://github.com/Zanuaimi/UniPatches/commit/8308e7b668916edf2da28924421a594342fe76dc))\n* **legacy:** harden OpenIAB receiver compatibility ([627cdde](https://github.com/Zanuaimi/UniPatches/commit/627cdde0c857fc606f3ddcd531b791ed5492ca90))\n* **overlay:** verify startup bridge and receiver safety ([56a3a58](https://github.com/Zanuaimi/UniPatches/commit/56a3a58e8fc7c6215602104918c15e157cadcb45))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.12/patches-1.29.0-dev.12.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.11"
+  "version": "1.29.0-dev.12"
 }
