@@ -1,3 +1,9 @@
+## [1.29.0-dev.6](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.5...v1.29.0-dev.6) (2026-09-16)
+
+### ✨ New Features
+
+* **inapp:** Add attribution to module description ([9df450e](https://github.com/Zanuaimi/UniPatches/commit/9df450e903e705950028126b4aba14198443efcf))
+
 ## [1.29.0-dev.5](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.4...v1.29.0-dev.5) (2026-09-16)
 
 ### 🐛 Bug Fixes

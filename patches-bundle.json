@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-16T09:29:35",
-  "description": "## [1.29.0-dev.5](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.4...v1.29.0-dev.5) (2026-09-16)\n\n### 🐛 Bug Fixes\n\n* **overlay:** preserve shared startup bridge ([f4d7e13](https://github.com/Zanuaimi/UniPatches/commit/f4d7e1371e613858c0a16d129bb6d6d0fb1f5f56))\n\n### ✨ New Features\n\n* **compatibility:** add legacy app support patch ([c0b4a77](https://github.com/Zanuaimi/UniPatches/commit/c0b4a7726d3529f41b41b8a740a8583b16643830))\n* **inapp:** add legacy OpenIAB overlay bridge ([72ce177](https://github.com/Zanuaimi/UniPatches/commit/72ce1772bd3f173c8371188cf8e71bacaa020176))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.5/patches-1.29.0-dev.5.mpp",
+  "created_at": "2026-09-16T09:35:43",
+  "description": "## [1.29.0-dev.6](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.5...v1.29.0-dev.6) (2026-09-16)\n\n### ✨ New Features\n\n* **inapp:** Add attribution to module description ([9df450e](https://github.com/Zanuaimi/UniPatches/commit/9df450e903e705950028126b4aba14198443efcf))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.6/patches-1.29.0-dev.6.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.5"
+  "version": "1.29.0-dev.6"
 }
