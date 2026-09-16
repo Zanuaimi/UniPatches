@@ -1,3 +1,9 @@
+## [1.29.0-dev.11](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.10...v1.29.0-dev.11) (2026-09-16)
+
+### 🐛 Bug Fixes
+
+* **compatibility:** Look for Intent Filter and Add Action as well for OpenIAB compatibility fix. ([2b099c5](https://github.com/Zanuaimi/UniPatches/commit/2b099c5828655c1393a56add95773ea08741272f))
+
 ## [1.29.0-dev.10](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.9...v1.29.0-dev.10) (2026-09-16)
 
 ### ✨ New Features
