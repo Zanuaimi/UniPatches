@@ -3,9 +3,11 @@ package unipatches.iap
 import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.bytecodePatch
+import com.android.tools.smali.dexlib2.iface.ClassDef
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import helpers.bytecode.cloneMutable
+import helpers.bytecode.cloneMutableAndAllocateScratchRegisters
 import java.util.logging.Logger
 
 @Suppress("unused")
@@ -29,6 +31,7 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
     try { category("InApp Emulation") } catch (_: NoSuchMethodError) {}
     execute {
         val logger = Logger.getLogger(this::class.java.name)
+        val managedPhaseStart = System.nanoTime()
         var patched = 0
         val patchedMethods = mutableSetOf<String>()
 
@@ -171,10 +174,11 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 null
             } catch (_: Exception) { null }
         }
-        // Buy-time grant block for launchBillingFlow (v0..v3, instance
-        // methods only): fire onPurchasesUpdated(OK, [fake PURCHASED]) on
-        // the client's own listener, then return OK. Null listener falls
-        // through to OK-only. This mirrors native MOD-menu behavior: the
+        // Buy-time grant block for launchBillingFlow: dispatch the purchase
+        // request through the runtime policy, then return a valid OK result.
+        // The policy owns fake purchase construction and popup timing. A null
+        // listener receives only the valid OK result. This mirrors native
+        // MOD-menu behavior:
         // grant happens when the user buys, while init/query/catalog paths
         // stay stock so strict titles keep booting.
         // NOTE (morphe inline-smali quirk, verified by assembling test
@@ -196,8 +200,7 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 ${if (overlayEnabled) """
                 $overlayProductArguments
                 invoke-static {v0, v1, v2}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatch(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
-                goto :morphe_iap_done
-                """.trimIndent() else ""}
+                """.trimIndent() else """
                 const-string v1, "{\"orderId\":\"morphe_fake\",\"packageName\":\"morphe_fake\",\"productId\":\"morphe_fake\",\"purchaseTime\":0,\"purchaseState\":1,\"purchaseToken\":\"morphe_fake\",\"quantity\":1,\"acknowledged\":true}"
                 const-string v2, "morphe_fake"
                 new-instance v3, Lcom/android/billingclient/api/Purchase;
@@ -214,7 +217,7 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 invoke-virtual {v1}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->build()Lcom/android/billingclient/api/BillingResult;
                 move-result-object v1
                 invoke-interface {v0, v1, v3}, Lcom/android/billingclient/api/PurchasesUpdatedListener;->onPurchasesUpdated(Lcom/android/billingclient/api/BillingResult;Ljava/util/List;)V
-                goto :morphe_iap_done
+                """.trimIndent()}
                 :morphe_iap_nocb
                 invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
                 move-result-object v1
@@ -223,7 +226,6 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 move-result-object v1
                 invoke-virtual {v1}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->build()Lcom/android/billingclient/api/BillingResult;
                 move-result-object v1
-                :morphe_iap_done
                 return-object v1
             """.trimIndent()
         }
@@ -364,15 +366,11 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 // The callback is followed by the stock connection body, so
                 // use cloned scratch registers instead of clobbering v0/v1.
                 // Keep all 35c invoke registers below v16.
-                if (originalRegisters > 12) return@patchAll
+                if (originalRegisters > 13) return@patchAll
                 val owner = mutableClassDefByOrNull(it.definingClass) ?: return@patchAll
-                val target = owner.methods.firstOrNull {
-                    it.name == "startConnection" &&
-                        it.parameterTypes == listOf("Lcom/android/billingclient/api/BillingClientStateListener;") &&
-                        it.returnType == "V"
-                } ?: return@patchAll
-                val scratch = originalRegisters
-                val cloned = it.cloneMutable(additionalRegisters = 3)
+                val allocation = it.cloneMutableAndAllocateScratchRegisters(owner, scratchRegisterCount = 3)
+                val cloned = allocation.method
+                val scratch = allocation.firstScratchRegister
                 val listenerReg = parameterRegister(it, 0)
                 val block = """
                     invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
@@ -387,9 +385,7 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                     invoke-interface {v${scratch + 1}, v$scratch}, Lcom/android/billingclient/api/BillingClientStateListener;->onBillingSetupFinished(Lcom/android/billingclient/api/BillingResult;)V
                     :morphe_iap_setup_done
                 """.trimIndent()
-                owner.methods.remove(target)
                 cloned.addInstructions(0, block)
-                owner.methods.add(cloned)
             }
             // else: leave the overload alone (see comment above)
         }
@@ -409,7 +405,39 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
             "processPurchase", "giveItem", "addPurchase", "grantPurchase",
         )
         var cocosPatched = false
+        // Build a small candidate index once. The broad compatibility phases
+        // otherwise enumerate and inspect every class independently.
+        val cocosCandidates = mutableListOf<ClassDef>()
+        val nativeBridgeCandidates = mutableListOf<ClassDef>()
+        val gameMakerCandidates = mutableListOf<ClassDef>()
+        var indexedClassCount = 0
         classDefForEach { classDef ->
+            indexedClassCount++
+            val methods = classDef.methods.toList()
+            if (classDef.type.startsWith("Lcom/android/billingclient/api/zz") &&
+                methods.any { it.name == "nativeOnPurchasesUpdated" && it.implementation != null }) {
+                nativeBridgeCandidates += classDef
+            }
+            if (!isFrameworkClass(classDef.type) && !isBillingNamespace(classDef.type) &&
+                methods.any { method ->
+                    method.name.equals("verifyPurchase", ignoreCase = true) &&
+                        method.returnType == "Z" && method.implementation != null
+                }) {
+                gameMakerCandidates += classDef
+            }
+            if (!isFrameworkClass(classDef.type) && !isBillingNamespace(classDef.type) &&
+                methods.any { method ->
+                    method.returnType == "V" && method.parameterTypes.firstOrNull() == "Ljava/lang/String;" &&
+                        method.implementation?.instructions?.any { instruction ->
+                            instruction is ReferenceInstruction &&
+                                instruction.reference is MethodReference &&
+                                (instruction.reference as MethodReference).name == "launchBillingFlow"
+                        } == true
+                }) {
+                cocosCandidates += classDef
+            }
+        }
+        cocosCandidates.forEach classDefForEach@{ classDef ->
             if (cocosPatched) return@classDefForEach
             val className = classDef.type
             if (isFrameworkClass(className) || isBillingNamespace(className)) return@classDefForEach
@@ -480,7 +508,7 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         // Unity and GameMaker IL2CPP builds can route BillingClient events
         // through obfuscated zz* bridge classes. Require the native methods
         // and exact callback signatures before touching a bridge.
-        classDefForEach { classDef ->
+        nativeBridgeCandidates.forEach classDefForEach@{ classDef ->
             val className = classDef.type
             if (!className.startsWith("Lcom/android/billingclient/api/zz")) return@classDefForEach
             if (classDef.methods.none { it.name == "nativeOnPurchasesUpdated" }) return@classDefForEach
@@ -934,7 +962,7 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         // GameMaker commonly keeps purchase validation in an app-owned class
         // with no billing-related name. Scan only non-framework, non-billing
         // classes and require the exact boolean verifyPurchase signature.
-        classDefForEach { classDef ->
+        gameMakerCandidates.forEach classDefForEach@{ classDef ->
             val className = classDef.type
             if (isFrameworkClass(className) || isBillingNamespace(className)) return@classDefForEach
             val verify = classDef.methods.firstOrNull {
@@ -1174,5 +1202,6 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         } else {
             logger.warning("No billing/purchase checks found. No changes applied.")
         }
+        logger.info("Emulate InApp managed phase completed in ${(System.nanoTime() - managedPhaseStart) / 1_000_000} ms; classes indexed=$indexedClassCount; candidates=cocos=${cocosCandidates.size}, native=${nativeBridgeCandidates.size}, gameMaker=${gameMakerCandidates.size}")
     }
 }

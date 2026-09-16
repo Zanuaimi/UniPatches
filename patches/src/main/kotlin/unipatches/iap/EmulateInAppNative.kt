@@ -10,6 +10,8 @@ private data class NativeSignature(
     val pattern: ByteArray,
     val mask: ByteArray,
     val replacement: ByteArray,
+    val anchorOffset: Int,
+    val anchor: ByteArray,
 )
 
 private data class ExecutableRange(val start: Int, val end: Int)
@@ -43,6 +45,15 @@ private fun maskedBytes(value: String): Pair<ByteArray, ByteArray> {
     return bytes.toByteArray() to masks.toByteArray()
 }
 
+private fun indexOfByte(bytes: ByteArray, value: Byte, fromIndex: Int): Int {
+    var index = fromIndex.coerceAtLeast(0)
+    while (index < bytes.size) {
+        if (bytes[index] == value) return index
+        index++
+    }
+    return -1
+}
+
 private fun maskedMatches(
     haystack: ByteArray,
     signature: NativeSignature,
@@ -53,18 +64,58 @@ private fun maskedMatches(
     for (range in ranges) {
         val lastStart = range.end - signature.pattern.size
         if (lastStart < range.start) continue
-        for (offset in range.start..lastStart step 4) {
-            var matched = true
-            for (index in signature.pattern.indices) {
-                val actual = haystack[offset + index].toInt() and 0xff
-                val expected = signature.pattern[index].toInt() and 0xff
-                val mask = signature.mask[index].toInt() and 0xff
-                if ((actual and mask) != (expected and mask)) {
-                    matched = false
+        val anchorStart = range.start + signature.anchorOffset
+        val anchorEnd = lastStart + signature.anchorOffset
+        if (signature.anchor.isEmpty()) {
+            for (offset in range.start..lastStart step 4) {
+                var matched = true
+                for (index in signature.pattern.indices) {
+                    val actual = haystack[offset + index].toInt() and 0xff
+                    val expected = signature.pattern[index].toInt() and 0xff
+                    val mask = signature.mask[index].toInt() and 0xff
+                    if ((actual and mask) != (expected and mask)) {
+                        matched = false
+                        break
+                    }
+                }
+                if (matched) {
+                    matches += offset
+                    if (matches.size > 1) return matches
+                }
+            }
+            continue
+        }
+        var anchorPosition = indexOfByte(haystack, signature.anchor[0], anchorStart)
+        while (anchorPosition >= 0 && anchorPosition <= anchorEnd) {
+            var anchorMatched = true
+            for (index in 1 until signature.anchor.size) {
+                if (haystack[anchorPosition + index] != signature.anchor[index]) {
+                    anchorMatched = false
                     break
                 }
             }
-            if (matched) matches += offset
+            if (anchorMatched) {
+                val offset = anchorPosition - signature.anchorOffset
+                if ((offset - range.start) % 4 == 0) {
+                    var matched = true
+                    for (index in signature.pattern.indices) {
+                        val actual = haystack[offset + index].toInt() and 0xff
+                        val expected = signature.pattern[index].toInt() and 0xff
+                        val mask = signature.mask[index].toInt() and 0xff
+                        if ((actual and mask) != (expected and mask)) {
+                            matched = false
+                            break
+                        }
+                    }
+                    if (matched) {
+                        matches += offset
+                        // Only the distinction between zero, one, and many
+                        // matches affects patch safety and reporting.
+                        if (matches.size > 1) return matches
+                    }
+                }
+            }
+            anchorPosition = indexOfByte(haystack, signature.anchor[0], anchorPosition + 1)
         }
     }
     return matches
@@ -119,7 +170,23 @@ private fun executableRanges(bytes: ByteArray): List<ExecutableRange> {
 
 private fun arm64Signature(name: String, pattern: String, replacement: String): NativeSignature {
     val (bytes, mask) = maskedBytes(pattern)
-    return NativeSignature(name, bytes, mask, hexBytes(replacement))
+    var bestStart = 0
+    var bestLength = 0
+    var currentStart = -1
+    for (index in mask.indices) {
+        if ((mask[index].toInt() and 0xff) == 0xff) {
+            if (currentStart < 0) currentStart = index
+            val length = index - currentStart + 1
+            if (length > bestLength) {
+                bestStart = currentStart
+                bestLength = length
+            }
+        } else {
+            currentStart = -1
+        }
+    }
+    val anchor = if (bestLength > 0) bytes.copyOfRange(bestStart, bestStart + bestLength) else byteArrayOf()
+    return NativeSignature(name, bytes, mask, hexBytes(replacement), bestStart, anchor)
 }
 
 private val arm64Signatures = listOf(
@@ -157,7 +224,11 @@ internal fun applyNativeIl2CppPhase(
     mode: String,
     logger: Logger,
 ): List<NativePhaseResult> {
-    if (mode == "managed") return emptyList()
+    val phaseStart = System.nanoTime()
+    if (mode == "managed") {
+        logger.info("Emulate InApp native phase skipped in managed-only mode")
+        return emptyList()
+    }
     val results = mutableListOf<NativePhaseResult>()
 
     for ((abi, path) in nativeAbiPaths) {
@@ -234,5 +305,6 @@ internal fun applyNativeIl2CppPhase(
             results += NativePhaseResult(abi, NativeStatus.SKIPPED, "failed closed: ${e.message}")
         }
     }
+    logger.info("Emulate InApp native phase completed in ${(System.nanoTime() - phaseStart) / 1_000_000} ms")
     return results
 }
