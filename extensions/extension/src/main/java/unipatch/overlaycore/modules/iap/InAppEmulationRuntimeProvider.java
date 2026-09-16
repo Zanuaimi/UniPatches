@@ -23,7 +23,7 @@ public final class InAppEmulationRuntimeProvider implements OverlayAppSpecificMo
     private static final class Module extends OverlayActionModule {
         @Override public String key() { return PROFILE_ID; }
         @Override public String label() { return "InApp Emulation"; }
-        @Override public String description() { return "Control purchase confirmation popups and manage saved products for this app session."; }
+        @Override public String description() { return "Control purchase confirmation popups and manage saved products for this app session. Credits to Nai64 for the original IAP patch functionality; enhancement inspiration from MiguelNinja19's billing patches."; }
         @Override public boolean hasSettings() { return true; }
         @Override public boolean hasActionButton() { return false; }
         @Override protected boolean readEnabled(Activity a, int f, int u) { return InAppRuntimePolicy.popupEnabled(); }
