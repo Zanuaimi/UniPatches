@@ -1666,6 +1666,7 @@ val universalOverlayPatch = bytecodePatch(
                 it.name == "onCreate" && it.returnType == "V" && it.parameterTypes == listOf("Landroid/os/Bundle;")
             }
         if (fallback != null && onCreate != null) {
+            patchActivityResultForwarding(fallback, logger)
             if (onCreate.hasOverlayBridge(application = false)) {
                 logger.info("Runtime overlay bridge already exists in ${fallback.type}->onCreate")
                 val configured = attachExistingOverlayPolicies(fallback, onCreate, adsRuntimePolicy, inAppRuntimePolicy)

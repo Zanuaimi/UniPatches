@@ -35,6 +35,71 @@ internal fun hasRecognizedActivityAncestor(
 internal fun acceptsLauncherOwnership(manifestResolved: Boolean, packageOwned: Boolean): Boolean =
     manifestResolved || packageOwned
 
+/** Forwards Activity results to the immediate superclass when an override omits that call. */
+internal fun patchActivityResultForwarding(
+    owner: MutableClass,
+    logger: Logger,
+): Boolean {
+    val method = owner.methods.firstOrNull {
+        it.name == "onActivityResult" && it.returnType == "V" &&
+            it.parameterTypes == listOf("I", "I", "Landroid/content/Intent;") && it.implementation != null
+    } ?: run {
+        logger.info("Universal Overlay Activity result forwarding skipped: ${owner.type}->onActivityResult(int,int,Intent) not found")
+        return false
+    }
+    val instructions = method.implementation?.instructions ?: return false
+    val hasSuperForwarding = instructions.any {
+        it.toString().contains("invoke-super") && it.toString().contains("->onActivityResult(")
+    }
+    val hasDiagnostics = instructions.count {
+        it.toString().contains("OverlayRuntime;->logActivityResult")
+    } >= 2
+    if (hasSuperForwarding && hasDiagnostics) {
+        logger.info("Universal Overlay Activity result forwarding and diagnostics already present: ${owner.type}->onActivityResult")
+        return false
+    }
+    val superclass = owner.superclass
+    if (superclass.isNullOrBlank() || superclass == "Ljava/lang/Object;") {
+        logger.warning("Universal Overlay Activity result forwarding skipped: ${owner.type} has no safe superclass")
+        return false
+    }
+    val returns = instructions.indices.filter { index ->
+        instructions[index].toString().trimStart().startsWith("return-void")
+    }.reversed()
+    if (returns.isEmpty()) {
+        logger.warning("Universal Overlay Activity result forwarding skipped: ${owner.type}->onActivityResult has no return-void")
+        return false
+    }
+    return try {
+        val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters)
+        if (!hasDiagnostics) {
+            cloned.addInstructionsWithLabels(
+                0,
+                "invoke-static/range {p0 .. p2}, $OVERLAY_RUNTIME_CLASS->logActivityResultEntry(Landroid/app/Activity;II)V",
+            )
+        }
+        for (index in returns) {
+            val instructionsToAdd = buildString {
+                if (!hasSuperForwarding) {
+                    append("invoke-super/range {p0 .. p3}, $superclass->onActivityResult(IILandroid/content/Intent;)V\n")
+                }
+                append("invoke-static/range {p0 .. p2}, $OVERLAY_RUNTIME_CLASS->logActivityResultExit(Landroid/app/Activity;II)V")
+            }
+            cloned.addInstructionsWithLabels(index + if (!hasDiagnostics) 1 else 0, instructionsToAdd)
+        }
+        owner.methods.remove(method)
+        owner.methods.add(cloned)
+        logger.info(
+            "Universal Overlay Activity result handling updated: ${owner.type}->onActivityResult " +
+                "superForwarding=${!hasSuperForwarding} diagnostics=${!hasDiagnostics}",
+        )
+        true
+    } catch (error: Exception) {
+        logger.warning("Universal Overlay Activity result forwarding failed at ${owner.type}: ${error.message}")
+        false
+    }
+}
+
 private fun MutableMethod.hasRuntimePolicy(policyClass: String): Boolean =
     implementation?.instructions?.any { instruction ->
         instruction.toString().contains("$policyClass;->configure")
