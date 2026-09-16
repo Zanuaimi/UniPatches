@@ -1,3 +1,9 @@
+## [1.29.0-dev.15](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.14...v1.29.0-dev.15) (2026-09-16)
+
+### 🔧 Improvements
+
+* **inapp:** Optimize patching process of InApp emulation to reduce patch total time ([2864cbf](https://github.com/Zanuaimi/UniPatches/commit/2864cbf8c432fa5707204180907c5f54ec294234))
+
 ## [1.29.0-dev.14](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.13...v1.29.0-dev.14) (2026-09-16)
 
 ### 🐛 Bug Fixes
