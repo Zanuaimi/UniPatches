@@ -1,3 +1,14 @@
+## [1.29.0-dev.4](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.3...v1.29.0-dev.4) (2026-09-16)
+
+### 🐛 Bug Fixes
+
+* **ads:** Enable runtime policy from selected modules ([34cec7f](https://github.com/Zanuaimi/UniPatches/commit/34cec7f9d79690e7eae53caef7ca5d48b87c99a9))
+
+### ✨ New Features
+
+* **controlembedded:** Organize auth and store settings ([4bf7ea0](https://github.com/Zanuaimi/UniPatches/commit/4bf7ea0332daa0f9849d907e95e24df081212599))
+* **inapp:** Add InApp Emulation overlay purchase controls ([ccf8574](https://github.com/Zanuaimi/UniPatches/commit/ccf8574befad5291a0bbf969e0a7ad292e901109))
+
 ## [1.29.0-dev.3](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.2...v1.29.0-dev.3) (2026-09-16)
 
 ### 🐛 Bug Fixes

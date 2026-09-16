@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.29.0-dev.3",
+  "version": "1.29.0-dev.4",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -74,7 +74,7 @@
     {
       "name": "Control App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )",
       "category": "Control App Ads Enhanced",
-      "description": "A merged ad-control patch based on Nai64's No Ads and Ads Free Rewards patches, plus\nliteral-host blocking inspired by Entree and Adobo. Block common ad formats, choose the\nSDKs to target, optionally grant ad rewards without an ad, and redirect matching literal\nad/tracker hosts embedded in the APK.\n\nHost filters are small embedded subsets inspired by uBlock Origin, EasyList, AdGuard,\nOISD, HaGeZi Pro mini, Privacy Essentials, EasyPrivacy, and Peter Lowe's list; they are\nnot downloaded full subscriptions. Each filter is independently toggleable. They only\naffect hosts stored as literal strings by the app; they cannot block dynamically generated\nhosts, encrypted traffic, or requests made entirely inside Google Play services.\n\nCompatibility: when combined with Disable Forced Online Checks, keep that patch's “Exclude\nad SDK and networking code” option enabled; otherwise blocked ad hosts may be treated as\nonline and retried. PairIP Firebase cleanup/removal can disable Firebase-backed reward,\nsign-in, billing, and attribution flows, which this patch cannot restore.\n\nThis patch includes an optional Universal Overlay addon. To use the addon, patch Control App Ads\ntogether with Universal Overlay, enable “Overlay integration >\nEnable runtime controls”, and select one or more of its three overlay addon modules:\n“Block Ads”, “Ads Free Rewards”, and “Block ad/tracking hosts”. The selected modules\nappear under “Ad control hook modules” in Universal Overlay when selected. Host blocking\nstarts according to the Enable Block Ads / Tracking Hosts master setting. Universal Overlay is required for the runtime policy to be\ninstalled; if it is not selected, the normal static ad controls still work but these\nruntime addon modules are not available.\nRuntime changes last for the current app process and affect only methods and literal hosts\nsuccessfully instrumented by this patch. Its policy is attached to the selected overlay's\nown startup bridge, including a manual Activity override; it does not independently choose\nan Application or Activity. Native, dynamically generated, unsupported, or unrecognized\nSDK paths remain unchanged.\n\nCredits: Nai64Patches from Nai64; host-blocking approach inspired by Entree and Adobo.",
+      "description": "A merged ad-control patch based on Nai64's No Ads and Ads Free Rewards patches, plus\nliteral-host blocking inspired by Entree and Adobo. Block common ad formats, choose the\nSDKs to target, optionally grant ad rewards without an ad, and redirect matching literal\nad/tracker hosts embedded in the APK.\n\nHost filters are small embedded subsets inspired by uBlock Origin, EasyList, AdGuard,\nOISD, HaGeZi Pro mini, Privacy Essentials, EasyPrivacy, and Peter Lowe's list; they are\nnot downloaded full subscriptions. Each filter is independently toggleable. They only\naffect hosts stored as literal strings by the app; they cannot block dynamically generated\nhosts, encrypted traffic, or requests made entirely inside Google Play services.\n\nCompatibility: when combined with Disable Forced Online Checks, keep that patch's “Exclude\nad SDK and networking code” option enabled; otherwise blocked ad hosts may be treated as\nonline and retried. PairIP Firebase cleanup/removal can disable Firebase-backed reward,\nsign-in, billing, and attribution flows, which this patch cannot restore.\n\nThis patch includes an optional Universal Overlay addon. To use the addon, patch Control App Ads\ntogether with Universal Overlay and select one or more of its three overlay addon modules:\n“Block Ads”, “Ads Free Rewards”, and “Block Ads / Tracking Hosts”. Ad runtime policy is\nenabled automatically when at least one of these Ads runtime modules is enabled in patch\nsettings. The selected modules\nappear under “Ad control hook modules” in Universal Overlay when selected. Host blocking\nstarts according to the Enable Block Ads / Tracking Hosts master setting. Universal Overlay is required for the runtime policy to be\ninstalled; if it is not selected, the normal static ad controls still work but these\nruntime addon modules are not available.\nRuntime changes last for the current app process and affect only methods and literal hosts\nsuccessfully instrumented by this patch. Its policy is attached to the selected overlay's\nown startup bridge, including a manual Activity override; it does not independently choose\nan Application or Activity. Native, dynamically generated, unsupported, or unrecognized\nSDK paths remain unchanged.\n\nCredits: Nai64Patches from Nai64; host-blocking approach inspired by Entree and Adobo.",
       "default": false,
       "dependencies": [],
       "compatiblePackages": null,
@@ -413,18 +413,9 @@
           "values": null
         },
         {
-          "key": "adsRuntimeHookModules",
-          "title": "Overlay integration > Enable runtime controls",
-          "description": "Optional. Enable this and one or more controls below, then select Universal Overlay in the same patch operation. The controls appear in Universal Overlay; they are session-only and affect only methods and literal hosts instrumented by this patch. Without Universal Overlay, the runtime policy is not installed.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
-          "values": null
-        },
-        {
           "key": "adsRuntimeBlockAdsModule",
           "title": "Overlay integration > Runtime controls > Block Ads",
-          "description": "Add one Block Ads settings control to the overlay. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths. Requires Enable runtime controls.",
+          "description": "Add one Block Ads settings control to the overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,
@@ -433,7 +424,7 @@
         {
           "key": "adsRuntimeRewardsModule",
           "title": "Overlay integration > Runtime controls > Ads Free Rewards",
-          "description": "Add one Ads Free Rewards settings control to Universal Overlay. Its three controls mirror the Ads Free Rewards patch settings initially and affect only safely instrumented reward paths; unsupported reward paths remain unchanged. Supported native MAX paths use request-scoped callbacks. Requires Enable runtime controls and Universal Overlay.",
+          "description": "Add one Ads Free Rewards settings control to Universal Overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its three controls mirror the Ads Free Rewards patch settings initially and affect only safely instrumented reward paths; unsupported reward paths remain unchanged. Supported native MAX paths use request-scoped callbacks.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,
@@ -442,7 +433,7 @@
         {
           "key": "adsRuntimeHostsModule",
           "title": "Overlay integration > Runtime controls > Block Ads / Tracking Hosts",
-          "description": "Add one host-blocking checkbox to the overlay. Its initial state follows Enable Block Ads / Tracking Hosts and controls literal hosts instrumented by this patch; encrypted or dynamically generated requests remain unchanged. Requires Enable runtime controls.",
+          "description": "Add one host-blocking checkbox to the overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its initial state follows Enable Block Ads / Tracking Hosts and controls literal hosts instrumented by this patch; encrypted or dynamically generated requests remain unchanged.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,
@@ -469,7 +460,7 @@
       "options": [
         {
           "key": "embeddedProviderMode",
-          "title": "Google services provider",
+          "title": "Embedded Auth / Stores > Provider and store behavior > Google services provider",
           "description": "Choose real Google Play Services, GmsCore / MicroG, or Zero Google Play behavior.",
           "required": false,
           "type": "kotlin.String",
@@ -482,7 +473,7 @@
         },
         {
           "key": "embeddedGmsCorePackage",
-          "title": "GmsCore package",
+          "title": "Embedded Auth / Stores > Provider and store behavior > GmsCore package",
           "description": "Select the GmsCore package used by GmsCore mode.",
           "required": false,
           "type": "kotlin.String",
@@ -497,7 +488,7 @@
         },
         {
           "key": "embeddedCustomGmsCorePackage",
-          "title": "Custom GmsCore package (optional)",
+          "title": "Embedded Auth / Stores > Provider and store behavior > Custom GmsCore package (optional)",
           "description": "A non-empty valid package overrides the GmsCore dropdown selection.",
           "required": false,
           "type": "kotlin.String",
@@ -506,7 +497,7 @@
         },
         {
           "key": "embeddedMainActivityClass",
-          "title": "Main Activity class (optional)",
+          "title": "Embedded Auth / Stores > Provider and store behavior > Main Activity class (optional)",
           "description": "Inject a GmsCore startup check into this Activity's onCreate method. Leave empty to disable.",
           "required": false,
           "type": "kotlin.String",
@@ -515,7 +506,7 @@
         },
         {
           "key": "embeddedStoreAvailability",
-          "title": "Store availability",
+          "title": "Embedded Auth / Stores > Provider and store behavior > Store availability",
           "description": "Choose which recognized store checks should be reported as available.",
           "required": false,
           "type": "kotlin.String",
@@ -529,7 +520,7 @@
         },
         {
           "key": "embeddedBypassLicenseVerification",
-          "title": "Bypass License Verification",
+          "title": "Embedded Auth / Stores > Licensing > Bypass License Verification",
           "description": "Force legacy LicenseChecker verification to allow.",
           "required": false,
           "type": "kotlin.Boolean",
@@ -537,8 +528,17 @@
           "values": null
         },
         {
+          "key": "embeddedBypassPlayLicenseCheck",
+          "title": "Embedded Auth / Stores > Licensing > Bypass Play License Check",
+          "description": "Answer the legacy LVL checkAccess callback as licensed.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
           "key": "embeddedShowPlayServicesAvailable",
-          "title": "Show Google Play Services as available",
+          "title": "Embedded Auth / Stores > Google Play Services > Show Google Play Services as available",
           "description": "Report recognized Google Play Services availability checks as successful.",
           "required": false,
           "type": "kotlin.Boolean",
@@ -547,7 +547,7 @@
         },
         {
           "key": "embeddedBypassPlayServicesCheck",
-          "title": "Bypass Google Play Services Check",
+          "title": "Embedded Auth / Stores > Google Play Services > Bypass Google Play Services Check",
           "description": "Bypass recognized Google Play Services availability checks.",
           "required": false,
           "type": "kotlin.Boolean",
@@ -555,53 +555,8 @@
           "values": null
         },
         {
-          "key": "embeddedBypassPlayLicenseCheck",
-          "title": "Bypass Play License Check",
-          "description": "Answer the legacy LVL checkAccess callback as licensed.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
-          "values": null
-        },
-        {
-          "key": "embeddedDisableFirebaseAutoInit",
-          "title": "Disable Firebase Auto Init",
-          "description": "Disable Firebase collection metadata and automatic measurement components.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
-          "values": null
-        },
-        {
-          "key": "embeddedDisableFirebasePerformance",
-          "title": "Disable Firebase Performance",
-          "description": "No-op Firebase Performance traces and HTTP metrics.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
-          "values": null
-        },
-        {
-          "key": "embeddedDisableGooglePay",
-          "title": "Disable Google Pay",
-          "description": "Report Google Pay readiness as unavailable.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
-          "values": null
-        },
-        {
-          "key": "embeddedDisableRemoteConfig",
-          "title": "Disable Remote Config Fetch",
-          "description": "Use bundled Remote Config defaults without fetching updates.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
-          "values": null
-        },
-        {
           "key": "embeddedForceSignedOut",
-          "title": "Force Google Signed Out",
+          "title": "Embedded Auth / Stores > Google Play Services > Force Google Signed Out",
           "description": "Make Google sign-in checks report signed out.",
           "required": false,
           "type": "kotlin.Boolean",
@@ -609,26 +564,8 @@
           "values": null
         },
         {
-          "key": "embeddedFixMaps",
-          "title": "Fix Maps on MicroG",
-          "description": "Report Maps initialization success and notify its initialized callback.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
-          "values": null
-        },
-        {
-          "key": "embeddedNullLocation",
-          "title": "Null Play Location",
-          "description": "Return empty Play Services location results.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
-          "values": null
-        },
-        {
           "key": "embeddedSilenceErrors",
-          "title": "Silence Play Services Errors",
+          "title": "Embedded Auth / Stores > Google Play Services > Silence Play Services Errors",
           "description": "Suppress recognized Play Services error UI and messages.",
           "required": false,
           "type": "kotlin.Boolean",
@@ -637,8 +574,62 @@
         },
         {
           "key": "embeddedSpoofVersion",
-          "title": "Spoof Play Services Version",
+          "title": "Embedded Auth / Stores > Google Play Services > Spoof Play Services Version",
           "description": "Report a high Play Services version.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedFixMaps",
+          "title": "Embedded Auth / Stores > Google Play Services > Fix Maps on MicroG",
+          "description": "Report Maps initialization success and notify its initialized callback.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedNullLocation",
+          "title": "Embedded Auth / Stores > Google Play Services > Null Play Location",
+          "description": "Return empty Play Services location results.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedDisableGooglePay",
+          "title": "Embedded Auth / Stores > Google Pay > Disable Google Pay",
+          "description": "Report Google Pay readiness as unavailable.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedDisableFirebaseAutoInit",
+          "title": "Embedded Auth / Stores > Firebase > Disable Firebase Auto Init",
+          "description": "Disable Firebase collection metadata and automatic measurement components.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedDisableFirebasePerformance",
+          "title": "Embedded Auth / Stores > Firebase > Disable Firebase Performance",
+          "description": "No-op Firebase Performance traces and HTTP metrics.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "embeddedDisableRemoteConfig",
+          "title": "Embedded Auth / Stores > Firebase > Disable Remote Config Fetch",
+          "description": "Use bundled Remote Config defaults without fetching updates.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,
@@ -993,7 +984,7 @@
       "options": [
         {
           "key": "nativeIl2CppMode",
-          "title": "Patch Mode",
+          "title": "InApp Emulation > Patch behavior > Patch Mode",
           "description": "Automatic runs all managed compatibility patches first, then safely attempts verified native IL2CPP patches for supported libraries. Managed compatibility only runs bytecode patches and disables native patching, which is useful for diagnosing native-related crashes. Native enhancement runs the managed patches and attempts the same validated native phase. Native patching is fail-closed and only supported ABI signatures are used.",
           "required": false,
           "type": "kotlin.String",
@@ -1006,7 +997,7 @@
         },
         {
           "key": "fakeStartupPurchases",
-          "title": "Fake owned purchases at startup",
+          "title": "InApp Emulation > Patch behavior > Fake owned purchases at startup",
           "description": "Deliver a fake owned purchase through modern callback inventory queries. Helps games that only grant at boot, but can stall strict Unity titles. Leave off if a game hangs on loading.",
           "required": false,
           "type": "kotlin.Boolean",
@@ -1015,7 +1006,7 @@
         },
         {
           "key": "legacyInventoryMode",
-          "title": "Legacy inventory behavior",
+          "title": "InApp Emulation > Patch behavior > Legacy inventory behavior",
           "description": "Preserve catalog and owned-purchase queries keeps legacy billing behavior unchanged and is recommended for compatibility. Return empty owned purchases suppresses restored purchases while leaving catalog lookup available. Return a fake owned purchase injects a synthetic purchase for older wrappers that grant content only from startup inventory. These legacy modes affect owned-inventory responses, not SKU catalog discovery.",
           "required": false,
           "type": "kotlin.String",
@@ -1025,6 +1016,24 @@
             "Return empty owned purchases": "empty",
             "Return a fake owned purchase": "fake"
           }
+        },
+        {
+          "key": "inAppEnableOverlayModule",
+          "title": "InApp Emulation > Overlay addon > Enable Overlay Module",
+          "description": "Add the session-only InApp Emulation module to Universal Overlay. Requires Universal Overlay in the same patch operation.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "inAppInitiallyEnablePopups",
+          "title": "InApp Emulation > Overlay addon > Initially enable popups before buying products",
+          "description": "Set the initial state of purchase confirmation popups in the overlay module. You can change it later from the module settings. Ignored when Enable Overlay Module is disabled.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
         }
       ]
     },
@@ -1034,7 +1043,7 @@
       "description": "Example overlay addon for Hill Climb Racing (com.fingersoft.hillclimb), used together with UniPatches Universal Overlay.\n        It adds six safe, mock-only app-specific preview modules to the shared overlay: A\n        - Add Coins\n        - Add Gems\n        - Add Paints \n        - Vehicle Selection\n        - Stage Selection\n        - Garage Selection. \n        All these six module options are enabled by default and can be disabled independently. \n        \n        Module settings and Preview actions are session-only; this example addon never reads or changes currencies, vehicles, stages, garage state, purchases, save files, or game bytecode.",
       "default": false,
       "dependencies": [
-        "UniPatches Universal Overlay Patch v2.5.3 (Experimental)"
+        "UniPatches Universal Overlay Patch v2.6.0 (Experimental)"
       ],
       "compatiblePackages": [
         {
@@ -1579,9 +1588,9 @@
       ]
     },
     {
-      "name": "UniPatches Universal Overlay Patch v2.5.3 (Experimental)",
+      "name": "UniPatches Universal Overlay Patch v2.6.0 (Experimental)",
       "category": "★ Universal Overlay",
-      "description": "A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual\npreset, select the overlay modules you want, optionally supply an icon image, then patch. Modules\nare excluded and disabled by default. Monitor modules show information, Activity modules control\nthe current Activity, Hook modules make best-effort changes to app behavior, System modules\ncontrol Android capabilities, and Advanced modules provide opt-in diagnostics. Text is the\ndefault legacy icon; an optional image replaces it completely, while the advanced Multi-parts editor\nsupports custom drawn icons, and can be conveniently made in Icon Builder local website in UniPatches repo.\n\nThis is an experimental patch and may not work on all apps. UI presets can save and reuse supported appearance and advanced icon\nsettings. The title, description, repository button text, and repository button URL remain\ncontrolled by the visible Morphe settings. Module selections and module behavior are excluded\nbecause hook and module combinations can be app-specific. \n\nIf Control App Ads is patched with its optional runtime policy enabled, its selected ad-control modules appear here\nautomatically; Universal Overlay does not patch ad SDKs by itself. When both patches are\nselected, Control App Ads attaches its runtime policy to this overlay's exact startup bridge,\nincluding an explicit Activity override, instead of selecting a separate Activity.\n\nAttribution: The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.",
+      "description": "A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual\npreset, select the overlay modules you want, optionally supply an icon image, then patch. Modules\nare excluded and disabled by default. Monitor modules show information, Activity modules control\nthe current Activity, Hook modules make best-effort changes to app behavior, System modules\ncontrol Android capabilities, and Advanced modules provide opt-in diagnostics. Text is the\ndefault legacy icon; an optional image replaces it completely, while the advanced Multi-parts editor\nsupports custom drawn icons, and can be conveniently made in Icon Builder local website in UniPatches repo.\n\nThis is an experimental patch and may not work on all apps. UI presets can save and reuse supported appearance and advanced icon\nsettings. The title, description, repository button text, and repository button URL remain\ncontrolled by the visible Morphe settings. Module selections and module behavior are excluded\nbecause hook and module combinations can be app-specific. \n\nInApp Emulation has an optional overlay addon that adds an InApp Emulation module to this menu.\nThe module can show a themed confirmation popup before emulated purchases, let you save product\nidentifiers to skip later popups during the current app session, and manage those saved products\nfrom its Settings button. To enable it, select Emulate InApp Patch, enable its Enable Overlay\nModule setting, enable Universal Overlay in the same patch operation, and keep Initially enable\npopups before buying products enabled if popups should start enabled. The addon does not control\ncatalog discovery, receipt verification, legacy inventory behavior, or native IL2CPP patching.\n\nControl App Ads can also add runtime ad-control modules here, but Universal Overlay does not\npatch ad SDKs by itself. To use them, select Control App Ads Patch and Universal Overlay,\nenable the desired options under Control App Ads' Overlay integration > Runtime controls. The\nAds runtime policy is enabled automatically when at least one of those modules is selected.\nThe available modules are Block\nAds, Ads Free Rewards, and Block Ads / Tracking Hosts. Their initial runtime values come from\nthe Control App Ads settings, and later changes are session-only. When both patches are selected,\nControl App Ads attaches its policy to this overlay's exact startup bridge, including an explicit\nActivity override, instead of selecting a separate Activity.\n\nAttribution: The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.",
       "default": false,
       "dependencies": [
         "Resolve Real Application (internal)"

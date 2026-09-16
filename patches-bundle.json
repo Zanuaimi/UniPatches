@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-16T05:36:35",
-  "description": "## [1.29.0-dev.3](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.2...v1.29.0-dev.3) (2026-09-16)\n\n### 🐛 Bug Fixes\n\n* **inapp:** Fix missing catalog in legacy SDKs, and add a new patch option ([9709eac](https://github.com/Zanuaimi/UniPatches/commit/9709eac7426db7ddc3bd41e4c9d2090b52deec8a))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.3/patches-1.29.0-dev.3.mpp",
+  "created_at": "2026-09-16T08:05:22",
+  "description": "## [1.29.0-dev.4](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.3...v1.29.0-dev.4) (2026-09-16)\n\n### 🐛 Bug Fixes\n\n* **ads:** Enable runtime policy from selected modules ([34cec7f](https://github.com/Zanuaimi/UniPatches/commit/34cec7f9d79690e7eae53caef7ca5d48b87c99a9))\n\n### ✨ New Features\n\n* **controlembedded:** Organize auth and store settings ([4bf7ea0](https://github.com/Zanuaimi/UniPatches/commit/4bf7ea0332daa0f9849d907e95e24df081212599))\n* **inapp:** Add InApp Emulation overlay purchase controls ([ccf8574](https://github.com/Zanuaimi/UniPatches/commit/ccf8574befad5291a0bbf969e0a7ad292e901109))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.4/patches-1.29.0-dev.4.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.3"
+  "version": "1.29.0-dev.4"
 }
