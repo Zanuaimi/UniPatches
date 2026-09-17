@@ -40,4 +40,14 @@ public class PurchaseRequestTest {
         assertFalse(request.isFinished());
         assertTrue(request.finish(PurchaseRequest.State.COMPLETED));
     }
+
+    @Test
+    public void validatedRequestCanEnterDeliveryState() {
+        PurchaseRequest request = new PurchaseRequest(
+                "ruby_pack", "inapp", "", new Object(), null,
+                PurchaseBackend.OPEN_IAB, false, 10_000L);
+
+        assertTrue(request.transition(PurchaseRequest.State.RECEIVED, PurchaseRequest.State.VALIDATED));
+        assertTrue(request.transition(PurchaseRequest.State.VALIDATED, PurchaseRequest.State.DELIVERING));
+    }
 }
