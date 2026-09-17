@@ -1,3 +1,9 @@
+## [1.29.0-dev.29](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.28...v1.29.0-dev.29) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* **inap:** Fix timeout causing verifier error ([da12b55](https://github.com/Zanuaimi/UniPatches/commit/da12b55f37ed749f06852068206a376d538d4877))
+
 ## [1.29.0-dev.28](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.27...v1.29.0-dev.28) (2026-09-17)
 
 ### ✨ New Features

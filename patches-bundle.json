@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-17T16:39:56",
-  "description": "## [1.29.0-dev.28](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.27...v1.29.0-dev.28) (2026-09-17)\n\n### ✨ New Features\n\n* **inapp:** Add timeout to both non-overlay and overlay mode ([fd8345f](https://github.com/Zanuaimi/UniPatches/commit/fd8345f59f160806a71c2223d545c6cfa45ebb5f))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.28/patches-1.29.0-dev.28.mpp",
+  "created_at": "2026-09-17T16:52:25",
+  "description": "## [1.29.0-dev.29](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.28...v1.29.0-dev.29) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* **inap:** Fix timeout causing verifier error ([da12b55](https://github.com/Zanuaimi/UniPatches/commit/da12b55f37ed749f06852068206a376d538d4877))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.29/patches-1.29.0-dev.29.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.28"
+  "version": "1.29.0-dev.29"
 }
