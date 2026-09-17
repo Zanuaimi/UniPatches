@@ -216,7 +216,7 @@ public final class OverlayRuntime {
     /** Shows the IAP confirmation popup on the Activity that initiated BillingClient. */
     public static synchronized boolean showInAppPurchaseConfirmation(Activity target, String productId) {
         Controller selected = target == null ? null : CONTROLLERS.get(target);
-        if (selected == null && target == null) {
+        if (selected == null || !selected.canShowInAppPurchaseConfirmation()) {
             for (Controller controller : new ArrayList<>(CONTROLLERS.values())) {
                 if (controller != null && controller.canShowInAppPurchaseConfirmation()) {
                     selected = controller;
@@ -277,6 +277,10 @@ public final class OverlayRuntime {
         if (configuration == null || globallyClosed) return;
         if (isActivityInstallBanned(activity)) return;
         if (activity.isFinishing() || (android.os.Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
+        // Legacy OpenIAB flows do not always pass their Activity through the listener.
+        // Keep the currently resumed host registered even when the overlay menu has not
+        // been opened yet, so a buy tap can still resolve a valid popup surface.
+        if (InAppRuntimePolicy.isConfigured()) InAppRuntimePolicy.registerActivity(activity);
         Controller existing = CONTROLLERS.get(activity);
         if (existing != null) {
             existing.applyRememberedStates();
@@ -571,6 +575,10 @@ public final class OverlayRuntime {
         void pause() {
             if (detached) return;
             root.removeCallbacks(dragVisibilityFade);
+            // A paused Activity cannot reliably display or interact with the in-app
+            // confirmation layer. Release the intercepted billing request here so a
+            // legacy game's purchase spinner cannot survive a lifecycle transition.
+            InAppRuntimePolicy.cancelPending();
             menuVisible = false;
             menuState = MenuState.CLOSED;
             menuScrim.animate().cancel();
@@ -1762,6 +1770,8 @@ public final class OverlayRuntime {
             OverlayPopupFrame card = new OverlayPopupFrame(overlayContext, config);
             card.addHeader("Emulate InApp Purchase Confirmation", config, popupTitleIcon(true), popupTitleIcon(false));
             layer.setOnClickListener(v -> {
+                Object ticker = layer.getTag();
+                if (ticker instanceof Runnable) root.removeCallbacks((Runnable) ticker);
                 InAppRuntimePolicy.cancelPending();
                 dismissModuleSettingsPopup(layer, card);
             });
@@ -1769,6 +1779,23 @@ public final class OverlayRuntime {
             description.setSingleLine(false);
             description.setPadding(0, dp(8), 0, 0);
             card.addView(description, new LinearLayout.LayoutParams(-1, -2));
+            TextView countdown = text("This request expires in 30 seconds.", 12, config.menuTextColor3);
+            countdown.setPadding(0, dp(6), 0, 0);
+            card.addView(countdown, new LinearLayout.LayoutParams(-1, -2));
+            final long expiresAt = SystemClock.elapsedRealtime() + 30_000L;
+            final Runnable[] countdownTicker = new Runnable[1];
+            countdownTicker[0] = () -> {
+                if (layer.getParent() != root) return;
+                long remaining = Math.max(0L, expiresAt - SystemClock.elapsedRealtime());
+                countdown.setText("This request expires in " + ((remaining + 999L) / 1000L) + " seconds.");
+                if (remaining > 0L) root.postDelayed(countdownTicker[0], 1000L);
+                else {
+                    InAppRuntimePolicy.cancelPending();
+                    dismissModuleSettingsPopup(layer, card);
+                }
+            };
+            layer.setTag(countdownTicker[0]);
+            root.post(countdownTicker[0]);
             CheckBox save = new CheckBox(overlayContext);
             save.setText("Save purchase for skipping purchase popup");
             save.setTextColor(config.menuTextColor2);
@@ -1784,10 +1811,12 @@ public final class OverlayRuntime {
             actionParams.topMargin = dp(8);
             card.addView(actions, actionParams);
             addAction(actions, "No", v -> {
+                root.removeCallbacks(countdownTicker[0]);
                 InAppRuntimePolicy.complete(false);
                 dismissModuleSettingsPopup(layer, card);
             });
             addAction(actions, "Yes", v -> {
+                root.removeCallbacks(countdownTicker[0]);
                 InAppRuntimePolicy.complete(save.isChecked());
                 dismissModuleSettingsPopup(layer, card);
             });
@@ -1799,6 +1828,7 @@ public final class OverlayRuntime {
             root.addView(layer);
             settingsPopupLayers.add(layer);
             if (layer.getParent() != root) {
+                root.removeCallbacks(countdownTicker[0]);
                 settingsPopupLayers.remove(layer);
                 OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup view was not attached to the overlay root");
                 return false;

@@ -106,11 +106,17 @@ public final class InAppRuntimePolicy {
         }
     }
 
-    /** Exact OpenIAB callback bridge used only by the optional overlay addon. */
+    /** Exact OpenIAB callback bridge used by both immediate and overlay-confirmed modes. */
     public static void dispatchLegacy(Object listener, String product) {
+        dispatchLegacy(listener, null, product);
+    }
+
+    /** Exact OpenIAB callback bridge with the Activity that initiated the flow when available. */
+    public static void dispatchLegacy(Object listener, Object purchaseActivity, String product) {
         if (listener == null) return;
         String normalized = valid(product) ? normalize(product) : "morphe_fake";
-        Activity target = activity.get();
+        Activity target = purchaseActivity instanceof Activity
+                ? (Activity) purchaseActivity : activity.get();
         synchronized (InAppRuntimePolicy.class) {
             if (!configured || !popupEnabled || SAVED.contains(normalized)) {
                 lastEvent = "Emulated legacy purchase delivered: " + normalized;
