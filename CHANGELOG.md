@@ -1,3 +1,9 @@
+## [1.29.0-dev.27](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.26...v1.29.0-dev.27) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* complete in-app purchase emulation callbacks ([f5d4e42](https://github.com/Zanuaimi/UniPatches/commit/f5d4e42d4dc10bbc58a6748b334b4aac7a713f1b))
+
 ## [1.29.0-dev.26](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.25...v1.29.0-dev.26) (2026-09-17)
 
 ### 🔧 Improvements
