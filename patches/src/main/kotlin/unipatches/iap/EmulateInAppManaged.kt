@@ -341,9 +341,13 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                             return-void
                             :morphe_openiab_original_purchase_flow
                         """.trimIndent()
-                        try {
-                            method.addInstructions(0, block)
-                        } catch (_: Exception) {
+                        if (minRegs(method) >= 7) {
+                            try {
+                                method.addInstructions(0, block)
+                            } catch (_: Exception) {
+                                expandSwap(method, block)
+                            }
+                        } else {
                             expandSwap(method, block)
                         }
                     }
