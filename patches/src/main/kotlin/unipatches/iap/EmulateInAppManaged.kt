@@ -280,27 +280,29 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                     "Lorg/onepf/oms/appstore/googleUtils/IabHelper${'$'}OnIabPurchaseFinishedListener;", "Ljava/lang/String;",
                 ),
             )
-            for (signature in legacyPurchaseSignatures) {
-                patchAll(Fingerprint(
-                    name = "launchPurchaseFlow",
-                    definingClass = openIabHelper,
-                    returnType = "V",
-                    custom = { method, _ -> method.parameterTypes == signature },
-                ), "OpenIAB.launchPurchaseFlow", 3) { method ->
-                    val skuIndex = 1
-                    val listenerIndex = signature.indexOfFirst { it.contains("OnIabPurchaseFinishedListener") }
-                    val purchaseActivity = parameterRegister(method, 0)
-                    val sku = parameterRegister(method, skuIndex)
-                    val listener = parameterRegister(method, listenerIndex)
-                    method.addInstructions(0, """
-                        move-object/from16 v0, $listener
-                        if-eqz v0, :morphe_openiab_original_purchase_flow
-                        move-object/from16 v1, $sku
-                        move-object/from16 v2, $purchaseActivity
-                        invoke-static {v0, v2, v1}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatchLegacy(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;)V
-                        return-void
-                        :morphe_openiab_original_purchase_flow
-                    """.trimIndent())
+            for (flowName in listOf("launchPurchaseFlow", "launchSubscriptionPurchaseFlow")) {
+                for (signature in legacyPurchaseSignatures) {
+                    patchAll(Fingerprint(
+                        name = flowName,
+                        definingClass = openIabHelper,
+                        returnType = "V",
+                        custom = { method, _ -> method.parameterTypes == signature },
+                    ), "OpenIAB.$flowName", 3) { method ->
+                        val skuIndex = 1
+                        val listenerIndex = signature.indexOfFirst { it.contains("OnIabPurchaseFinishedListener") }
+                        val purchaseActivity = parameterRegister(method, 0)
+                        val sku = parameterRegister(method, skuIndex)
+                        val listener = parameterRegister(method, listenerIndex)
+                        method.addInstructions(0, """
+                            move-object/from16 v0, $listener
+                            if-eqz v0, :morphe_openiab_original_purchase_flow
+                            move-object/from16 v1, $sku
+                            move-object/from16 v2, $purchaseActivity
+                            invoke-static {v0, v2, v1}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatchLegacy(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;)V
+                            return-void
+                            :morphe_openiab_original_purchase_flow
+                        """.trimIndent())
+                    }
                 }
             }
         }
