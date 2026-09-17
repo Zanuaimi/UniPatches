@@ -26,10 +26,16 @@ public final class InAppEmulationRuntimeProvider implements OverlayAppSpecificMo
         @Override public String description() { return "Control purchase confirmation popups and manage saved products for this app session. Credits to Nai64 for the original IAP patch functionality; enhancement inspiration from MiguelNinja19's billing patches."; }
         @Override public boolean hasSettings() { return true; }
         @Override public boolean hasActionButton() { return false; }
+        @Override public boolean hasEnableToggle() { return false; }
         @Override protected boolean readEnabled(Activity a, int f, int u) { return InAppRuntimePolicy.popupEnabled(); }
         @Override protected void applyEnabled(Activity a, int f, int u) { InAppRuntimePolicy.setPopupEnabled(true); }
         @Override protected void restoreOriginal(Activity a, int f, int u) { InAppRuntimePolicy.setPopupEnabled(false); }
         @Override public String settingsTitle() { return "InApp Emulation settings"; }
+        @Override public boolean hasSettingsToggle() { return true; }
+        @Override public String settingsToggleLabel() { return "Enable Confirm Emulate Purchase Popup"; }
+        @Override public boolean settingsToggleValue() { return InAppRuntimePolicy.popupEnabled(); }
+        @Override public void applySettingsToggle(boolean enabled) { InAppRuntimePolicy.setPopupEnabled(enabled); }
+        @Override public String settingsEmptyText() { return "\nNo Saved Products\n"; }
         @Override public String[] settingsChoices() { return InAppRuntimePolicy.savedPurchases(); }
         @Override public boolean[] settingsValues() {
             String[] values = settingsChoices();

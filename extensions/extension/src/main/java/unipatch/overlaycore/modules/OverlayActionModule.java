@@ -17,6 +17,13 @@ public abstract class OverlayActionModule extends OverlayAppSpecificModule {
     public boolean hasSettings() { return false; }
     public boolean hasEnableToggle() { return true; }
 
+    /** Optional checkbox rendered at the top of the shared settings popup. */
+    public boolean hasSettingsToggle() { return false; }
+    public String settingsToggleLabel() { return "Enabled"; }
+    public boolean settingsToggleValue() { return false; }
+    public void applySettingsToggle(boolean enabled) { }
+    public String settingsEmptyText() { return null; }
+
     /**
      * Declarative settings consumed by the shared overlay-styled popup. Subclasses can expose
      * either a checkbox list or a single input. Keeping this contract here

@@ -1689,6 +1689,8 @@ public final class OverlayRuntime {
 
             final String textValue = module.settingsTextValue();
             final EditText input;
+            final CheckBox[] settingsToggleRef = new CheckBox[1];
+            final int[] settingsChoiceCount = new int[1];
             if (textValue != null) {
                 TextView hint = text(module.settingsTextHint(), 13, config.menuTextColor3);
                 LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
@@ -1709,8 +1711,21 @@ public final class OverlayRuntime {
                 card.addView(input, inputParams);
             } else {
                 input = null;
+                if (module.hasSettingsToggle()) {
+                    CheckBox settingsToggle = new CheckBox(overlayContext);
+                    settingsToggleRef[0] = settingsToggle;
+                    settingsToggle.setText(module.settingsToggleLabel());
+                    settingsToggle.setTextColor(config.menuTextColor2);
+                    settingsToggle.setChecked(module.settingsToggleValue());
+                    settingsToggle.setContentDescription(module.settingsToggleLabel());
+                    styleCheckBox(settingsToggle);
+                    LinearLayout.LayoutParams toggleParams = new LinearLayout.LayoutParams(-1, -2);
+                    toggleParams.topMargin = dp(8);
+                    card.addView(settingsToggle, toggleParams);
+                }
                 String[] choices = module.settingsChoices();
                 if (choices == null) choices = new String[0];
+                settingsChoiceCount[0] = choices.length;
                 String[] descriptions = module.settingsDescriptions();
                 if (descriptions == null) descriptions = new String[0];
                 boolean[] values = module.settingsValues();
@@ -1740,6 +1755,15 @@ public final class OverlayRuntime {
                     choiceRow.setTag(check);
                     choicesLayout.addView(choiceRow, new LinearLayout.LayoutParams(-1, -2));
                 }
+                if (choices.length == 0 && module.settingsEmptyText() != null) {
+                    choicesLayout.setGravity(Gravity.CENTER);
+                    choicesLayout.setMinimumHeight(dp(96));
+                    TextView empty = text(module.settingsEmptyText(), 14, config.menuTextColor3);
+                    empty.setGravity(Gravity.CENTER);
+                    empty.setTextIsSelectable(false);
+                    choicesLayout.addView(empty, new LinearLayout.LayoutParams(-1, -1));
+                    scroll.setFillViewport(true);
+                }
                 scroll.addView(choicesLayout, new ScrollView.LayoutParams(-1, -2));
                 LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(-1, -2);
                 scrollParams.topMargin = dp(8);
@@ -1757,12 +1781,17 @@ public final class OverlayRuntime {
             addAction(actions, module.settingsConfirmationLabel(), v -> {
                 boolean applied;
                 try {
+                    if (settingsToggleRef[0] != null) {
+                        module.applySettingsToggle(settingsToggleRef[0].isChecked());
+                    }
                     if (input != null) {
                         applied = module.applySettingsText(input.getText().toString());
                     } else {
                         LinearLayout choicesLayout = (LinearLayout) card.getTag();
-                        boolean[] values = new boolean[choicesLayout.getChildCount()];
-                        for (int i = 0; i < values.length; i++) values[i] = ((CheckBox) choicesLayout.getChildAt(i).getTag()).isChecked();
+                        boolean[] values = new boolean[settingsChoiceCount[0]];
+                        for (int i = 0; i < values.length; i++) {
+                            values[i] = ((CheckBox) choicesLayout.getChildAt(i).getTag()).isChecked();
+                        }
                         module.applySettings(values);
                         applied = true;
                     }
