@@ -208,7 +208,7 @@ internal fun exportAllActivities(document: Document): Int {
 
 @Suppress("unused")
 val legacyAppCompatibilityPatch = resourcePatch(
-    name = "Improve Legacy App / Game Compatibility for Modern Android Patch ( Enhanced )",
+    name = "Improve Legacy App / Game Compatibility for Modern Android Patch ( Experimental, Enhanced )",
     description = """
         Improve compatibility for older apps and games on modern Android versions. This patch combines
         legacy manifest, storage, screen, native runtime, network, shared-library, and optional device
@@ -223,9 +223,11 @@ val legacyAppCompatibilityPatch = resourcePatch(
         This patch cannot restore shut-down servers, missing CPU architecture support, server licensing,
         Play Integrity, or unsupported native code. Conservative compatibility features are enabled by
         default; more invasive native, network, storage, library, and identity options remain disabled.
-
+        
+        Experimental: Its functionalities are not guaranteed to work in all apps.
+        
         Credits: Nai64Patches from Nai64 for the original legacy compatibility functionality. UniPatches
-        provides the merged settings, validation, manifest safeguards, and compatibility organization.
+        provides the merged settings, validation, manifest safeguards, compatibility organization, and provides suppress GPlay Login UI patch option.
     """.trimIndent(),
     default = false,
 ) {
