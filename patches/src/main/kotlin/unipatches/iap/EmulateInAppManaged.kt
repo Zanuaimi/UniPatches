@@ -279,6 +279,33 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         // for the confirmation popup. Keep the interception independent from the
         // optional overlay addon so legacy non-overlay IAP is still emulated.
         run {
+            val unityPlugin = "Lorg/onepf/openiab/UnityPlugin;"
+            for ((methodName, inapp) in listOf("purchaseProduct" to true, "purchaseSubscription" to false)) {
+                patchAll(Fingerprint(
+                    name = methodName,
+                    definingClass = unityPlugin,
+                    returnType = "V",
+                    custom = { method, _ -> method.parameterTypes == listOf("Ljava/lang/String;", "Ljava/lang/String;") },
+                ), "UnityPlugin.$methodName-entry", 3) { method ->
+                    val block = """
+                        move-object/from16 v0, p0
+                        move-object/from16 v1, p1
+                        move-object/from16 v2, p2
+                        const/4 v3, ${if (inapp) "0x1" else "0x0"}
+                        invoke-static {v0, v1, v2, v3}, Lunipatch/overlaycore/InAppRuntimePolicy;->interceptLegacyPurchaseEntry(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;Z)Z
+                        move-result v0
+                        if-eqz v0, :morphe_unity_original_purchase
+                        return-void
+                        :morphe_unity_original_purchase
+                    """.trimIndent()
+                    var granted = false
+                    if (minRegs(method) >= 4) {
+                        try { method.addInstructions(0, block); granted = true } catch (_: Exception) {}
+                    }
+                    if (!granted) granted = expandSwap(method, block)
+                    if (granted) logger.info("FreeIAP UnityPlugin early entry hook: $methodName")
+                }
+            }
             val openIabHelper = "Lorg/onepf/oms/OpenIabHelper;"
             val legacyPurchaseSignatures = listOf(
                 listOf(
