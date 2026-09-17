@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.29.0-dev.27",
+  "version": "1.29.0-dev.28",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -1302,6 +1302,24 @@
           "required": false,
           "type": "kotlin.Boolean",
           "default": true,
+          "values": null
+        },
+        {
+          "key": "inAppNonOverlayPurchaseTimeoutSeconds",
+          "title": "InApp Emulation > Patch behavior > Non-overlay purchase timeout (seconds)",
+          "description": "Maximum time to wait for a non-overlay emulated purchase callback. Values are clamped to 1-86400 seconds.",
+          "required": false,
+          "type": "kotlin.Int",
+          "default": 10,
+          "values": null
+        },
+        {
+          "key": "inAppOverlayPurchaseTimeoutSeconds",
+          "title": "InApp Emulation > Overlay addon > Overlay purchase timeout (seconds)",
+          "description": "Maximum time to wait for Universal Overlay purchase confirmation. Values are clamped to 1-86400 seconds.",
+          "required": false,
+          "type": "kotlin.Int",
+          "default": 30,
           "values": null
         }
       ]

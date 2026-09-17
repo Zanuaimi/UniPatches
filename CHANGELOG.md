@@ -1,3 +1,9 @@
+## [1.29.0-dev.28](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.27...v1.29.0-dev.28) (2026-09-17)
+
+### ✨ New Features
+
+* **inapp:** Add timeout to both non-overlay and overlay mode ([fd8345f](https://github.com/Zanuaimi/UniPatches/commit/fd8345f59f160806a71c2223d545c6cfa45ebb5f))
+
 ## [1.29.0-dev.27](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.26...v1.29.0-dev.27) (2026-09-17)
 
 ### 🐛 Bug Fixes
