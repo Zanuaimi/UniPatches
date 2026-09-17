@@ -134,6 +134,7 @@ public final class InAppRuntimePolicy {
         final Pending request;
         synchronized (InAppRuntimePolicy.class) { request = pending; }
         MAIN.postDelayed(() -> timeout(request), 30000L);
+        if (target != null) OverlayRuntime.ensureActivity(target);
         if (!OverlayRuntime.showInAppPurchaseConfirmation(target, normalized)) {
             OverlayRuntimeLogger.log("INFO", "InApp", "Legacy purchase confirmation popup queued until an active overlay Activity is available: product=" + normalized);
         }
@@ -142,6 +143,7 @@ public final class InAppRuntimePolicy {
     /** Retries a pending confirmation after the target Activity has resumed and its overlay attached. */
     public static synchronized void retryPendingConfirmation(Activity target) {
         if (pending == null) return;
+        if (target != null) OverlayRuntime.ensureActivity(target);
         OverlayRuntime.showInAppPurchaseConfirmation(target, pending.product);
     }
 

@@ -259,6 +259,25 @@ public final class OverlayRuntime {
         return true;
     }
 
+    /**
+     * Ensures that a newly-created purchase Activity has an overlay controller before a legacy
+     * billing hook asks for its confirmation surface. Application lifecycle callbacks normally do
+     * this on resume, but UnityProxyActivity starts the billing call from onCreate, before resume.
+     */
+    public static synchronized boolean ensureActivity(Activity activity) {
+        if (activity == null || configuration == null || globallyClosed || isActivityInstallBanned(activity)) {
+            return false;
+        }
+        Controller existing = CONTROLLERS.get(activity);
+        if (existing != null) return existing.canShowInAppPurchaseConfirmation();
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            return MAIN.post(() -> showActivity(activity, false));
+        }
+        showActivity(activity, false);
+        Controller controller = CONTROLLERS.get(activity);
+        return controller != null && controller.canShowInAppPurchaseConfirmation();
+    }
+
     public static void logActivityResultEntry(Activity activity, int requestCode, int resultCode) {
         logActivityResult("entry", activity, requestCode, resultCode);
     }
@@ -274,6 +293,10 @@ public final class OverlayRuntime {
     }
 
     static synchronized void showActivity(Activity activity) {
+        showActivity(activity, true);
+    }
+
+    private static synchronized void showActivity(Activity activity, boolean retryPending) {
         if (configuration == null || globallyClosed) return;
         if (isActivityInstallBanned(activity)) return;
         if (activity.isFinishing() || (android.os.Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
@@ -296,7 +319,7 @@ public final class OverlayRuntime {
                     OverlayRuntimeLogger.log("WARN", "Overlay", "Overlay reattach failed: " + error.getClass().getSimpleName());
                 }
             }
-            InAppRuntimePolicy.retryPendingConfirmation(activity);
+            if (retryPending) InAppRuntimePolicy.retryPendingConfirmation(activity);
             return;
         }
         Controller controller = null;
@@ -305,7 +328,7 @@ public final class OverlayRuntime {
             CONTROLLERS.put(activity, controller);
             controller.attach();
             OverlayRuntimeLogger.log("INFO", "Overlay", "Overlay attached to " + activity.getClass().getName());
-            InAppRuntimePolicy.retryPendingConfirmation(activity);
+            if (retryPending) InAppRuntimePolicy.retryPendingConfirmation(activity);
         } catch (RuntimeException ignored) {
             if (controller != null) controller.detach();
             // Never let overlay setup failure crash the host application.
