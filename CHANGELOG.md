@@ -1,3 +1,9 @@
+## [1.29.0-dev.24](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.23...v1.29.0-dev.24) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* **inapp:** Route legacy OpenIAB purchases via proxy ([7bce4cb](https://github.com/Zanuaimi/UniPatches/commit/7bce4cb497531f5b5813446cce69b3321d5f2542))
+
 ## [1.29.0-dev.23](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.22...v1.29.0-dev.23) (2026-09-17)
 
 ### 🐛 Bug Fixes

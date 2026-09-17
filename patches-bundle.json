@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-17T06:24:15",
-  "description": "## [1.29.0-dev.23](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.22...v1.29.0-dev.23) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* **inapp:** Ensure activity is opened in legacy apps and ensure one confirm layer popup ([a7929a3](https://github.com/Zanuaimi/UniPatches/commit/a7929a35224a343b50424307c71e618cbbee05af))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.23/patches-1.29.0-dev.23.mpp",
+  "created_at": "2026-09-17T07:29:32",
+  "description": "## [1.29.0-dev.24](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.23...v1.29.0-dev.24) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* **inapp:** Route legacy OpenIAB purchases via proxy ([7bce4cb](https://github.com/Zanuaimi/UniPatches/commit/7bce4cb497531f5b5813446cce69b3321d5f2542))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.24/patches-1.29.0-dev.24.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.23"
+  "version": "1.29.0-dev.24"
 }
