@@ -1,3 +1,9 @@
+## [1.29.0-dev.23](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.22...v1.29.0-dev.23) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* **inapp:** Ensure activity is opened in legacy apps and ensure one confirm layer popup ([a7929a3](https://github.com/Zanuaimi/UniPatches/commit/a7929a35224a343b50424307c71e618cbbee05af))
+
 ## [1.29.0-dev.22](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.21...v1.29.0-dev.22) (2026-09-17)
 
 ### 🐛 Bug Fixes

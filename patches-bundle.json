@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-17T06:04:17",
-  "description": "## [1.29.0-dev.22](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.21...v1.29.0-dev.22) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* restore legacy purchase activity lifecycle ([26bdb2b](https://github.com/Zanuaimi/UniPatches/commit/26bdb2bad4a726c36968120c2b415dda4e129124))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.22/patches-1.29.0-dev.22.mpp",
+  "created_at": "2026-09-17T06:24:15",
+  "description": "## [1.29.0-dev.23](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.22...v1.29.0-dev.23) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* **inapp:** Ensure activity is opened in legacy apps and ensure one confirm layer popup ([a7929a3](https://github.com/Zanuaimi/UniPatches/commit/a7929a35224a343b50424307c71e618cbbee05af))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.23/patches-1.29.0-dev.23.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.22"
+  "version": "1.29.0-dev.23"
 }
