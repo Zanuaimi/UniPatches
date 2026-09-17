@@ -25,7 +25,9 @@ internal fun applyOpenIabPatches(context: InAppManagedAdapterContext) {
                 move-object/from16 v1, p1
                 move-object/from16 v2, p2
                 const/4 v3, ${if (inapp) "0x1" else "0x0"}
-                invoke-static {v0, v1, v2, v3}, Lunipatch/overlaycore/InAppRuntimePolicy;->interceptLegacyPurchaseEntry(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;Z)Z
+                const v4, $nonOverlayTimeout
+                const v5, $overlayTimeout
+                invoke-static/range {v0 .. v5}, Lunipatch/overlaycore/InAppRuntimePolicy;->interceptLegacyPurchaseEntry(Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;ZII)Z
                 move-result v0
                 if-eqz v0, :morphe_unity_original_purchase
                 return-void

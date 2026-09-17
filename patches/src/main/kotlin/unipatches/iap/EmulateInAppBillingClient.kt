@@ -4,7 +4,10 @@ import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 
 /** BillingClient entry-point adapter shared by Billing v3 and v9 runtimes. */
-internal fun applyBillingClientCorePatches(context: InAppManagedAdapterContext) {
+internal fun applyBillingClientCorePatches(
+    context: InAppManagedAdapterContext,
+    flowSpec: BillingClientFlowSpec,
+) {
     val patchAll = context.patchAll
     val listenerIget = context.listenerIget
     val buyGrantBlock = context.buyGrantBlock
@@ -21,9 +24,7 @@ internal fun applyBillingClientCorePatches(context: InAppManagedAdapterContext) 
         val isStatic = try { com.android.tools.smali.dexlib2.AccessFlags.STATIC.isSet(it.accessFlags) } catch (_: Exception) { true }
         val field = if (!isStatic) listenerIget(it.definingClass) else null
         if (field != null) {
-            val productArguments = it.parameterTypes.mapIndexedNotNull { index, type ->
-                if (type.startsWith("L") || type.startsWith("[")) parameterRegister(it, index) else null
-            }.take(2)
+            val productArguments = flowSpec.productArguments(it, parameterRegister)
             val block = buyGrantBlock(field, productArguments)
             var granted = false
             if (minRegs(it) >= 5) try { it.addInstructions(0, block); granted = true } catch (_: Exception) {}

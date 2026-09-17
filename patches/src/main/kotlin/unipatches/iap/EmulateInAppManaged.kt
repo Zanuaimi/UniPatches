@@ -61,6 +61,10 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
             if (!knownNamespace) return "missing billing/vendor namespace"
 
             val methodName = method.name.lowercase()
+            val isOpenIabSkuGetter = classText == "lorg/onepf/oms/appstore/googleutils/skudetails;" &&
+                methodName in setOf("getprice", "getoriginalprice", "getformattedprice", "getsku", "gettype") &&
+                method.parameterTypes.isEmpty()
+            if (isOpenIabSkuGetter) return null
             val parameterText = method.parameterTypes.joinToString(" ").lowercase()
             val indicators = listOf(
                 classText.contains("billing") || classText.contains("purchase") || classText.contains("receipt"),
@@ -290,12 +294,13 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
             if (it.parameterTypes == listOf("Lcom/android/billingclient/api/BillingClientStateListener;") && it.returnType == "V") {
                 // The callback is followed by the stock connection body, so
                 // use cloned scratch registers instead of clobbering v0/v1.
-                val owner = mutableClassDefByOrNull(it.definingClass) ?: return@patchAll
-                val allocation = it.cloneMutableAndAllocateScratchRegisters(owner, scratchRegisterCount = 4)
-                val cloned = allocation.method
-                val scratch = allocation.firstScratchRegister
-                val listenerReg = parameterRegister(it, 0)
-                val block = """
+                try {
+                    val owner = mutableClassDefByOrNull(it.definingClass) ?: return@patchAll
+                    val allocation = it.cloneMutableAndAllocateScratchRegisters(owner, scratchRegisterCount = 4)
+                    val cloned = allocation.method
+                    val scratch = allocation.firstScratchRegister
+                    val listenerReg = parameterRegister(it, 0)
+                    val block = """
                     invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
                     move-result-object v$scratch
                     const/4 v${scratch + 1}, 0x0
@@ -309,7 +314,11 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
                     invoke-interface/range {v${scratch + 1} .. v${scratch + 2}}, Lcom/android/billingclient/api/BillingClientStateListener;->onBillingSetupFinished(Lcom/android/billingclient/api/BillingResult;)V
                     :morphe_iap_setup_done
                 """.trimIndent()
-                cloned.addInstructions(0, block)
+                    cloned.addInstructions(0, block)
+                    logger.info("FreeIAP startConnection expanded frame: ${it.definingClass}->${it.name} regs=${cloned.implementation?.registerCount}")
+                } catch (error: Exception) {
+                    logger.warning("FreeIAP skipped startConnection: register-safe allocation failed (${error.message})")
+                }
             }
             // else: leave the overload alone (see comment above)
         }

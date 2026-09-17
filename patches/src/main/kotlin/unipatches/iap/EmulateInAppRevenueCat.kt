@@ -27,7 +27,6 @@ internal fun BytecodePatchContext.applyRevenueCatPatches(
         val rcInfos = "Lcom/revenuecat/purchases/EntitlementInfos;"
         val rcTx = "Lcom/revenuecat/purchases/models/StoreTransaction;"
         val rcCust = "Lcom/revenuecat/purchases/CustomerInfo;"
-        val fakeId = "morphe_fake"
 
         // 1b) Same fake via sun.misc.Unsafe allocation (no constructors, no
         // range invokes): allocate + populate fields resolved at patch time.
@@ -69,6 +68,9 @@ internal fun BytecodePatchContext.applyRevenueCatPatches(
                     custom = { m, _ -> m.parameterTypes.lastOrNull() == rcPurchaseCb }), "RC.$pn-unsafe") { method ->
                     try {
                         val cbReg = parameterRegister(method, method.parameterTypes.lastIndex)
+                        val productArg = method.parameterTypes.indexOfFirst {
+                            it != rcPurchaseCb && (it.startsWith("L") || it.startsWith("["))
+                        }.takeIf { it >= 0 }?.let { parameterRegister(method, it) }
                         val owner = try {
                             Fingerprint(name = pn, definingClass = rcPurchases, returnType = "V",
                                 custom = { m, _ -> m.parameterTypes.lastOrNull() == rcPurchaseCb }).classDefOrNull
@@ -85,7 +87,14 @@ internal fun BytecodePatchContext.applyRevenueCatPatches(
                         emit("const-string v10, \"MorpheRC\"")
                         emit("const-string v11, \"RC $pn buy tapped\"")
                         emit("invoke-static {v10, v11}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I")
-                        emit("const-string v$uId, \"$fakeId\"")
+                        if (productArg == null) {
+                            logger.warning("Emulate InApp: RC.$pn skipped (no product-bearing argument)")
+                            return@patchAll
+                        }
+                        emit("move-object/from16 v$uTmp, $productArg")
+                        emit("invoke-static {v$uTmp}, Lunipatch/overlaycore/InAppRuntimePolicy;->productIdFrom(Ljava/lang/Object;)Ljava/lang/String;")
+                        emit("move-result-object v$uId")
+                        emit("if-eqz v$uId, :morphe_rc_${pn}_original")
                         // Unsafe handle
                         emit("const-string v$uTmp, \"theUnsafe\"")
                         emit("const-class v$uUnsafe, Lsun/misc/Unsafe;")
@@ -125,6 +134,7 @@ internal fun BytecodePatchContext.applyRevenueCatPatches(
                         emit("iput-object v$uInfos, v$uCust, $rcCustInfosF")
                         emit("invoke-interface {v$uCb, v$uTx, v$uCust}, $rcPurchaseCb->onCompleted($rcTx$rcCust)V")
                         emit("return-void")
+                        emit(":morphe_rc_${pn}_original")
                         try {
                             owner.methods.remove(target)
                         } catch (_: Exception) {}
@@ -178,8 +188,10 @@ internal fun BytecodePatchContext.applyRevenueCatPatches(
                 emit("const-string v$vH, \"MorpheRC\"")
                 emit("const-string v${vH + 1}, \"RC purchasesUpdated\"")
                 emit("invoke-static {v$vH, v${vH + 1}}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I")
-                emit("const-string v$vH, \"{\\\"orderId\\\":\\\"morphe_fake\\\",\\\"packageName\\\":\\\"morphe_fake\\\",\\\"productId\\\":\\\"morphe_fake\\\",\\\"purchaseTime\\\":0,\\\"purchaseState\\\":1,\\\"purchaseToken\\\":\\\"morphe_fake\\\",\\\"quantity\\\":1,\\\"acknowledged\\\":true}\"")
-                emit("const-string v${vH + 1}, \"morphe_fake\"")
+                emit("invoke-static {$purchasesReg}, Lunipatch/overlaycore/InAppRuntimePolicy;->productIdFrom(Ljava/lang/Object;)Ljava/lang/String;")
+                emit("move-result-object v$vH")
+                emit("if-eqz v$vH, :morphe_rc_purchases_original")
+                emit("const-string v${vH + 1}, \"{}\"")
                 emit("new-instance v${vH + 2}, Lcom/android/billingclient/api/Purchase;")
                 emit("invoke-direct {v${vH + 2}, v$vH, v${vH + 1}}, Lcom/android/billingclient/api/Purchase;-><init>(Ljava/lang/String;Ljava/lang/String;)V")
                 emit("move-object/from16 v$vH, $purchasesReg")
@@ -187,6 +199,7 @@ internal fun BytecodePatchContext.applyRevenueCatPatches(
                 emit("invoke-direct {v${vH + 1}, v$vH}, Ljava/util/ArrayList;-><init>(Ljava/util/Collection;)V")
                 emit("invoke-virtual {v${vH + 1}, v${vH + 2}}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z")
                 emit("move-object/from16 $purchasesReg, v${vH + 1}")
+                emit(":morphe_rc_purchases_original")
                 try {
                     owner.methods.remove(target)
                 } catch (_: Exception) {}

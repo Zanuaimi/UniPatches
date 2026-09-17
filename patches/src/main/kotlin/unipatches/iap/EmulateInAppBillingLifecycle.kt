@@ -44,6 +44,14 @@ internal fun applyBillingClientLifecycleAndInventoryPatches(
                 // inventory. Do not let it alter legacy Bundle APIs while
                 // the dedicated legacy setting remains in preserve mode.
                 if (it.returnType == "Landroid/os/Bundle;" && legacyInventoryMode == "preserve") return@patchAll
+                val catalogInputs = it.parameterTypes.mapIndexedNotNull { index, type ->
+                    if ((type.startsWith("L") || type.startsWith("[")) &&
+                        (type.toString().lowercase().contains("sku") || type.toString().lowercase().contains("product") || type.toString().lowercase().contains("purchase")))
+                        parameterRegister(it, index) else null
+                }.distinct()
+                val rememberCatalog = catalogInputs.joinToString("\n") { register ->
+                    "invoke-static {$register}, Lunipatch/overlaycore/InAppRuntimePolicy;->rememberCatalogProduct(Ljava/lang/Object;)V"
+                }
                 val listenerIdx = it.parameterTypes.indexOfFirst { p -> p.contains("PurchasesResponseListener") || p.contains("PurchaseHistoryResponseListener") }
                 if (listenerIdx >= 0 && it.returnType == "V") {
                     val isHistory = it.parameterTypes[listenerIdx].contains("History")
@@ -52,6 +60,7 @@ internal fun applyBillingClientLifecycleAndInventoryPatches(
                     val cb = if (isHistory) "onPurchaseHistoryResponse" else "onQueryPurchasesResponse"
                     if (!fakeStartupPurchases) {
                         it.addInstructions(0, """
+                            $rememberCatalog
                             invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
                             move-result-object v0
                             const/4 v1, 0x0
@@ -71,49 +80,29 @@ internal fun applyBillingClientLifecycleAndInventoryPatches(
                     // v0..v3: expanded into a grown frame via expandSwap so
                     // tiny delegate frames (e.g. 3-reg BillingClientImpl
                     // methods) verify instead of killing their class.
-                    val block = if (isHistory) {
-                        """
-                            invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
-                            move-result-object v0
-                            const/4 v1, 0x0
-                            invoke-virtual {v0, v1}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->setResponseCode(I)Lcom/android/billingclient/api/BillingResult${'$'}Builder;
-                            move-result-object v0
-                            invoke-virtual {v0}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->build()Lcom/android/billingclient/api/BillingResult;
-                            move-result-object v0
-                            const-string v1, "{\"productId\":\"morphe_fake\",\"purchaseToken\":\"morphe_fake\",\"purchaseTime\":0,\"quantity\":1}"
-                            const-string v2, "morphe_fake"
-                            new-instance v3, Lcom/android/billingclient/api/PurchaseHistoryRecord;
-                            invoke-direct {v3, v1, v2}, Lcom/android/billingclient/api/PurchaseHistoryRecord;-><init>(Ljava/lang/String;Ljava/lang/String;)V
-                            new-instance v1, Ljava/util/ArrayList;
-                            invoke-direct {v1}, Ljava/util/ArrayList;-><init>()V
-                            invoke-virtual {v1, v3}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
-                            move-object/from16 v3, $listenerReg
-                            if-eqz v3, :morphe_iap_query_done
-                            invoke-interface {v3, v0, v1}, Lcom/android/billingclient/api/PurchaseHistoryResponseListener;->onPurchaseHistoryResponse(Lcom/android/billingclient/api/BillingResult;Ljava/util/List;)V
-                            :morphe_iap_query_done
-                            return-void
-                        """.trimIndent()
-                    } else {
-                        """
-                            invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
-                            move-result-object v0
-                            const/4 v1, 0x0
-                            invoke-virtual {v0, v1}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->setResponseCode(I)Lcom/android/billingclient/api/BillingResult${'$'}Builder;
-                            move-result-object v0
-                            const-string v1, "{\"orderId\":\"morphe_fake\",\"packageName\":\"morphe_fake\",\"productId\":\"morphe_fake\",\"purchaseTime\":0,\"purchaseState\":1,\"purchaseToken\":\"morphe_fake\",\"quantity\":1,\"acknowledged\":true}"
-                            const-string v2, "morphe_fake"
-                            new-instance v3, Lcom/android/billingclient/api/Purchase;
-                            invoke-direct {v3, v1, v2}, Lcom/android/billingclient/api/Purchase;-><init>(Ljava/lang/String;Ljava/lang/String;)V
-                            new-instance v1, Ljava/util/ArrayList;
-                            invoke-direct {v1}, Ljava/util/ArrayList;-><init>()V
-                            invoke-virtual {v1, v3}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
-                            move-object/from16 v3, $listenerReg
-                            if-eqz v3, :morphe_iap_query_done
-                            invoke-interface {v3, v0, v1}, Lcom/android/billingclient/api/PurchasesResponseListener;->onQueryPurchasesResponse(Lcom/android/billingclient/api/BillingResult;Ljava/util/List;)V
-                            :morphe_iap_query_done
-                            return-void
-                        """.trimIndent()
-                    }
+                    val block = """
+                        $rememberCatalog
+                        invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
+                        move-result-object v0
+                        const/4 v1, 0x0
+                        invoke-virtual {v0, v1}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->setResponseCode(I)Lcom/android/billingclient/api/BillingResult${'$'}Builder;
+                        move-result-object v0
+                        invoke-virtual {v0}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->build()Lcom/android/billingclient/api/BillingResult;
+                        move-result-object v0
+                        new-instance v1, Ljava/util/ArrayList;
+                        invoke-direct {v1}, Ljava/util/ArrayList;-><init>()V
+                        const-class v2, ${if (isHistory) "Lcom/android/billingclient/api/PurchaseHistoryRecord;" else "Lcom/android/billingclient/api/Purchase;"}
+                        invoke-static {v2}, Lunipatch/overlaycore/InAppRuntimePolicy;->emulatedInventoryPurchase(Ljava/lang/Class;)Ljava/lang/Object;
+                        move-result-object v2
+                        if-eqz v2, :morphe_iap_query_empty
+                        invoke-virtual {v1, v2}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
+                        :morphe_iap_query_empty
+                        move-object/from16 v2, $listenerReg
+                        if-eqz v2, :morphe_iap_query_done
+                        invoke-interface {v2, v0, v1}, $iface->$cb(Lcom/android/billingclient/api/BillingResult;Ljava/util/List;)V
+                        :morphe_iap_query_done
+                        return-void
+                    """.trimIndent()
                     if (!expandSwap(it, block) && minRegs(it) >= 4) {
                         it.addInstructions(0, block)
                     }
@@ -129,7 +118,9 @@ internal fun applyBillingClientLifecycleAndInventoryPatches(
                         const-string v1, "INAPP_PURCHASE_DATA_LIST"
                         new-instance v2, Ljava/util/ArrayList;
                         invoke-direct {v2}, Ljava/util/ArrayList;-><init>()V
-                        ${if (legacyInventoryMode == "fake") "const-string v3, \"{\\\"productId\\\":\\\"morphe_fake\\\",\\\"purchaseToken\\\":\\\"morphe_fake\\\"}\"\n                        invoke-virtual {v2, v3}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z\n                        invoke-virtual {v0, v1, v2}, Landroid/os/Bundle;->putStringArrayList(Ljava/lang/String;Ljava/util/ArrayList;)V\n                        const-string v1, \"INAPP_SIGNATURE_LIST\"\n                        new-instance v2, Ljava/util/ArrayList;\n                        invoke-direct {v2}, Ljava/util/ArrayList;-><init>()V\n                        const-string v3, \"morphe_fake\"\n                        invoke-virtual {v2, v3}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z" else ""}
+                        // Fake mode never invents an owned product ID. The empty
+                        // response is intentional until a requested catalog ID
+                        // can be associated with the inventory query.
                         invoke-virtual {v0, v1, v2}, Landroid/os/Bundle;->putStringArrayList(Ljava/lang/String;Ljava/util/ArrayList;)V
                         return-object v0
                     """.trimIndent())
@@ -227,8 +218,18 @@ internal fun applyBillingClientLifecycleAndInventoryPatches(
         }
 
         // Prices -> "0.00" / 0
+        for (pm in listOf("getPrice", "getOriginalPrice", "getFormattedPrice")) {
+            patchAll(Fingerprint(name = pm, returnType = "Ljava/lang/String;", custom = { m, c ->
+                c.type == "Lorg/onepf/oms/appstore/googleUtils/SkuDetails;" && m.parameterTypes.isEmpty()
+            }), "OpenIAB.SkuDetails.$pm") {
+                it.addInstructions(0, "const-string v0, \"0.00\"\nreturn-object v0")
+            }
+        }
         for (pm in listOf("getPrice", "getOriginalPrice", "getFormattedPrice", "getDisplayPrice", "getPriceString")) {
-            patchAll(Fingerprint(name = pm, returnType = "Ljava/lang/String;", custom = { _, c -> val t=c.type.lowercase(); t.contains("sku") || t.contains("product") || t.contains("billing") }), pm) {
+            patchAll(Fingerprint(name = pm, returnType = "Ljava/lang/String;", custom = { _, c ->
+                val t = c.type.lowercase()
+                t != "lorg/onepf/oms/appstore/googleutils/skudetails;" && (t.contains("sku") || t.contains("product") || t.contains("billing"))
+            }), pm) {
                 if (it.parameterTypes.isEmpty()) it.addInstructions(0, "const-string v0, \"0.00\"\nreturn-object v0")
             }
         }
@@ -242,16 +243,9 @@ internal fun applyBillingClientLifecycleAndInventoryPatches(
         patchAll(Fingerprint(name = "getPriceAmountMicros", custom = { _, c -> c.type.lowercase().contains("offer") }), "Offer.getPriceAmountMicros") {
             if (it.returnType == "J") it.addInstructions(0, "const-wide/16 v0, 0x0\nreturn-wide v0")
         }
-        // getOriginalJson -> fake json
-        patchAll(Fingerprint(name = "getOriginalJson", returnType = "Ljava/lang/String;", custom = { _, c ->
-            val t = c.type.lowercase()
-            t.contains("billing") || t.contains("purchase") || t.contains("sku") || t.contains("product")
-        }), "getOriginalJson") {
-            it.addInstructions(0, "const-string v0, \"{\\\"productId\\\":\\\"morphe_fake\\\",\\\"purchaseToken\\\":\\\"fake\\\"}\"\nreturn-object v0")
-        }
-
         // Purchase state getters -> look owned/valid (scoped to billing/purchase classes only;
-        // ProductDetails identity like getProductId is deliberately NOT spoofed so SKU lookup keeps working)
+        // all purchase metadata getters remain stock so product/package/token information
+        // from real or factory-created purchases is preserved.
         patchAll(Fingerprint(name = "getPurchaseState", returnType = "I", custom = { _, c -> val t = c.type.lowercase(); t.contains("billing") || t.contains("purchase") }), "Purchase.getPurchaseState") {
             it.addInstructions(0, "const/4 v0, 0x1\nreturn v0")
         }
@@ -261,18 +255,6 @@ internal fun applyBillingClientLifecycleAndInventoryPatches(
         patchAll(Fingerprint(name = "getQuantity", returnType = "I", custom = { _, c -> val t = c.type.lowercase(); t.contains("billing") || t.contains("purchase") }), "Purchase.getQuantity") {
             it.addInstructions(0, "const/4 v0, 0x1\nreturn v0")
         }
-        for (ps in listOf("getPurchaseToken", "getOrderId", "getSignature")) {
-            patchAll(Fingerprint(name = ps, returnType = "Ljava/lang/String;", custom = { _, c -> val t = c.type.lowercase(); t.contains("billing") || t.contains("purchase") }), "Purchase.$ps") {
-                if (it.parameterTypes.isEmpty()) it.addInstructions(0, "const-string v0, \"morphe_fake\"\nreturn-object v0")
-            }
-        }
-        patchAll(Fingerprint(name = "getProducts", custom = { m, c -> m.returnType.contains("List") && (c.type.lowercase().contains("billing") || c.type.lowercase().contains("purchase")) }), "Purchase.getProducts") {
-            it.addInstructions(0, "const-string v0, \"morphe_fake\"\ninvoke-static {v0}, Ljava/util/Collections;->singletonList(Ljava/lang/Object;)Ljava/util/List;\nmove-result-object v0\nreturn-object v0")
-        }
-        patchAll(Fingerprint(name = "getSkus", custom = { m, c -> m.returnType.contains("List") && (c.type.lowercase().contains("billing") || c.type.lowercase().contains("purchase")) }), "Purchase.getSkus") {
-            it.addInstructions(0, "const-string v0, \"morphe_fake\"\ninvoke-static {v0}, Ljava/util/Collections;->singletonList(Ljava/lang/Object;)Ljava/util/List;\nmove-result-object v0\nreturn-object v0")
-        }
-
         patchAll(Fingerprint(name = "isFeatureSupported", custom = { _, c -> c.type.contains("BillingClient") }), "isFeatureSupported", 2) {
             when {
                 it.returnType.contains("BillingResult") -> it.addInstructions(0, okBillingResult)

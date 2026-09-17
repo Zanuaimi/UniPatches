@@ -5,5 +5,5 @@ internal object BillingV9Adapter : BillingClientAdapter {
     override fun supports(capabilities: BillingClientCapabilities) =
         capabilities.billingClientPresent && capabilities.productDetails && capabilities.offerTokens
     override fun apply(context: InAppManagedAdapterContext) =
-        applyBillingClientCorePatches(context.copy(billingAdapterKey = key))
+        applyBillingClientCorePatches(context.copy(billingAdapterKey = key), BillingClientFlowSpec.V9)
 }

@@ -6,5 +6,5 @@ internal object BillingV3Adapter : BillingClientAdapter {
         capabilities.billingClientPresent && !capabilities.productDetails &&
             (capabilities.skuDetails || capabilities.legacyLaunchFlow)
     override fun apply(context: InAppManagedAdapterContext) =
-        applyBillingClientCorePatches(context.copy(billingAdapterKey = key))
+        applyBillingClientCorePatches(context.copy(billingAdapterKey = key), BillingClientFlowSpec.V3)
 }
