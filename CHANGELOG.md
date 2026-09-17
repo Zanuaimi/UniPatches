@@ -1,3 +1,10 @@
+## [1.29.0-dev.25](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.24...v1.29.0-dev.25) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* attach overlay from application startup ([8ce826d](https://github.com/Zanuaimi/UniPatches/commit/8ce826d7536c190c6cbb06f8a8bb52d92ddf2806))
+* harden in-app emulation validation ([df23661](https://github.com/Zanuaimi/UniPatches/commit/df236617f2fd8721cf6969be8227095bdd51e036))
+
 ## [1.29.0-dev.24](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.23...v1.29.0-dev.24) (2026-09-17)
 
 ### 🐛 Bug Fixes
