@@ -260,11 +260,11 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
             }
         }
 
-        // OpenIAB legacy purchase flow. Keep this phase exact and optional:
-        // it only replaces the public OpenIabHelper overloads when the InApp
-        // overlay is enabled, leaving normal legacy store behavior untouched
-        // when the addon is not selected.
-        if (inventoryOptionsProvider().third) {
+        // OpenIAB legacy purchase flow. The runtime policy is safe in both modes:
+        // without the overlay it delivers immediately; with the overlay it waits
+        // for the confirmation popup. Keep the interception independent from the
+        // optional overlay addon so legacy non-overlay IAP is still emulated.
+        run {
             val openIabHelper = "Lorg/onepf/oms/OpenIabHelper;"
             val legacyPurchaseSignatures = listOf(
                 listOf(
@@ -286,16 +286,18 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                     definingClass = openIabHelper,
                     returnType = "V",
                     custom = { method, _ -> method.parameterTypes == signature },
-                ), "OpenIAB.launchPurchaseFlow", 2) { method ->
+                ), "OpenIAB.launchPurchaseFlow", 3) { method ->
                     val skuIndex = 1
                     val listenerIndex = signature.indexOfFirst { it.contains("OnIabPurchaseFinishedListener") }
+                    val purchaseActivity = parameterRegister(method, 0)
                     val sku = parameterRegister(method, skuIndex)
                     val listener = parameterRegister(method, listenerIndex)
                     method.addInstructions(0, """
                         move-object/from16 v0, $listener
                         if-eqz v0, :morphe_openiab_original_purchase_flow
                         move-object/from16 v1, $sku
-                        invoke-static {v0, v1}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatchLegacy(Ljava/lang/Object;Ljava/lang/String;)V
+                        move-object/from16 v2, $purchaseActivity
+                        invoke-static {v0, v2, v1}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatchLegacy(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;)V
                         return-void
                         :morphe_openiab_original_purchase_flow
                     """.trimIndent())
@@ -305,9 +307,9 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
 
         // OpenIAB's Unity wrapper starts UnityProxyActivity before it reaches
         // OpenIabHelper.launchPurchaseFlow. Intercept the exact public Unity
-        // entry points so the proxy is not opened when the overlay policy is
-        // actually configured. If the bridge was not installed, preserve the
-        // original proxy Activity path unchanged.
+        // entry points in both modes so the proxy is never opened for an
+        // emulated purchase. The runtime policy decides whether to wait for
+        // the optional overlay confirmation.
         val openIabUnityPlugin = "Lorg/onepf/openiab/UnityPlugin;"
         for (methodName in listOf("purchaseProduct", "purchaseSubscription")) {
             patchAll(Fingerprint(
@@ -318,9 +320,6 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
             ), "OpenIAB.UnityPlugin.$methodName", 2) { method ->
                 val product = parameterRegister(method, 0)
                 method.addInstructions(0, """
-                    invoke-static {}, Lunipatch/overlaycore/InAppRuntimePolicy;->isConfigured()Z
-                    move-result v0
-                    if-eqz v0, :morphe_openiab_unity_original_purchase
                     iget-object v0, p0, $openIabUnityPlugin->_purchaseFinishedListener:Lorg/onepf/oms/appstore/googleUtils/IabHelper${'$'}OnIabPurchaseFinishedListener;
                     if-eqz v0, :morphe_openiab_unity_original_purchase
                     move-object/from16 v1, $product
@@ -833,10 +832,10 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         patchAll(Fingerprint(name = "getPriceAmountMicros", returnType = "J", custom = { _, c ->
             val t = c.type.lowercase()
             t.contains("offer") || t.contains("product") || t.contains("sku") || t.contains("billing")
-        }), "getPriceAmountMicros", 2) {
+        }), "getPriceAmountMicros") {
             it.addInstructions(0, "const-wide/16 v0, 0x0\nreturn-wide v0")
         }
-        patchAll(Fingerprint(name = "getPriceAmountMicros", custom = { _, c -> c.type.lowercase().contains("offer") }), "Offer.getPriceAmountMicros", 2) {
+        patchAll(Fingerprint(name = "getPriceAmountMicros", custom = { _, c -> c.type.lowercase().contains("offer") }), "Offer.getPriceAmountMicros") {
             if (it.returnType == "J") it.addInstructions(0, "const-wide/16 v0, 0x0\nreturn-wide v0")
         }
         // getOriginalJson -> fake json
