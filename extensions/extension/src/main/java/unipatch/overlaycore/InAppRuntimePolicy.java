@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
+import android.widget.Toast;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -13,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import unipatch.overlaycore.modules.OverlaySessionState;
 import unipatch.overlaycore.modules.advanced.OverlayRuntimeLogger;
 
@@ -22,6 +24,8 @@ public final class InAppRuntimePolicy {
 
     private static final String MODULE = "inAppEmulation";
     private static final int MAX_SAVED_PURCHASES = 128;
+    private static final int DEFAULT_NON_OVERLAY_TIMEOUT_SECONDS = 10;
+    private static final int DEFAULT_OVERLAY_TIMEOUT_SECONDS = 30;
     private static final Set<String> SAVED = new LinkedHashSet<>();
     private static WeakReference<Activity> activity = new WeakReference<>(null);
     private static Pending pending;
@@ -29,6 +33,8 @@ public final class InAppRuntimePolicy {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static boolean configured;
     private static boolean popupEnabled = true;
+    private static long nonOverlayTimeoutMs = DEFAULT_NON_OVERLAY_TIMEOUT_SECONDS * 1000L;
+    private static long overlayTimeoutMs = DEFAULT_OVERLAY_TIMEOUT_SECONDS * 1000L;
     private static String lastEvent = "No purchase request this session";
 
     private InAppRuntimePolicy() { }
@@ -37,24 +43,35 @@ public final class InAppRuntimePolicy {
         configured = false;
         pending = null;
         redirect = null;
+        nonOverlayTimeoutMs = DEFAULT_NON_OVERLAY_TIMEOUT_SECONDS * 1000L;
+        overlayTimeoutMs = DEFAULT_OVERLAY_TIMEOUT_SECONDS * 1000L;
         SAVED.clear();
         OverlaySessionState.clearModule(MODULE);
         if (encoded == null) return;
         String[] values = encoded.split("\\|", -1);
-        if (values.length != 4 || !"1".equals(values[0]) || !MODULE.equals(values[1]) || !MODULE.equals(values[2])) return;
+        if ((values.length != 4 && values.length != 6) || !"1".equals(values[0]) || !MODULE.equals(values[1]) || !MODULE.equals(values[2])) return;
         if (!"0".equals(values[3]) && !"1".equals(values[3])) return;
         popupEnabled = "1".equals(values[3]);
+        if (values.length == 6) configureTimeouts(parseSeconds(values[4], DEFAULT_NON_OVERLAY_TIMEOUT_SECONDS), parseSeconds(values[5], DEFAULT_OVERLAY_TIMEOUT_SECONDS));
         configured = true;
+    }
+
+    public static synchronized void configureTimeouts(int nonOverlaySeconds, int overlaySeconds) {
+        nonOverlayTimeoutMs = parseSeconds(nonOverlaySeconds, DEFAULT_NON_OVERLAY_TIMEOUT_SECONDS) * 1000L;
+        overlayTimeoutMs = parseSeconds(overlaySeconds, DEFAULT_OVERLAY_TIMEOUT_SECONDS) * 1000L;
     }
 
     public static synchronized boolean isConfigured() { return configured; }
     public static synchronized boolean popupEnabled() { return popupEnabled; }
+    public static synchronized int overlayTimeoutSeconds() { return (int) Math.max(1L, overlayTimeoutMs / 1000L); }
     public static synchronized void setPopupEnabled(boolean enabled) { popupEnabled = enabled; }
     public static synchronized String lastEvent() { return lastEvent; }
 
     public static synchronized void reset() {
         configured = false;
         popupEnabled = true;
+        nonOverlayTimeoutMs = DEFAULT_NON_OVERLAY_TIMEOUT_SECONDS * 1000L;
+        overlayTimeoutMs = DEFAULT_OVERLAY_TIMEOUT_SECONDS * 1000L;
         pending = null;
         redirect = null;
         SAVED.clear();
@@ -90,8 +107,11 @@ public final class InAppRuntimePolicy {
             if (!configured || !popupEnabled || SAVED.contains(product)) {
                 lastEvent = "Emulated purchase delivered: " + product;
                 OverlayRuntimeLogger.log("INFO", "InApp", "Intercepted modern purchase: product=" + product + ", mode=immediate");
+                Pending immediate = new Pending(listener, product, false, target);
+                pending = immediate;
+                MAIN.postDelayed(() -> timeout(immediate), timeoutMillis(immediate));
                 boolean delivered = deliver(listener, product, 0, true);
-                if (!delivered) deliver(listener, product, 1, false);
+                finishImmediate(immediate, delivered);
                 if (!delivered) OverlayRuntimeLogger.log("WARN", "InApp", "Modern purchase callback failed: product=" + product);
                 return delivered;
             }
@@ -101,7 +121,7 @@ public final class InAppRuntimePolicy {
                 deliver(listener, product, 1, false);
                 return false;
             }
-            pending = new Pending(listener, product, false, target);
+            pending = new Pending(listener, product, false, target, true);
             lastEvent = "Waiting for confirmation: " + product;
             OverlayRuntimeLogger.log("INFO", "InApp", "Purchase request received: listener=" + listener.getClass().getName() +
                     ", activity=" + (target == null ? "null" : target.getClass().getName()) +
@@ -109,7 +129,7 @@ public final class InAppRuntimePolicy {
         }
         final Pending request;
         synchronized (InAppRuntimePolicy.class) { request = pending; }
-        MAIN.postDelayed(() -> timeout(request), 30000L);
+        MAIN.postDelayed(() -> timeout(request), timeoutMillis(request));
         if (target != null) OverlayRuntime.ensureActivity(target);
         if (!OverlayRuntime.showInAppPurchaseConfirmation(target, product)) {
             OverlayRuntimeLogger.log("WARN", "InApp", "Purchase confirmation popup could not attach; cancelling purchase: product=" + product);
@@ -269,8 +289,11 @@ public final class InAppRuntimePolicy {
                 lastEvent = "Emulated legacy purchase delivered: " + normalized;
                 OverlayRuntimeLogger.log("INFO", "InApp", "Intercepted legacy purchase: product=" + normalized +
                         ", mode=immediate, inapp=" + inapp);
+                Pending immediate = new Pending(listener, normalized, true, target, developerPayload, inapp);
+                pending = immediate;
+                MAIN.postDelayed(() -> timeout(immediate), timeoutMillis(immediate));
                 boolean delivered = deliverLegacy(listener, normalized, true, developerPayload, inapp);
-                if (!delivered) deliverLegacy(listener, normalized, false, developerPayload, inapp);
+                finishImmediate(immediate, delivered);
                 if (!delivered) OverlayRuntimeLogger.log("WARN", "InApp", "Legacy purchase callback failed: product=" + normalized);
                 finishLegacyProxy(target);
                 return;
@@ -280,14 +303,14 @@ public final class InAppRuntimePolicy {
                 deliverLegacy(listener, normalized, false, developerPayload, inapp);
                 return;
             }
-            pending = new Pending(listener, normalized, true, target, developerPayload, inapp);
+            pending = new Pending(listener, normalized, true, target, developerPayload, inapp, true);
             lastEvent = "Waiting for legacy confirmation: " + normalized;
             OverlayRuntimeLogger.log("INFO", "InApp", "Intercepted legacy purchase: product=" + normalized +
                     ", mode=overlay-confirmation, inapp=" + inapp);
         }
         final Pending request;
         synchronized (InAppRuntimePolicy.class) { request = pending; }
-        MAIN.postDelayed(() -> timeout(request), 30000L);
+        MAIN.postDelayed(() -> timeout(request), timeoutMillis(request));
         if (target != null) OverlayRuntime.ensureActivity(target);
         if (!OverlayRuntime.showInAppPurchaseConfirmation(target, normalized)) {
             OverlayRuntimeLogger.log("INFO", "InApp", "Legacy purchase confirmation popup queued until an active overlay Activity is available: product=" + normalized);
@@ -406,13 +429,49 @@ public final class InAppRuntimePolicy {
             if (pending != request) return;
         }
         OverlayRuntimeLogger.log("WARN", "InApp", "Purchase request timed out: product=" + request.product);
-        cancelPending();
+        if (cancelPending()) {
+            Activity target = request.activity.get();
+            if (target == null) target = activity.get();
+            if (target != null) {
+                try {
+                    Toast.makeText(target.getApplicationContext(), "Purchase timed out", Toast.LENGTH_SHORT).show();
+                } catch (RuntimeException error) {
+                    OverlayRuntimeLogger.log("WARN", "InApp", "Timeout toast failed: " + error.getClass().getSimpleName());
+                }
+            }
+        }
+    }
+
+    private static long timeoutMillis(Pending request) {
+        synchronized (InAppRuntimePolicy.class) {
+            return request.overlayConfirmation ? overlayTimeoutMs : nonOverlayTimeoutMs;
+        }
+    }
+
+    private static int parseSeconds(String value, int fallback) {
+        try { return parseSeconds(Integer.parseInt(value), fallback); }
+        catch (NumberFormatException ignored) { return fallback; }
+    }
+
+    private static int parseSeconds(int value, int fallback) {
+        return value > 0 && value <= 86_400 ? value : fallback;
+    }
+
+    private static void finishImmediate(Pending request, boolean delivered) {
+        synchronized (InAppRuntimePolicy.class) {
+            if (pending != request || !request.completed.compareAndSet(false, true)) return;
+            pending = null;
+        }
+        if (!delivered) {
+            if (request.legacy) deliverLegacy(request.listener, request.product, false, request.developerPayload, request.inapp);
+            else deliver(request.listener, request.product, 1, false);
+        }
     }
 
     public static synchronized void complete(boolean save) {
         Pending request = pending;
         pending = null;
-        if (request == null) return;
+        if (request == null || !request.completed.compareAndSet(false, true)) return;
         if (save && SAVED.size() < MAX_SAVED_PURCHASES) SAVED.add(request.product);
         lastEvent = "Emulated purchase delivered: " + request.product;
         boolean delivered = request.legacy
@@ -426,16 +485,17 @@ public final class InAppRuntimePolicy {
         if (request.legacy) finishLegacyProxy(request.activity.get());
     }
 
-    public static synchronized void cancelPending() {
+    public static synchronized boolean cancelPending() {
         Pending request = pending;
         pending = null;
-        if (request == null) return;
+        if (request == null || !request.completed.compareAndSet(false, true)) return false;
         lastEvent = "Purchase cancelled: " + request.product;
         boolean delivered = request.legacy
                 ? deliverLegacy(request.listener, request.product, false, request.developerPayload, request.inapp)
                 : deliver(request.listener, request.product, 1, false);
         if (!delivered) OverlayRuntimeLogger.log("WARN", "InApp", "Purchase cancellation callback failed: product=" + request.product);
         if (request.legacy) finishLegacyProxy(request.activity.get());
+        return true;
     }
 
     /** Mirrors UnityProxyActivity's original result-handled cleanup for emulated legacy flows. */
@@ -605,14 +665,24 @@ public final class InAppRuntimePolicy {
     private static final class Pending {
         final Object listener; final String product; final boolean legacy; final WeakReference<Activity> activity;
         final String developerPayload; final boolean inapp;
+        final boolean overlayConfirmation;
+        final AtomicBoolean completed = new AtomicBoolean(false);
         Pending(Object listener, String product, boolean legacy, Activity activity) {
-            this(listener, product, legacy, activity, "", true);
+            this(listener, product, legacy, activity, "", true, false);
+        }
+        Pending(Object listener, String product, boolean legacy, Activity activity, boolean overlayConfirmation) {
+            this(listener, product, legacy, activity, "", true, overlayConfirmation);
         }
         Pending(Object listener, String product, boolean legacy, Activity activity, String developerPayload, boolean inapp) {
+            this(listener, product, legacy, activity, developerPayload, inapp, false);
+        }
+        Pending(Object listener, String product, boolean legacy, Activity activity, String developerPayload,
+                boolean inapp, boolean overlayConfirmation) {
             this.listener = listener; this.product = product; this.legacy = legacy;
             this.activity = new WeakReference<>(activity);
             this.developerPayload = developerPayload == null ? "" : developerPayload;
             this.inapp = inapp;
+            this.overlayConfirmation = overlayConfirmation;
         }
     }
 

@@ -11,7 +11,7 @@ import helpers.bytecode.cloneMutableAndAllocateScratchRegisters
 import java.util.logging.Logger
 
 @Suppress("unused")
-internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boolean, String, Boolean>) = bytecodePatch(
+internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boolean, String, Pair<Int, Int>>) = bytecodePatch(
     name = null,
     description = """
         Get paid items free: buying grants items without charging. Best for offline games.
@@ -34,6 +34,9 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         val managedPhaseStart = System.nanoTime()
         var patched = 0
         val patchedMethods = mutableSetOf<String>()
+        val (_, _, timeouts) = inventoryOptionsProvider()
+        val nonOverlayTimeout = timeouts.first.coerceIn(1, 86400)
+        val overlayTimeout = timeouts.second.coerceIn(1, 86400)
 
         // Minimum registers a frame provably holds: param slots (J/D count
         // double) plus this for instance methods. Injected blocks use fixed
@@ -219,6 +222,9 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 :morphe_iap_valid
                 $validationFirst
                 $validationSecond
+                const v3, $nonOverlayTimeout
+                const v4, $overlayTimeout
+                invoke-static {v3, v4}, Lunipatch/overlaycore/InAppRuntimePolicy;->configureTimeouts(II)V
                 invoke-static {v0, v1, v2}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatch(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z
                 move-result v3
                 if-eqz v3, :morphe_iap_cancelled
@@ -319,19 +325,27 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                         } else {
                             "const/4 v4, ${if (flowName == "launchPurchaseFlow") "0x1" else "0x0"}"
                         }
-                        method.addInstructions(0, """
+                        val block = """
                             move-object/from16 v0, $listener
                             if-eqz v0, :morphe_openiab_original_purchase_flow
                             move-object/from16 v1, $sku
                             move-object/from16 v2, $purchaseActivity
                             $developerPayloadInstruction
                             $inappInstruction
+                            const v5, $nonOverlayTimeout
+                            const v6, $overlayTimeout
+                            invoke-static {v5, v6}, Lunipatch/overlaycore/InAppRuntimePolicy;->configureTimeouts(II)V
                             invoke-static {v0, v2, v1, v3, v4}, Lunipatch/overlaycore/InAppRuntimePolicy;->routeLegacyPurchase(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;Z)Z
                             move-result v5
                             if-eqz v5, :morphe_openiab_original_purchase_flow
                             return-void
                             :morphe_openiab_original_purchase_flow
-                        """.trimIndent())
+                        """.trimIndent()
+                        try {
+                            method.addInstructions(0, block)
+                        } catch (_: Exception) {
+                            expandSwap(method, block)
+                        }
                     }
                 }
             }

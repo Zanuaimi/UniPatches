@@ -2,6 +2,7 @@ package unipatches.iap
 
 import app.morphe.patcher.patch.rawResourcePatch
 import app.morphe.patcher.patch.booleanOption
+import app.morphe.patcher.patch.intOption
 import app.morphe.patcher.patch.stringOption
 import java.util.logging.Logger
 
@@ -74,9 +75,22 @@ val emulateInAppPatch = rawResourcePatch(
         key = "inAppInitiallyEnablePopups",
         description = "Set the initial state of purchase confirmation popups in the overlay module. You can change it later from the module settings. Ignored when Enable Overlay Module is disabled.",
     )
+    val nonOverlayPurchaseTimeout by intOption(
+        title = "InApp Emulation > Patch behavior > Non-overlay purchase timeout (seconds)",
+        default = 10,
+        key = "inAppNonOverlayPurchaseTimeoutSeconds",
+        description = "Maximum time to wait for a non-overlay emulated purchase callback. Values are clamped to 1-86400 seconds.",
+    )
+    val overlayPurchaseTimeout by intOption(
+        title = "InApp Emulation > Overlay addon > Overlay purchase timeout (seconds)",
+        default = 30,
+        key = "inAppOverlayPurchaseTimeoutSeconds",
+        description = "Maximum time to wait for Universal Overlay purchase confirmation. Values are clamped to 1-86400 seconds.",
+    )
 
-    dependsOn(emulateInAppManagedPatch { Triple(fakeStartupPurchases == true, legacyInventoryMode ?: "preserve", enableOverlayModule == true) })
-    dependsOn(emulateInAppOverlayBridgePatch { Pair(enableOverlayModule == true, initiallyEnablePopups == true) })
+    val timeoutValues = Pair(nonOverlayPurchaseTimeout ?: 10, overlayPurchaseTimeout ?: 30)
+    dependsOn(emulateInAppManagedPatch { Triple(fakeStartupPurchases == true, legacyInventoryMode ?: "preserve", timeoutValues) })
+    dependsOn(emulateInAppOverlayBridgePatch { Triple(enableOverlayModule == true, initiallyEnablePopups == true, timeoutValues) })
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)

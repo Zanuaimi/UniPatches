@@ -1842,23 +1842,6 @@ public final class OverlayRuntime {
             description.setSingleLine(false);
             description.setPadding(0, dp(8), 0, 0);
             card.addView(description, new LinearLayout.LayoutParams(-1, -2));
-            TextView countdown = text("This request expires in 30 seconds.", 12, config.menuTextColor3);
-            countdown.setPadding(0, dp(6), 0, 0);
-            card.addView(countdown, new LinearLayout.LayoutParams(-1, -2));
-            final long expiresAt = SystemClock.elapsedRealtime() + 30_000L;
-            final Runnable[] countdownTicker = new Runnable[1];
-            countdownTicker[0] = () -> {
-                if (layer.getParent() != root) return;
-                long remaining = Math.max(0L, expiresAt - SystemClock.elapsedRealtime());
-                countdown.setText("This request expires in " + ((remaining + 999L) / 1000L) + " seconds.");
-                if (remaining > 0L) root.postDelayed(countdownTicker[0], 1000L);
-                else {
-                    InAppRuntimePolicy.cancelPending();
-                    dismissModuleSettingsPopup(layer, card);
-                }
-            };
-            layer.setTag(countdownTicker[0]);
-            root.post(countdownTicker[0]);
             CheckBox save = new CheckBox(overlayContext);
             save.setText("Save purchase for skipping purchase popup");
             save.setTextColor(config.menuTextColor2);
@@ -1867,6 +1850,26 @@ public final class OverlayRuntime {
             LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(-1, -2);
             saveParams.topMargin = dp(8);
             card.addView(save, saveParams);
+            TextView countdown = text("Timeout Countdown : " + InAppRuntimePolicy.overlayTimeoutSeconds(), 12, config.menuTextColor3);
+            countdown.setPadding(0, dp(6), 0, 0);
+            card.addView(countdown, new LinearLayout.LayoutParams(-1, -2));
+            final long expiresAt = SystemClock.elapsedRealtime() + InAppRuntimePolicy.overlayTimeoutSeconds() * 1000L;
+            final Runnable[] countdownTicker = new Runnable[1];
+            countdownTicker[0] = () -> {
+                if (layer.getParent() != root) return;
+                long remaining = Math.max(0L, expiresAt - SystemClock.elapsedRealtime());
+                long seconds = (remaining + 999L) / 1000L;
+                countdown.setText("Timeout Countdown : " + seconds);
+                if (seconds > 0L && seconds <= 5L) countdown.setAlpha(countdown.getAlpha() > 0.5f ? 0.25f : 1f);
+                else countdown.setAlpha(1f);
+                if (remaining > 0L) root.postDelayed(countdownTicker[0], 1000L);
+                else {
+                    InAppRuntimePolicy.cancelPending();
+                    dismissModuleSettingsPopup(layer, card);
+                }
+            };
+            layer.setTag(countdownTicker[0]);
+            root.post(countdownTicker[0]);
             LinearLayout actions = new LinearLayout(overlayContext);
             actions.setOrientation(LinearLayout.HORIZONTAL);
             actions.setGravity(Gravity.CENTER);
