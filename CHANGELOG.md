@@ -1,3 +1,9 @@
+## [1.29.0-dev.22](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.21...v1.29.0-dev.22) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* restore legacy purchase activity lifecycle ([26bdb2b](https://github.com/Zanuaimi/UniPatches/commit/26bdb2bad4a726c36968120c2b415dda4e129124))
+
 ## [1.29.0-dev.21](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.20...v1.29.0-dev.21) (2026-09-17)
 
 ### ✨ New Features
