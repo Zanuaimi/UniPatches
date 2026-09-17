@@ -142,6 +142,16 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
             move-result-object v0
             return-object v0
         """.trimIndent()
+        val cancelledBillingResult = """
+            invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
+            move-result-object v0
+            const/4 v1, 0x1
+            invoke-virtual {v0, v1}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->setResponseCode(I)Lcom/android/billingclient/api/BillingResult${'$'}Builder;
+            move-result-object v0
+            invoke-virtual {v0}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->build()Lcom/android/billingclient/api/BillingResult;
+            move-result-object v0
+            return-object v0
+        """.trimIndent()
 
         // ──────────────────────────────────────────────
         // GOOGLE PLAY BILLING
@@ -169,6 +179,7 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                         it.type == "Lcom/android/billingclient/api/PurchasesUpdatedListener;"
                     } ?: continue
                     return "iget-object v0, v0, $defClass->${f.name}:${f.type}\n" +
+                        "if-eqz v0, :morphe_iap_no_listener\n" +
                         "iget-object v0, v0, $holder->${inner.name}:${inner.type}"
                 }
                 null
@@ -177,7 +188,8 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         // Buy-time grant block for launchBillingFlow: dispatch the purchase
         // request through the runtime policy, then return a valid OK result.
         // The policy owns fake purchase construction and popup timing. A null
-        // listener receives only the valid OK result. This mirrors native
+        // listener or listener-holder is rejected instead of receiving a false
+        // success result. This mirrors native
         // MOD-menu behavior:
         // grant happens when the user buys, while init/query/catalog paths
         // stay stock so strict titles keep booting.
@@ -188,18 +200,31 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         // move-*/from16 (which assembles in any frame) and otherwise
         // touches only v-regs. NEVER use a narrow opcode with a p-reg.
         fun buyGrantBlock(igetTail: String, overlayEnabled: Boolean = false, productArguments: List<String> = emptyList()): String {
+            val validationFirst = productArguments.getOrNull(0)?.let { "move-object/from16 v1, $it" } ?: "const/4 v1, 0x0"
+            val validationSecond = productArguments.getOrNull(1)?.let { "move-object/from16 v2, $it" } ?: "const/4 v2, 0x0"
             val overlayProductArguments = if (overlayEnabled) {
-                val first = productArguments.getOrNull(0)?.let { "move-object/from16 v1, $it" } ?: "const/4 v1, 0x0"
-                val second = productArguments.getOrNull(1)?.let { "move-object/from16 v2, $it" } ?: "const/4 v2, 0x0"
-                "$first\n$second"
+                "$validationFirst\n$validationSecond"
             } else ""
             return """
+                move-object/from16 v4, p0
                 move-object/from16 v0, p0
                 $igetTail
-                if-eqz v0, :morphe_iap_nocb
+                if-eqz v0, :morphe_iap_no_listener
+                $validationFirst
+                $validationSecond
+                invoke-static {v4, v0, v1, v2}, Lunipatch/overlaycore/InAppRuntimePolicy;->validateModernPurchase(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)I
+                move-result v3
+                if-eqz v3, :morphe_iap_valid
+                invoke-static {v3}, Lunipatch/overlaycore/InAppRuntimePolicy;->billingResult(I)Ljava/lang/Object;
+                move-result-object v1
+                check-cast v1, Lcom/android/billingclient/api/BillingResult;
+                return-object v1
+                :morphe_iap_valid
                 ${if (overlayEnabled) """
                 $overlayProductArguments
-                invoke-static {v0, v1, v2}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatch(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
+                invoke-static {v0, v1, v2}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatch(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z
+                move-result v3
+                if-eqz v3, :morphe_iap_cancelled
                 """.trimIndent() else """
                 const-string v1, "{\"orderId\":\"morphe_fake\",\"packageName\":\"morphe_fake\",\"productId\":\"morphe_fake\",\"purchaseTime\":0,\"purchaseState\":1,\"purchaseToken\":\"morphe_fake\",\"quantity\":1,\"acknowledged\":true}"
                 const-string v2, "morphe_fake"
@@ -218,6 +243,13 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 move-result-object v1
                 invoke-interface {v0, v1, v3}, Lcom/android/billingclient/api/PurchasesUpdatedListener;->onPurchasesUpdated(Lcom/android/billingclient/api/BillingResult;Ljava/util/List;)V
                 """.trimIndent()}
+                ${if (overlayEnabled) """
+                goto :morphe_iap_nocb
+                :morphe_iap_cancelled
+                $cancelledBillingResult
+                """.trimIndent() else ""}
+                :morphe_iap_no_listener
+                $cancelledBillingResult
                 :morphe_iap_nocb
                 invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
                 move-result-object v1
@@ -242,7 +274,7 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 }.take(2)
                 val block = buyGrantBlock(field, overlayEnabled, productArguments)
                 var granted = false
-                if (minRegs(it) >= 4) {
+                if (minRegs(it) >= 5) {
                     try { it.addInstructions(0, block); granted = true } catch (_: Exception) {}
                 }
                 if (!granted) {

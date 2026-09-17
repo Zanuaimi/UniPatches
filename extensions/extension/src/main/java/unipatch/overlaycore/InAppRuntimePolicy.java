@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -81,20 +82,19 @@ public final class InAppRuntimePolicy {
         }
     }
 
-    public static void dispatch(Object listener, Object purchaseActivity, Object flowParams) {
-        if (listener == null) return;
+    public static boolean dispatch(Object listener, Object purchaseActivity, Object flowParams) {
+        if (listener == null) return false;
         Activity target = purchaseActivity instanceof Activity ? (Activity) purchaseActivity : null;
         String product = productId(flowParams, null);
         synchronized (InAppRuntimePolicy.class) {
             if (!configured || !popupEnabled || SAVED.contains(product)) {
                 lastEvent = "Emulated purchase delivered: " + product;
-                deliver(listener, product, 0, true);
-                return;
+                return deliver(listener, product, 0, true);
             }
             if (pending != null) {
                 lastEvent = "Purchase request rejected while another confirmation is pending: " + product;
                 deliver(listener, product, 1, false);
-                return;
+                return false;
             }
             pending = new Pending(listener, product, false, target);
             lastEvent = "Waiting for confirmation: " + product;
@@ -104,8 +104,129 @@ public final class InAppRuntimePolicy {
         final Pending request;
         synchronized (InAppRuntimePolicy.class) { request = pending; }
         MAIN.postDelayed(() -> timeout(request), 30000L);
+        if (target != null) OverlayRuntime.ensureActivity(target);
         if (!OverlayRuntime.showInAppPurchaseConfirmation(target, product)) {
-            OverlayRuntimeLogger.log("INFO", "InApp", "Purchase confirmation popup queued until an active overlay Activity is available: product=" + product);
+            OverlayRuntimeLogger.log("WARN", "InApp", "Purchase confirmation popup could not attach; cancelling purchase: product=" + product);
+            cancelPending();
+            return false;
+        }
+        return true;
+    }
+
+    /** Returns a BillingClient-compatible response code and completes rejected callbacks. */
+    public static int validateModernPurchase(Object billingClient, Object listener,
+                                             Object purchaseActivity, Object flowParams) {
+        int responseCode;
+        if (billingClient == null || listener == null || !(purchaseActivity instanceof Activity) || flowParams == null) {
+            responseCode = 5;
+        } else if (!listenerHolderMatches(billingClient, listener)) {
+            responseCode = 5;
+        } else {
+            Integer state = connectionState(billingClient);
+            responseCode = state != null && state != 2 ? 2 : validateFlowParams(flowParams);
+        }
+        if (responseCode != 0) {
+            deliver(listener, productId(flowParams, null), responseCode, false);
+        }
+        return responseCode;
+    }
+
+    /** Builds BillingResult without linking the extension against a BillingClient version. */
+    public static Object billingResult(int responseCode) {
+        try {
+            Class<?> resultClass = Class.forName("com.android.billingclient.api.BillingResult");
+            Object builder = resultClass.getMethod("newBuilder").invoke(null);
+            builder = builder.getClass().getMethod("setResponseCode", int.class).invoke(builder, responseCode);
+            return builder.getClass().getMethod("build").invoke(builder);
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            return null;
+        }
+    }
+
+    private static Integer connectionState(Object billingClient) {
+        // BillingClientImpl uses an obfuscated volatile int for its connection state. Restrict
+        // reflection to conventional names and the known zzb slot; unknown versions are treated
+        // as indeterminate so emulation remains compatible with future BillingClient releases.
+        for (Class<?> type = billingClient.getClass(); type != null && type != Object.class; type = type.getSuperclass()) {
+            for (Field field : type.getDeclaredFields()) {
+                if (field.getType() != int.class) continue;
+                String name = field.getName().toLowerCase(Locale.ROOT);
+                if (!(name.equals("zzb") || name.contains("connectionstate") || name.contains("billingstate"))) continue;
+                try {
+                    field.setAccessible(true);
+                    return field.getInt(billingClient);
+                } catch (ReflectiveOperationException | RuntimeException ignored) { }
+            }
+        }
+        return null;
+    }
+
+    private static boolean listenerHolderMatches(Object billingClient, Object listener) {
+        for (Class<?> type = billingClient.getClass(); type != null && type != Object.class; type = type.getSuperclass()) {
+            for (Field field : type.getDeclaredFields()) {
+                try {
+                    field.setAccessible(true);
+                    Object holder = field.get(billingClient);
+                    if (holder == listener) return true;
+                    if (holder == null || field.getType().isPrimitive() || holder instanceof String) continue;
+                    for (Class<?> holderType = holder.getClass(); holderType != null && holderType != Object.class; holderType = holderType.getSuperclass()) {
+                        for (Field holderField : holderType.getDeclaredFields()) {
+                            if (holderField.getType() != null && holderField.getType().getName().equals("com.android.billingclient.api.PurchasesUpdatedListener")) {
+                                holderField.setAccessible(true);
+                                return holderField.get(holder) == listener;
+                            }
+                        }
+                    }
+                } catch (ReflectiveOperationException | RuntimeException ignored) { }
+            }
+        }
+        // Unknown BillingClient versions may hide the holder behind a different shape. Do not
+        // reject those versions solely because their private fields cannot be classified.
+        return true;
+    }
+
+    private static int validateFlowParams(Object flowParams) {
+        try {
+            Method developer = flowParams.getClass().getMethod("getDeveloperBillingOptionParams");
+            if (developer.invoke(flowParams) != null) return 5;
+        } catch (ReflectiveOperationException | RuntimeException ignored) { }
+        boolean productDetailsApi = false;
+        try {
+            Method productsMethod = flowParams.getClass().getMethod("getProductDetailsParamsList");
+            productDetailsApi = true;
+            Object products = productsMethod.invoke(flowParams);
+            if (!(products instanceof Iterable<?>)) return 4;
+            boolean found = false;
+            for (Object params : (Iterable<?>) products) {
+                if (params == null) continue;
+                Method detailsMethod = params.getClass().getMethod("getProductDetails");
+                Object details = detailsMethod.invoke(params);
+                if (details == null) continue;
+                Method idMethod = details.getClass().getMethod("getProductId");
+                Object id = idMethod.invoke(details);
+                if (!(id instanceof String) || !valid((String) id)) continue;
+                found = true;
+                Method typeMethod = details.getClass().getMethod("getProductType");
+                Object productType = typeMethod.invoke(details);
+                if (!("inapp".equals(productType) || "subs".equals(productType))) return 5;
+                if ("subs".equals(productType)) {
+                    Method offerMethod;
+                    try {
+                        offerMethod = params.getClass().getMethod("getOfferToken");
+                    } catch (NoSuchMethodException error) {
+                        return 5;
+                    }
+                    Object offer = offerMethod.invoke(params);
+                    if (!(offer instanceof String) || !valid((String) offer)) return 4;
+                }
+            }
+            return found ? 0 : 4;
+        } catch (NoSuchMethodException ignored) {
+            // BillingClient versions before ProductDetails use a different flow shape. The
+            // non-null parameter has already passed the stable validation available to us.
+            return productDetailsApi ? 5 : 0;
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            return 5;
         }
     }
 
