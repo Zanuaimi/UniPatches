@@ -117,6 +117,14 @@ popups, while its Settings popup presents saved product identifiers as checkbox 
 row removes it after confirmation. The saved list is bounded, normalized, duplicate-free, and
 process-local. The provider also rejects null or unsupported Activities safely.
 
+The module is available only when the InApp patch's `Enable Overlay Module` runtime option was
+selected and its policy was attached to the verified shared overlay bridge. Its settings popup
+contains the confirmation toggle and a scrollable saved-product list; an empty list displays
+`No Saved Products`. Enabling the toggle requires Universal Overlay confirmation before an
+emulated purchase, while disabling it completes the emulated result immediately. Saved products
+skip confirmation for the current app process. The InApp patch owns the 10-second non-overlay and
+30-second overlay timeout defaults; these are patch settings rather than module settings.
+
 `InAppRuntimePolicy.java` receives the listener and product-related arguments from the managed
 billing patch. It either delivers the emulated result immediately or retains one pending callback
 while the shared confirmation popup is displayed. Saved products and disabled popups bypass the

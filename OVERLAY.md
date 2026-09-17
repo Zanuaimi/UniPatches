@@ -257,12 +257,22 @@ in the same patch operation. The separate initial-popup setting controls the fir
 state and can later be changed from the module toggle. The module Settings popup manages saved
 product identifiers for the current session.
 
+The purchase popup toggle is the runtime switch for confirmation: enabled shows the Universal
+Overlay confirmation flow, while disabled uses the immediate non-overlay flow. Non-overlay
+emulation does not depend on overlay initialization. The InApp patch's Runtime settings provide
+independent timeout values for both modes, defaulting to 10 seconds for non-overlay purchases and
+30 seconds for overlay confirmations. The confirmation popup displays its countdown and pending
+requests are cancelled when the selected timeout expires.
+
 Its purchase confirmation popup uses the shared `OverlayPopupFrame`, UI color 3 for the description,
 the configured bottom-button styling, and the optional header
 `Emulate InApp Purchase Confirmation`. The description is
 `Do you want to try to emulate in-app purchase for this product?`. The save checkbox is
 `Save purchase for skipping purchase popup`, with exactly `No` and `Yes` buttons. `No` cancels the
 pending request; `Yes` completes the emulated purchase and optionally saves its product identifier.
+The popup also displays `Timeout Countdown: {overlay mode timeout}` below the save checkbox. It
+updates once per second and blinks only during the final five seconds. The value comes from the
+InApp patch's overlay-mode timeout setting.
 This overlay behavior remains separate from catalog discovery, legacy inventory behavior, receipt
 verification, billing availability, and native IL2CPP patching.
 
@@ -582,7 +592,9 @@ isolated from universal modules.
 
 InApp Emulation uses the shared `OverlayActionModule` settings flow for popup enablement and
 session-only saved product management. Its asynchronous purchase confirmation is a separate
-runtime popup, not a one-shot module action.
+runtime popup, not a one-shot module action. The module settings contain the confirmation toggle
+and a scrollable saved-product list; an empty list displays `No Saved Products`. These timeout
+values are patch settings, not module settings.
 
 ## Runtime flow
 
