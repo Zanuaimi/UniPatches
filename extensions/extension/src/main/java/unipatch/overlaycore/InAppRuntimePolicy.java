@@ -284,29 +284,50 @@ public final class InAppRuntimePolicy {
             finishLegacyProxy(target);
             return;
         }
+        Pending immediate = null;
+        boolean reject = false;
         synchronized (InAppRuntimePolicy.class) {
             if (!configured || !popupEnabled || SAVED.contains(normalized)) {
                 lastEvent = "Emulated legacy purchase delivered: " + normalized;
                 OverlayRuntimeLogger.log("INFO", "InApp", "Intercepted legacy purchase: product=" + normalized +
                         ", mode=immediate, inapp=" + inapp);
-                Pending immediate = new Pending(listener, normalized, true, target, developerPayload, inapp);
+                immediate = new Pending(listener, normalized, true, target, developerPayload, inapp);
                 pending = immediate;
-                MAIN.postDelayed(() -> timeout(immediate), timeoutMillis(immediate));
-                boolean delivered = deliverLegacy(listener, normalized, true, developerPayload, inapp);
-                finishImmediate(immediate, delivered);
-                if (!delivered) OverlayRuntimeLogger.log("WARN", "InApp", "Legacy purchase callback failed: product=" + normalized);
-                finishLegacyProxy(target);
-                return;
-            }
-            if (pending != null) {
+            } else if (pending != null) {
                 lastEvent = "Legacy purchase request rejected while another confirmation is pending: " + normalized;
-                deliverLegacy(listener, normalized, false, developerPayload, inapp);
-                return;
+                reject = true;
+            } else {
+                pending = new Pending(listener, normalized, true, target, developerPayload, inapp, true);
+                lastEvent = "Waiting for legacy confirmation: " + normalized;
+                OverlayRuntimeLogger.log("INFO", "InApp", "Intercepted legacy purchase: product=" + normalized +
+                        ", mode=overlay-confirmation, inapp=" + inapp);
             }
-            pending = new Pending(listener, normalized, true, target, developerPayload, inapp, true);
-            lastEvent = "Waiting for legacy confirmation: " + normalized;
-            OverlayRuntimeLogger.log("INFO", "InApp", "Intercepted legacy purchase: product=" + normalized +
-                    ", mode=overlay-confirmation, inapp=" + inapp);
+        }
+        if (reject) {
+            boolean delivered = deliverLegacy(listener, normalized, false, developerPayload, inapp);
+            OverlayRuntimeLogger.log(delivered ? "INFO" : "WARN", "InApp",
+                    "Legacy cancellation result " + (delivered ? "returned" : "failed") + ": product=" + normalized);
+            finishLegacyProxy(target);
+            return;
+        }
+        if (immediate != null) {
+            if (immediate.completed.compareAndSet(false, true)) {
+                boolean delivered = deliverLegacy(immediate.listener, immediate.product, true,
+                        immediate.developerPayload, immediate.inapp);
+                synchronized (InAppRuntimePolicy.class) {
+                    if (pending == immediate) pending = null;
+                }
+                if (!delivered) {
+                    lastEvent = "Legacy purchase callback failed: " + normalized;
+                    OverlayRuntimeLogger.log("WARN", "InApp", "Legacy purchase callback failed: product=" + normalized);
+                    deliverLegacy(immediate.listener, immediate.product, false,
+                            immediate.developerPayload, immediate.inapp);
+                } else {
+                    OverlayRuntimeLogger.log("INFO", "InApp", "Legacy purchase result returned: product=" + normalized);
+                }
+            }
+            finishLegacyProxy(target);
+            return;
         }
         final Pending request;
         synchronized (InAppRuntimePolicy.class) { request = pending; }
@@ -314,6 +335,40 @@ public final class InAppRuntimePolicy {
         if (target != null) OverlayRuntime.ensureActivity(target);
         if (!OverlayRuntime.showInAppPurchaseConfirmation(target, normalized)) {
             OverlayRuntimeLogger.log("INFO", "InApp", "Legacy purchase confirmation popup queued until an active overlay Activity is available: product=" + normalized);
+        }
+    }
+
+    /** Handles UnityPlugin's early purchase entry point so non-overlay mode skips its proxy Activity. */
+    public static boolean interceptLegacyPurchaseEntry(Object plugin, String product,
+                                                        String developerPayload, boolean inapp) {
+        // This hook exists only when the InApp Emulation patch is selected. An
+        // unconfigured runtime therefore still means standalone non-overlay
+        // emulation; requiring overlay initialization here would reintroduce
+        // the proxy Activity dependency.
+        if (plugin == null || (isConfigured() && popupEnabled())) return false;
+        try {
+            Method listenerMethod = plugin.getClass().getMethod("getPurchaseFinishedListener");
+            Object listener = listenerMethod.invoke(plugin);
+            Activity target = currentActivity();
+            OverlayRuntimeLogger.log("INFO", "InApp", "UnityPlugin entry intercepted: product=" + product +
+                    ", mode=immediate, listener=" + (listener == null ? "null" : listener.getClass().getName()));
+            dispatchLegacy(listener, target, product, developerPayload, inapp);
+            OverlayRuntimeLogger.log("INFO", "InApp", "Legacy proxy skipped: product=" + product);
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            OverlayRuntimeLogger.log("WARN", "InApp", "UnityPlugin entry interception failed: " + error.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    private static Activity currentActivity() {
+        try {
+            Class<?> unityPlayer = Class.forName("com.unity3d.player.UnityPlayer");
+            java.lang.reflect.Field field = unityPlayer.getField("currentActivity");
+            Object value = field.get(null);
+            return value instanceof Activity ? (Activity) value : activity.get();
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return activity.get();
         }
     }
 
@@ -325,16 +380,24 @@ public final class InAppRuntimePolicy {
             return dispatchLegacyFromProxy(listener, target, product, developerPayload, inapp);
         }
         if (listener == null) return false;
+        boolean reject = false;
         synchronized (InAppRuntimePolicy.class) {
             if (!configured || !popupEnabled || SAVED.contains(valid(product) ? normalize(product) : "")) {
                 // Non-overlay mode deliberately keeps the original direct emulation behavior.
             } else {
                 if (redirect != null || pending != null) {
-                    deliverLegacy(listener, valid(product) ? normalize(product) : "", false, developerPayload, inapp);
-                    return true;
+                    reject = true;
+                } else {
+                    redirect = new Redirect(listener, product, developerPayload, inapp);
                 }
-                redirect = new Redirect(listener, product, developerPayload, inapp);
             }
+        }
+        if (reject) {
+            String normalized = valid(product) ? normalize(product) : "";
+            boolean delivered = deliverLegacy(listener, normalized, false, developerPayload, inapp);
+            OverlayRuntimeLogger.log(delivered ? "INFO" : "WARN", "InApp",
+                    "Legacy cancellation result " + (delivered ? "returned" : "failed") + ": product=" + normalized);
+            return true;
         }
         if (!isConfigured() || !popupEnabled() || SAVED.contains(valid(product) ? normalize(product) : "")) {
             dispatchLegacy(listener, target, product, developerPayload, inapp);
@@ -385,11 +448,13 @@ public final class InAppRuntimePolicy {
             intent.putExtra("inapp", inapp);
             intent.putExtra("developerPayload", developerPayload);
             if (Looper.myLooper() == Looper.getMainLooper()) {
+                OverlayRuntimeLogger.log("INFO", "InApp", "Legacy proxy launched: product=" + product);
                 source.startActivity(intent);
                 return true;
             }
             return MAIN.post(() -> {
                 try {
+                    OverlayRuntimeLogger.log("INFO", "InApp", "Legacy proxy launched: product=" + product);
                     source.startActivity(intent);
                 } catch (RuntimeException error) {
                     failRedirect(product, listenerForRedirect(product));
@@ -468,12 +533,15 @@ public final class InAppRuntimePolicy {
         }
     }
 
-    public static synchronized void complete(boolean save) {
-        Pending request = pending;
-        pending = null;
-        if (request == null || !request.completed.compareAndSet(false, true)) return;
-        if (save && SAVED.size() < MAX_SAVED_PURCHASES) SAVED.add(request.product);
-        lastEvent = "Emulated purchase delivered: " + request.product;
+    public static void complete(boolean save) {
+        Pending request;
+        synchronized (InAppRuntimePolicy.class) {
+            request = pending;
+            pending = null;
+            if (request == null || !request.completed.compareAndSet(false, true)) return;
+            if (save && SAVED.size() < MAX_SAVED_PURCHASES) SAVED.add(request.product);
+            lastEvent = "Emulated purchase delivered: " + request.product;
+        }
         boolean delivered = request.legacy
                 ? deliverLegacy(request.listener, request.product, true, request.developerPayload, request.inapp)
                 : deliver(request.listener, request.product, 0, true);
@@ -485,11 +553,14 @@ public final class InAppRuntimePolicy {
         if (request.legacy) finishLegacyProxy(request.activity.get());
     }
 
-    public static synchronized boolean cancelPending() {
-        Pending request = pending;
-        pending = null;
-        if (request == null || !request.completed.compareAndSet(false, true)) return false;
-        lastEvent = "Purchase cancelled: " + request.product;
+    public static boolean cancelPending() {
+        Pending request;
+        synchronized (InAppRuntimePolicy.class) {
+            request = pending;
+            pending = null;
+            if (request == null || !request.completed.compareAndSet(false, true)) return false;
+            lastEvent = "Purchase cancelled: " + request.product;
+        }
         boolean delivered = request.legacy
                 ? deliverLegacy(request.listener, request.product, false, request.developerPayload, request.inapp)
                 : deliver(request.listener, request.product, 1, false);
@@ -501,6 +572,7 @@ public final class InAppRuntimePolicy {
     /** Mirrors UnityProxyActivity's original result-handled cleanup for emulated legacy flows. */
     private static void finishLegacyProxy(Activity target) {
         if (target == null || !"org.onepf.openiab.UnityProxyActivity".equals(target.getClass().getName())) return;
+        OverlayRuntimeLogger.log("INFO", "InApp", "Finishing legacy purchase proxy: " + target.getClass().getName());
         MAIN.post(() -> {
             if (!target.isFinishing() && (android.os.Build.VERSION.SDK_INT < 17 || !target.isDestroyed())) {
                 try { target.finish(); }
@@ -591,13 +663,18 @@ public final class InAppRuntimePolicy {
             Object purchase = null;
             Class<?> purchaseClass = Class.forName("org.onepf.oms.appstore.googleUtils.Purchase");
             if (includePurchase) {
-                String json = "{\"productId\":\"" + jsonEscape(product) + "\",\"orderId\":\"morphe_fake\",\"purchaseToken\":\"morphe_fake\",\"purchaseState\":0,\"purchaseTime\":0,\"developerPayload\":\"" + jsonEscape(developerPayload == null ? "" : developerPayload) + "\"}";
+                String packageName = currentActivity() == null ? "" : currentActivity().getPackageName();
+                String json = "{\"productId\":\"" + jsonEscape(product) + "\",\"orderId\":\"morphe_fake\",\"packageName\":\"" + jsonEscape(packageName) + "\",\"purchaseToken\":\"morphe_fake\",\"purchaseState\":0,\"purchaseTime\":0,\"developerPayload\":\"" + jsonEscape(developerPayload == null ? "" : developerPayload) + "\"}";
                 purchase = purchaseClass.getConstructor(String.class, String.class, String.class, String.class)
                         .newInstance(inapp ? "inapp" : "subs", json, "", "com.google.play");
+                OverlayRuntimeLogger.log("INFO", "InApp", "Legacy purchase constructed: product=" + product +
+                        ", itemType=" + (inapp ? "inapp" : "subs") + ", package=" + packageName);
             }
             Method callback = findLegacyPurchaseCallback(listener, resultClass, purchaseClass);
             if (callback != null) {
                 callback.setAccessible(true);
+                OverlayRuntimeLogger.log("INFO", "InApp", "Legacy callback method: " + callback.getDeclaringClass().getName() +
+                        "->" + callback.getName());
                 callback.invoke(listener, result, purchase);
                 OverlayRuntimeLogger.log("INFO", "InApp", "Legacy purchase callback delivered: listener=" + listener.getClass().getName() + ", inapp=" + inapp);
                 return true;
