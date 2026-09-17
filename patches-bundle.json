@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-17T10:35:18",
-  "description": "## [1.29.0-dev.25](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.24...v1.29.0-dev.25) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* attach overlay from application startup ([8ce826d](https://github.com/Zanuaimi/UniPatches/commit/8ce826d7536c190c6cbb06f8a8bb52d92ddf2806))\n* harden in-app emulation validation ([df23661](https://github.com/Zanuaimi/UniPatches/commit/df236617f2fd8721cf6969be8227095bdd51e036))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.25/patches-1.29.0-dev.25.mpp",
+  "created_at": "2026-09-17T10:53:28",
+  "description": "## [1.29.0-dev.26](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.25...v1.29.0-dev.26) (2026-09-17)\n\n### 🔧 Improvements\n\n* **inapp:** Improve UI overlay module of inapp emulation ([4f9cba8](https://github.com/Zanuaimi/UniPatches/commit/4f9cba8826fa8911c9b443037049356d6133a676))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.26/patches-1.29.0-dev.26.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.25"
+  "version": "1.29.0-dev.26"
 }

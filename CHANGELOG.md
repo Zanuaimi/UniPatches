@@ -1,3 +1,9 @@
+## [1.29.0-dev.26](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.25...v1.29.0-dev.26) (2026-09-17)
+
+### 🔧 Improvements
+
+* **inapp:** Improve UI overlay module of inapp emulation ([4f9cba8](https://github.com/Zanuaimi/UniPatches/commit/4f9cba8826fa8911c9b443037049356d6133a676))
+
 ## [1.29.0-dev.25](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.24...v1.29.0-dev.25) (2026-09-17)
 
 ### 🐛 Bug Fixes
