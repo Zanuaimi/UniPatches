@@ -1,3 +1,9 @@
+## [1.29.0-dev.19](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.18...v1.29.0-dev.19) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* mark dev validation ([8f88753](https://github.com/Zanuaimi/UniPatches/commit/8f88753333bd5edfe349465208ac23f3466a819f))
+
 ## [1.29.0-dev.18](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.17...v1.29.0-dev.18) (2026-09-16)
 
 ### 🐛 Bug Fixes

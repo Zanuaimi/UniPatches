@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-16T15:54:01",
-  "description": "## [1.29.0-dev.18](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.17...v1.29.0-dev.18) (2026-09-16)\n\n### 🐛 Bug Fixes\n\n* **inapp:** Harden purchase callback delivery ([2073291](https://github.com/Zanuaimi/UniPatches/commit/207329162fc8239d766d1f902c08f7d0c4156fce))\n* **overlay:** Harden launcher result forwarding ([057afcb](https://github.com/Zanuaimi/UniPatches/commit/057afcbfd0095376f264f468382005e3239fa661))\n* **overlay:** Make runtime lifecycle attachment safe ([43eb7bd](https://github.com/Zanuaimi/UniPatches/commit/43eb7bd38ca596c01912e41b4e735932eae58dc5))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.18/patches-1.29.0-dev.18.mpp",
+  "created_at": "2026-09-17T04:35:21",
+  "description": "## [1.29.0-dev.19](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.18...v1.29.0-dev.19) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* mark dev validation ([8f88753](https://github.com/Zanuaimi/UniPatches/commit/8f88753333bd5edfe349465208ac23f3466a819f))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.19/patches-1.29.0-dev.19.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.18"
+  "version": "1.29.0-dev.19"
 }
