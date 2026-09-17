@@ -1,3 +1,11 @@
+## [1.29.0-dev.33](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.32...v1.29.0-dev.33) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* add in-app runtime seam tests ([f2c2303](https://github.com/Zanuaimi/UniPatches/commit/f2c2303e60c7188d0d9d764c71e94164ccde3cb4))
+* harden in-app purchase runtime ([78cf77e](https://github.com/Zanuaimi/UniPatches/commit/78cf77eb14eda15ceb1d1e0aecf55a076431a72e))
+* separate billing compatibility strategies ([0beac8c](https://github.com/Zanuaimi/UniPatches/commit/0beac8ca65bcbf6bc0107004b937580e90ba985f))
+
 ## [1.29.0-dev.32](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.31...v1.29.0-dev.32) (2026-09-17)
 
 ### 🐛 Bug Fixes
