@@ -1,3 +1,10 @@
+## [1.29.0-dev.31](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.30...v1.29.0-dev.31) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* **inapp:** bypass legacy proxy in non-overlay mode ([7e998e7](https://github.com/Zanuaimi/UniPatches/commit/7e998e702458098ecbe15ddf9f97654ec537bb6f))
+* **inapp:** harden legacy purchase callback flow ([26489c2](https://github.com/Zanuaimi/UniPatches/commit/26489c261eee0fe37b9e3378118930c9e115c8ba))
+
 ## [1.29.0-dev.30](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.29...v1.29.0-dev.30) (2026-09-17)
 
 ### 🐛 Bug Fixes
