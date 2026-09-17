@@ -538,13 +538,13 @@ val universalOverlayPatch = bytecodePatch(
         control Android capabilities, and Advanced modules provide opt-in diagnostics. Text is the
         default legacy icon; an optional image replaces it completely, while the advanced Multi-parts editor
         supports custom drawn icons, and can be conveniently made in Icon Builder local website in UniPatches repo.
-        
+
         UI presets can save and reuse supported appearance and advanced icon
         settings. The title, description, repository button text, and repository button URL remain
         controlled by the visible Morphe settings. Module selections and module behavior are excluded
         because hook and module combinations can be app-specific. 
         
-        Experimental : This patch may not work on all apps. 
+        Experimental : This patch may not work on all apps.
 
         Compatibility: this patch owns one shared startup bridge for its runtime and integrated
         modules. PairIP Bypass preserves that bridge when its Application startup strategies run

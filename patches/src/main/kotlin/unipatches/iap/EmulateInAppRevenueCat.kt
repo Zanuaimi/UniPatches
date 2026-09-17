@@ -213,4 +213,3 @@ internal fun BytecodePatchContext.applyRevenueCatPatches(
 
     return patched to patchedMethods
 }
-
