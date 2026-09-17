@@ -4,10 +4,14 @@ import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLa
 import app.morphe.patcher.patch.BytecodePatchContext
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
+import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod.Companion.toMutable
 import helpers.bytecode.cloneMutable
 import helpers.bytecode.numberOfParameterRegisters
 import helpers.bytecode.p0Register
 import helpers.startup.StartupHooks
+import com.android.tools.smali.dexlib2.AccessFlags
+import com.android.tools.smali.dexlib2.immutable.ImmutableMethod
+import com.android.tools.smali.dexlib2.immutable.ImmutableMethodImplementation
 import java.util.logging.Logger
 
 internal const val OVERLAY_RUNTIME_CLASS = "Lunipatch/overlaycore/OverlayRuntime;"
@@ -177,6 +181,42 @@ internal fun injectOverlayBridge(
     }
     OverlayPatchRunMarker.publish(context, owner, cloned)
     return cloned
+}
+
+/**
+ * Creates an Application-owned onCreate override when the manifest Application only inherits
+ * onCreate from an SDK superclass. The override calls the immediate superclass so SDK startup
+ * remains intact, while keeping the overlay injection out of the shared SDK class.
+ */
+internal fun createApplicationOnCreateOverride(
+    owner: MutableClass,
+): MutableMethod {
+    val superclass = owner.superclass
+        ?: error("Application ${owner.type} has no superclass")
+    require(superclass != "Ljava/lang/Object;") {
+        "Application ${owner.type} has no safe superclass"
+    }
+    val method = ImmutableMethod(
+        owner.type,
+        "onCreate",
+        emptyList(),
+        "V",
+        AccessFlags.PUBLIC.value,
+        emptySet(),
+        emptySet(),
+        ImmutableMethodImplementation(
+            1,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+        ),
+    ).toMutable()
+    method.addInstructionsWithLabels(
+        0,
+        "invoke-super {p0}, $superclass->onCreate()V\nreturn-void",
+    )
+    owner.methods.add(method)
+    return method
 }
 
 /** Adds only missing queued policies to an existing verified shared bridge. */

@@ -1616,10 +1616,25 @@ val universalOverlayPatch = bytecodePatch(
             StartupHooks.resolvedLauncherActivityDescriptor,
             logger,
         )
-        // A manifest-resolved launcher is the most reliable process entry point for Activity
-        // injection. Try the Application entry point only when no valid launcher was resolved.
-        if (!explicitActivityFirst && resolvedLauncher == null && appMethod != null) {
-            val (appOwner, appOnCreate) = appMethod
+        // Prefer the process Application entry point whenever it can be resolved. This installs
+        // lifecycle callbacks before Unity's Activity and before BillingClient purchase calls.
+        // Explicit Activity mode remains available for APKs whose Application is incompatible.
+        val applicationTarget = if (!explicitActivityFirst && appMethod != null) {
+            val targetClass = checkNotNull(appClass)
+            val (inheritedOwner, inheritedOnCreate) = appMethod
+            if (inheritedOwner.type == targetClass.type) {
+                targetClass to inheritedOnCreate
+            } else try {
+                val direct = createApplicationOnCreateOverride(targetClass)
+                logger.info("Created direct Application.onCreate override in ${targetClass.type}; inherited implementation remains untouched in ${inheritedOwner.type}")
+                targetClass to direct
+            } catch (error: Exception) {
+                logger.warning("Could not create direct Application.onCreate override in ${targetClass.type}: ${error.message}")
+                null
+            }
+        } else null
+        if (applicationTarget != null) {
+            val (appOwner, appOnCreate) = applicationTarget
             if (appOnCreate.hasOverlayBridge(application = true)) {
                 logger.info("Runtime overlay bridge already exists in ${appOwner.type}->onCreate")
                 val configured = attachExistingOverlayPolicies(appOwner, appOnCreate, adsRuntimePolicy, inAppRuntimePolicy)
@@ -1647,8 +1662,6 @@ val universalOverlayPatch = bytecodePatch(
         }
 
         val fallback = if (bridgeInstalled) {
-            null
-        } else if (bridgeAttempted) {
             null
         } else {
             selectedUiPreset.activityOverride.trim().takeIf { it.isNotEmpty() }?.let(::descriptor)
