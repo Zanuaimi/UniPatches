@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-17T16:52:25",
-  "description": "## [1.29.0-dev.29](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.28...v1.29.0-dev.29) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* **inap:** Fix timeout causing verifier error ([da12b55](https://github.com/Zanuaimi/UniPatches/commit/da12b55f37ed749f06852068206a376d538d4877))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.29/patches-1.29.0-dev.29.mpp",
+  "created_at": "2026-09-17T17:26:14",
+  "description": "## [1.29.0-dev.30](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.29...v1.29.0-dev.30) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* **inapp:** Fix incorrect constructor for legacy ([e6af92a](https://github.com/Zanuaimi/UniPatches/commit/e6af92ac170d32b43174dddc8f0f9efda6488ecb))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.30/patches-1.29.0-dev.30.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.29"
+  "version": "1.29.0-dev.30"
 }

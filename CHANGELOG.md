@@ -1,3 +1,9 @@
+## [1.29.0-dev.30](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.29...v1.29.0-dev.30) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* **inapp:** Fix incorrect constructor for legacy ([e6af92a](https://github.com/Zanuaimi/UniPatches/commit/e6af92ac170d32b43174dddc8f0f9efda6488ecb))
+
 ## [1.29.0-dev.29](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.28...v1.29.0-dev.29) (2026-09-17)
 
 ### 🐛 Bug Fixes
