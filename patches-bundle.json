@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-17T22:40:00",
-  "description": "## [1.29.0-dev.33](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.32...v1.29.0-dev.33) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* add in-app runtime seam tests ([f2c2303](https://github.com/Zanuaimi/UniPatches/commit/f2c2303e60c7188d0d9d764c71e94164ccde3cb4))\n* harden in-app purchase runtime ([78cf77e](https://github.com/Zanuaimi/UniPatches/commit/78cf77eb14eda15ceb1d1e0aecf55a076431a72e))\n* separate billing compatibility strategies ([0beac8c](https://github.com/Zanuaimi/UniPatches/commit/0beac8ca65bcbf6bc0107004b937580e90ba985f))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.33/patches-1.29.0-dev.33.mpp",
+  "created_at": "2026-09-17T23:44:33",
+  "description": "## [1.29.0-dev.34](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.33...v1.29.0-dev.34) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* add in-app emulation regression coverage ([0357e32](https://github.com/Zanuaimi/UniPatches/commit/0357e32cccdc20349e7622c4e483f2b1d72c78ce))\n* preserve legacy catalog and harden purchase flow ([a9b79d1](https://github.com/Zanuaimi/UniPatches/commit/a9b79d1f92d228381f42b9adb448df36a2183436))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.34/patches-1.29.0-dev.34.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.33"
+  "version": "1.29.0-dev.34"
 }

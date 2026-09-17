@@ -1,3 +1,10 @@
+## [1.29.0-dev.34](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.33...v1.29.0-dev.34) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* add in-app emulation regression coverage ([0357e32](https://github.com/Zanuaimi/UniPatches/commit/0357e32cccdc20349e7622c4e483f2b1d72c78ce))
+* preserve legacy catalog and harden purchase flow ([a9b79d1](https://github.com/Zanuaimi/UniPatches/commit/a9b79d1f92d228381f42b9adb448df36a2183436))
+
 ## [1.29.0-dev.33](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.32...v1.29.0-dev.33) (2026-09-17)
 
 ### 🐛 Bug Fixes
