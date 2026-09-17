@@ -217,20 +217,18 @@ internal fun applyBillingClientLifecycleAndInventoryPatches(
             }
         }
 
-        // Prices -> "0.00" / 0
-        for (pm in listOf("getPrice", "getOriginalPrice", "getFormattedPrice")) {
-            patchAll(Fingerprint(name = pm, returnType = "Ljava/lang/String;", custom = { m, c ->
-                c.type == "Lorg/onepf/oms/appstore/googleUtils/SkuDetails;" && m.parameterTypes.isEmpty()
-            }), "OpenIAB.SkuDetails.$pm") {
-                it.addInstructions(0, "const-string v0, \"0.00\"\nreturn-object v0")
-            }
-        }
+        // OpenIAB SkuDetails is catalog data, not purchase ownership data.
+        // Leave its price getters untouched so the app receives the real
+        // store price and does not hide otherwise valid products.
         for (pm in listOf("getPrice", "getOriginalPrice", "getFormattedPrice", "getDisplayPrice", "getPriceString")) {
-            patchAll(Fingerprint(name = pm, returnType = "Ljava/lang/String;", custom = { _, c ->
+            patchAll(Fingerprint(name = pm, returnType = "Ljava/lang/String;", custom = { m, c ->
                 val t = c.type.lowercase()
-                t != "lorg/onepf/oms/appstore/googleutils/skudetails;" && (t.contains("sku") || t.contains("product") || t.contains("billing"))
+                !OpenIabCatalogPolicy.isCatalogGetter(c.type, m.name, m.parameterTypes.size) &&
+                    (t.contains("sku") || t.contains("product") || t.contains("billing"))
             }), pm) {
-                if (it.parameterTypes.isEmpty()) it.addInstructions(0, "const-string v0, \"0.00\"\nreturn-object v0")
+                if (it.parameterTypes.isEmpty() && !OpenIabCatalogPolicy.isCatalogGetter(it.definingClass, it.name, it.parameterTypes.size)) {
+                    it.addInstructions(0, "const-string v0, \"0.00\"\nreturn-object v0")
+                }
             }
         }
         // OneTimePurchaseOfferDetails / SubscriptionOfferDetails micros

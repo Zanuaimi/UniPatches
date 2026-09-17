@@ -33,11 +33,12 @@ internal fun applyOpenIabPatches(context: InAppManagedAdapterContext) {
                 return-void
                 :morphe_unity_original_purchase
             """.trimIndent()
-            var granted = false
-            if (minRegs(method) >= 4) {
-                try { method.addInstructions(0, block); granted = true } catch (_: Exception) {}
-            }
-            if (!granted) granted = expandSwap(method, block)
+            // Always inject into an expanded clone.  The timeout arguments
+            // must never be written into p0/p1/etc.; on small frames those
+            // aliases can be the original method parameters (including
+            // UnityPlugin's `this` register).  Expansion also gives the
+            // generated range invoke stable scratch registers.
+            expandSwap(method, block)
         }
     }
 
@@ -74,7 +75,6 @@ internal fun applyOpenIabPatches(context: InAppManagedAdapterContext) {
                 } else "const/4 v4, ${if (flowName == "launchPurchaseFlow") "0x1" else "0x0"}"
                 val block = """
                     move-object/from16 v0, $listener
-                    if-eqz v0, :morphe_openiab_original_purchase_flow
                     move-object/from16 v1, $sku
                     move-object/from16 v2, $activity
                     $payloadInstruction

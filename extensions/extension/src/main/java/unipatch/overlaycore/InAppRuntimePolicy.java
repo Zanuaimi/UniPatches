@@ -427,7 +427,11 @@ public final class InAppRuntimePolicy {
             return;
         }
         if (immediate != null) {
-            if (immediate.transition(PurchaseRequest.State.RECEIVED, PurchaseRequest.State.DELIVERING)) {
+            boolean enteredDelivery = immediate.transition(PurchaseRequest.State.VALIDATED, PurchaseRequest.State.DELIVERING);
+            if (!enteredDelivery) {
+                OverlayRuntimeLogger.log("WARN", "InApp", "Legacy request transition rejected: VALIDATED -> DELIVERING, product=" + immediate.productId);
+            }
+            if (enteredDelivery) {
                 final PurchaseRequest immediateRequest = immediate;
                 scheduleTimeout(immediateRequest);
                 OverlayRuntimeLogger.log("INFO", "InApp", "Legacy non-overlay timeout scheduled: id=" + immediateRequest.requestId +
@@ -487,7 +491,11 @@ public final class InAppRuntimePolicy {
             return true;
         } catch (ReflectiveOperationException | RuntimeException error) {
             OverlayRuntimeLogger.log("WARN", "InApp", "UnityPlugin entry interception failed: " + error.getClass().getSimpleName());
-            return false;
+            // The hook already owns this entry point.  Do not fall through to
+            // UnityPlugin's real proxy/billing path when listener discovery
+            // fails; that path can wait forever on devices without Play.
+            dispatchLegacy(null, currentActivity(), product, developerPayload, inapp);
+            return true;
         }
     }
 
