@@ -199,12 +199,9 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         // dropped. Every injection below therefore copies params with
         // move-*/from16 (which assembles in any frame) and otherwise
         // touches only v-regs. NEVER use a narrow opcode with a p-reg.
-        fun buyGrantBlock(igetTail: String, overlayEnabled: Boolean = false, productArguments: List<String> = emptyList()): String {
+        fun buyGrantBlock(igetTail: String, productArguments: List<String> = emptyList()): String {
             val validationFirst = productArguments.getOrNull(0)?.let { "move-object/from16 v1, $it" } ?: "const/4 v1, 0x0"
             val validationSecond = productArguments.getOrNull(1)?.let { "move-object/from16 v2, $it" } ?: "const/4 v2, 0x0"
-            val overlayProductArguments = if (overlayEnabled) {
-                "$validationFirst\n$validationSecond"
-            } else ""
             return """
                 move-object/from16 v4, p0
                 move-object/from16 v0, p0
@@ -220,34 +217,14 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 check-cast v1, Lcom/android/billingclient/api/BillingResult;
                 return-object v1
                 :morphe_iap_valid
-                ${if (overlayEnabled) """
-                $overlayProductArguments
+                $validationFirst
+                $validationSecond
                 invoke-static {v0, v1, v2}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatch(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z
                 move-result v3
                 if-eqz v3, :morphe_iap_cancelled
-                """.trimIndent() else """
-                const-string v1, "{\"orderId\":\"morphe_fake\",\"packageName\":\"morphe_fake\",\"productId\":\"morphe_fake\",\"purchaseTime\":0,\"purchaseState\":1,\"purchaseToken\":\"morphe_fake\",\"quantity\":1,\"acknowledged\":true}"
-                const-string v2, "morphe_fake"
-                new-instance v3, Lcom/android/billingclient/api/Purchase;
-                invoke-direct {v3, v1, v2}, Lcom/android/billingclient/api/Purchase;-><init>(Ljava/lang/String;Ljava/lang/String;)V
-                new-instance v1, Ljava/util/ArrayList;
-                invoke-direct {v1}, Ljava/util/ArrayList;-><init>()V
-                invoke-virtual {v1, v3}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z
-                move-object v3, v1
-                invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
-                move-result-object v1
-                const/4 v2, 0x0
-                invoke-virtual {v1, v2}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->setResponseCode(I)Lcom/android/billingclient/api/BillingResult${'$'}Builder;
-                move-result-object v1
-                invoke-virtual {v1}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->build()Lcom/android/billingclient/api/BillingResult;
-                move-result-object v1
-                invoke-interface {v0, v1, v3}, Lcom/android/billingclient/api/PurchasesUpdatedListener;->onPurchasesUpdated(Lcom/android/billingclient/api/BillingResult;Ljava/util/List;)V
-                """.trimIndent()}
-                ${if (overlayEnabled) """
                 goto :morphe_iap_nocb
                 :morphe_iap_cancelled
                 $cancelledBillingResult
-                """.trimIndent() else ""}
                 :morphe_iap_no_listener
                 $cancelledBillingResult
                 :morphe_iap_nocb
@@ -263,7 +240,6 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         }
 
         patchAll(Fingerprint(name = "launchBillingFlow", custom = { m, _ -> m.returnType.contains("BillingResult") }), "launchBillingFlow", 2) {
-            val overlayEnabled = inventoryOptionsProvider().third
             val isStatic = try {
                 com.android.tools.smali.dexlib2.AccessFlags.STATIC.isSet(it.accessFlags)
             } catch (_: Exception) { true }
@@ -272,7 +248,7 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 val productArguments = it.parameterTypes.mapIndexedNotNull { index, type ->
                     if (type.startsWith("L") || type.startsWith("[")) parameterRegister(it, index) else null
                 }.take(2)
-                val block = buyGrantBlock(field, overlayEnabled, productArguments)
+                val block = buyGrantBlock(field, productArguments)
                 var granted = false
                 if (minRegs(it) >= 5) {
                     try { it.addInstructions(0, block); granted = true } catch (_: Exception) {}
@@ -364,7 +340,6 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
         // Unity IL2CPP native bridge (BillingClientImpl.launchBillingFlowCpp):
         // exact-name fingerprint above misses it, so cover by return type.
         patchAll(Fingerprint(name = "launchBillingFlowCpp", custom = { _, c -> isBillingNamespace(c.type) }), "launchBillingFlowCpp", 2) {
-            val overlayEnabled = inventoryOptionsProvider().third
             val isStatic = try {
                 com.android.tools.smali.dexlib2.AccessFlags.STATIC.isSet(it.accessFlags)
             } catch (_: Exception) { true }
@@ -373,7 +348,7 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                 val productArguments = it.parameterTypes.mapIndexedNotNull { index, type ->
                     if (type.startsWith("L") || type.startsWith("[")) parameterRegister(it, index) else null
                 }.take(2)
-                val block = buyGrantBlock(field, overlayEnabled, productArguments)
+                val block = buyGrantBlock(field, productArguments)
                 var granted = false
                 if (minRegs(it) >= 4) {
                     try { it.addInstructions(0, block); granted = true } catch (_: Exception) {}

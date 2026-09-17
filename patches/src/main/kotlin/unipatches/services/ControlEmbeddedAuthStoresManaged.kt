@@ -19,6 +19,8 @@ internal data class ControlEmbeddedOptions(
     val disableGooglePay: Boolean,
     val disableRemoteConfig: Boolean,
     val forceSignedOut: Boolean,
+    val suppressPlayGamesSignIn: Boolean,
+    val suppressPlayGamesSignInUi: Boolean,
     val fixMaps: Boolean,
     val nullLocation: Boolean,
     val silenceErrors: Boolean,
@@ -71,6 +73,36 @@ private fun BytecodePatchContext.taskBoolean(fp: Fingerprint, label: String, val
 
 private fun BytecodePatchContext.taskNull(fp: Fingerprint, label: String, logger: Logger): Int =
     inject(fp, label, setOf("Lcom/google/android/gms/tasks/Task;"), "const/4 v0, 0x0\ninvoke-static {v0}, Lcom/google/android/gms/tasks/Tasks;->forResult(Ljava/lang/Object;)Lcom/google/android/gms/tasks/Task;\nmove-result-object v0\nreturn-object v0", logger)
+
+private fun BytecodePatchContext.taskFailure(fp: Fingerprint, label: String, logger: Logger): Int =
+    inject(
+        fp,
+        label,
+        setOf("Lcom/google/android/gms/tasks/Task;"),
+        "new-instance v0, Ljava/lang/Exception;\nconst-string v1, \"Play Games sign-in suppressed\"\ninvoke-direct {v0, v1}, Ljava/lang/Exception;-><init>(Ljava/lang/String;)V\ninvoke-static {v0}, Lcom/google/android/gms/tasks/Tasks;->forException(Ljava/lang/Exception;)Lcom/google/android/gms/tasks/Task;\nmove-result-object v0\nreturn-object v0",
+        logger,
+        minRegisters = 2,
+    )
+
+private fun BytecodePatchContext.playGamesSignIn(logger: Logger, suppressUiOnly: Boolean): Int {
+    var count = 0
+    val client = "Lcom/google/android/gms/games/GamesSignInClient;"
+    fun concreteClient(name: String): Fingerprint = Fingerprint(
+        name = name,
+        returnType = "Lcom/google/android/gms/tasks/Task;",
+        custom = { _, c ->
+            val type = c.type.lowercase()
+            type.contains("/games/") && c.type != client
+        },
+    )
+    if (!suppressUiOnly) {
+        count += taskFailure(Fingerprint(definingClass = client, name = "isAuthenticated", returnType = "Lcom/google/android/gms/tasks/Task;"), "Play Games authentication check", logger)
+        count += taskFailure(concreteClient("isAuthenticated"), "Play Games authentication implementation", logger)
+    }
+    count += taskFailure(Fingerprint(definingClass = client, name = "signIn", returnType = "Lcom/google/android/gms/tasks/Task;"), "Play Games sign-in UI", logger)
+    count += taskFailure(concreteClient("signIn"), "Play Games sign-in implementation", logger)
+    return count
+}
 
 private fun BytecodePatchContext.maps(logger: Logger): Int {
     var count = int(Fingerprint(definingClass = "Lcom/google/android/gms/maps/MapsInitializer;", name = "initialize", returnType = "I", parameters = listOf("Landroid/content/Context;")), "Maps initialize", 0, logger)
@@ -149,6 +181,8 @@ internal fun controlEmbeddedAuthStoresManagedPatch(optionsProvider: () -> Contro
             bool(Fingerprint(definingClass = "Lcom/google/android/gms/auth/api/signin/GoogleSignIn;", name = "hasPermissions", returnType = "Z"), "Google sign-out permissions", false, logger)
             nullObject(Fingerprint(definingClass = "Lcom/google/android/gms/auth/api/signin/GoogleSignIn;", name = "getLastSignedInAccount", returnType = "Lcom/google/android/gms/auth/api/signin/GoogleSignInAccount;"), "Google sign-out account", logger)
         }
+        if (o.suppressPlayGamesSignIn) playGamesSignIn(logger, suppressUiOnly = false)
+        else if (o.suppressPlayGamesSignInUi) playGamesSignIn(logger, suppressUiOnly = true)
         if (o.fixMaps) maps(logger)
         if (o.nullLocation) for (name in listOf("getLastLocation", "requestLocationUpdates", "flushLocations")) taskNull(Fingerprint(definingClass = "Lcom/google/android/gms/location/FusedLocationProviderClient;", name = name, returnType = "Lcom/google/android/gms/tasks/Task;"), "Play Location $name", logger)
         if (o.silenceErrors) {

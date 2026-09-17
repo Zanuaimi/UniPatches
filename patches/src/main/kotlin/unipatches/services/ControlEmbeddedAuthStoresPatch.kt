@@ -84,6 +84,8 @@ val controlEmbeddedAuthStoresPatch = rawResourcePatch(
     val showPlayServicesAvailable by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Show Google Play Services as available", default = false, key = "embeddedShowPlayServicesAvailable", description = "Report recognized Google Play Services availability checks as successful.")
     val bypassPlayServicesCheck by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Bypass Google Play Services Check", default = false, key = "embeddedBypassPlayServicesCheck", description = "Bypass recognized Google Play Services availability checks.")
     val forceSignedOut by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Force Google Signed Out", default = false, key = "embeddedForceSignedOut", description = "Make Google sign-in checks report signed out.")
+    val suppressPlayGamesSignIn by booleanOption(title = "Embedded Auth / Stores > Google Play Games > Suppress Play Games Sign-In", default = false, key = "embeddedSuppressPlayGamesSignIn", description = "Prevent Play Games sign-in and authentication checks from starting the Google account UI; return a failed Task so the app can disable Play Games integration.")
+    val suppressPlayGamesSignInUi by booleanOption(title = "Embedded Auth / Stores > Google Play Games > Suppress Play Games Sign-In UI", default = false, key = "embeddedSuppressPlayGamesSignInUi", description = "Block explicit Play Games sign-in UI requests while leaving authentication-status checks unchanged.")
     val silenceErrors by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Silence Play Services Errors", default = false, key = "embeddedSilenceErrors", description = "Suppress recognized Play Services error UI and messages.")
     val spoofVersion by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Spoof Play Services Version", default = false, key = "embeddedSpoofVersion", description = "Report a high Play Services version.")
     val fixMaps by booleanOption(title = "Embedded Auth / Stores > Google Play Services > Fix Maps on MicroG", default = false, key = "embeddedFixMaps", description = "Report Maps initialization success and notify its initialized callback.")
@@ -109,6 +111,8 @@ val controlEmbeddedAuthStoresPatch = rawResourcePatch(
             disableGooglePay = disableGooglePay == true,
             disableRemoteConfig = disableRemoteConfig == true,
             forceSignedOut = forceSignedOut == true || selectedProvider == "zero",
+            suppressPlayGamesSignIn = suppressPlayGamesSignIn == true,
+            suppressPlayGamesSignInUi = suppressPlayGamesSignInUi == true,
             fixMaps = fixMaps == true || selectedProvider == "gmscore",
             nullLocation = nullLocation == true,
             silenceErrors = silenceErrors == true || selectedProvider == "zero",
