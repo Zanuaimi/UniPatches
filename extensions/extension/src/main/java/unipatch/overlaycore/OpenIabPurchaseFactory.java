@@ -2,6 +2,7 @@ package unipatch.overlaycore;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.Locale;
 
 /** Constructs purchases for OpenIAB's legacy Google utility classes. */
 public final class OpenIabPurchaseFactory {
@@ -10,8 +11,10 @@ public final class OpenIabPurchaseFactory {
     public static Object create(String productId, String packageName, String developerPayload,
                                 boolean inapp) throws ReflectiveOperationException {
         Class<?> purchaseClass = Class.forName("org.onepf.oms.appstore.googleUtils.Purchase");
-        String json = "{\"productId\":\"" + PurchaseJson.escape(productId) + "\",\"orderId\":\"morphe_fake\",\"packageName\":\"" +
-                PurchaseJson.escape(packageName) + "\",\"purchaseToken\":\"morphe_fake\",\"purchaseState\":0,\"purchaseTime\":0,\"developerPayload\":\"" +
+        String identity = identity(productId);
+        long purchaseTime = System.currentTimeMillis();
+        String json = "{\"productId\":\"" + PurchaseJson.escape(productId) + "\",\"orderId\":\"unipatches-order-" + identity + "\",\"packageName\":\"" +
+                PurchaseJson.escape(packageName) + "\",\"purchaseToken\":\"unipatches-token-" + identity + "\",\"purchaseState\":0,\"purchaseTime\":" + purchaseTime + ",\"developerPayload\":\"" +
                 PurchaseJson.escape(developerPayload) + "\"}";
         try {
             Constructor<?> constructor = purchaseClass.getConstructor(String.class, String.class, String.class, String.class);
@@ -24,9 +27,13 @@ public final class OpenIabPurchaseFactory {
             set(purchase, "setPackageName", packageName);
             set(purchase, "setDeveloperPayload", developerPayload == null ? "" : developerPayload);
             set(purchase, "setPurchaseState", Integer.valueOf(0));
-            set(purchase, "setToken", "morphe_fake");
+            set(purchase, "setToken", "unipatches-token-" + identity);
             return purchase;
         }
+    }
+
+    private static String identity(String productId) {
+        return Integer.toHexString((productId == null ? "" : productId).hashCode()).toLowerCase(Locale.ROOT);
     }
 
     private static void set(Object target, String name, Object value) {

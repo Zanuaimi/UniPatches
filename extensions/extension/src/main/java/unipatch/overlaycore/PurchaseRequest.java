@@ -31,6 +31,7 @@ public final class PurchaseRequest {
     public final long timeoutMillis;
     private final AtomicReference<State> state = new AtomicReference<>(State.RECEIVED);
     private final AtomicBoolean terminal = new AtomicBoolean(false);
+    private final AtomicBoolean callbackAttempted = new AtomicBoolean(false);
 
     public PurchaseRequest(String productId, String productType, String developerPayload,
                            Object listener, Activity sourceActivity, PurchaseBackend backend,
@@ -63,4 +64,9 @@ public final class PurchaseRequest {
     }
 
     public boolean isFinished() { return terminal.get(); }
+
+    /** Ensures a listener is invoked at most once for this request. */
+    public boolean claimCallback() { return callbackAttempted.compareAndSet(false, true); }
+
+    public boolean callbackAttempted() { return callbackAttempted.get(); }
 }

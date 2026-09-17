@@ -1,18 +1,25 @@
 package unipatch.overlaycore;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 
-/** Constructs the version-neutral JSON payload used by BillingClient purchases. */
+/** Shared low-level BillingClient purchase construction helpers. */
 public final class BillingPurchaseFactory {
     private BillingPurchaseFactory() { }
 
-    public static Object create(String productId, String packageName) throws ReflectiveOperationException {
-        Class<?> purchaseClass = Class.forName("com.android.billingclient.api.Purchase");
+    static Object construct(Class<?> purchaseClass, String productId, String packageName,
+                            String orderId, String token, boolean acknowledged)
+            throws ReflectiveOperationException {
         Constructor<?> constructor = purchaseClass.getConstructor(String.class, String.class);
-        String json = "{\"orderId\":\"morphe_fake\",\"packageName\":\"" + PurchaseJson.escape(packageName) +
+        String json = "{\"orderId\":\"" + PurchaseJson.escape(orderId) + "\",\"packageName\":\"" + PurchaseJson.escape(packageName) +
                 "\",\"productId\":\"" + PurchaseJson.escape(productId) +
-                "\",\"purchaseTime\":0,\"purchaseState\":1,\"purchaseToken\":\"morphe_fake\",\"quantity\":1,\"acknowledged\":true}";
-        return constructor.newInstance(json, "morphe_fake");
+                "\",\"purchaseTime\":" + System.currentTimeMillis() +
+                ",\"purchaseState\":1,\"purchaseToken\":\"" + PurchaseJson.escape(token) +
+                "\",\"quantity\":1,\"acknowledged\":" + acknowledged + "}";
+        return constructor.newInstance(json, token);
+    }
+
+    static String identity(String productId, String prefix) {
+        String value = productId == null ? "" : productId.trim();
+        return prefix + "-" + Integer.toHexString(value.hashCode());
     }
 }
