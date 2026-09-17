@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-17T04:35:21",
-  "description": "## [1.29.0-dev.19](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.18...v1.29.0-dev.19) (2026-09-17)\n\n### 🐛 Bug Fixes\n\n* mark dev validation ([8f88753](https://github.com/Zanuaimi/UniPatches/commit/8f88753333bd5edfe349465208ac23f3466a819f))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.19/patches-1.29.0-dev.19.mpp",
+  "created_at": "2026-09-17T04:58:59",
+  "description": "## [1.29.0-dev.20](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.19...v1.29.0-dev.20) (2026-09-17)\n\n### ✨ New Features\n\n* **inapp:** Also affect launchSubscriptionPurchaseFlow ([46e86fc](https://github.com/Zanuaimi/UniPatches/commit/46e86fce388a5f4fa71230708fbc399d1cc51232))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.29.0-dev.20/patches-1.29.0-dev.20.mpp",
   "signature_download_url": "",
-  "version": "1.29.0-dev.19"
+  "version": "1.29.0-dev.20"
 }

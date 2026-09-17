@@ -1,3 +1,9 @@
+## [1.29.0-dev.20](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.19...v1.29.0-dev.20) (2026-09-17)
+
+### ✨ New Features
+
+* **inapp:** Also affect launchSubscriptionPurchaseFlow ([46e86fc](https://github.com/Zanuaimi/UniPatches/commit/46e86fce388a5f4fa71230708fbc399d1cc51232))
+
 ## [1.29.0-dev.19](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.18...v1.29.0-dev.19) (2026-09-17)
 
 ### 🐛 Bug Fixes
