@@ -589,12 +589,12 @@ public final class InAppRuntimePolicy {
             Object result = resultClass.getConstructor(int.class, String.class)
                     .newInstance(includePurchase ? 0 : 1, includePurchase ? "Success" : "Cancelled");
             Object purchase = null;
-            if (includePurchase) {
-                Class<?> purchaseClass = Class.forName("org.onepf.oms.appstore.googleUtils.Purchase");
-                String json = "{\"productId\":\"" + jsonEscape(product) + "\",\"orderId\":\"morphe_fake\",\"purchaseToken\":\"morphe_fake\",\"purchaseState\":0,\"purchaseTime\":0,\"developerPayload\":\"" + jsonEscape(developerPayload == null ? "" : developerPayload) + "\"}";
-                purchase = purchaseClass.getConstructor(String.class).newInstance(json);
-            }
             Class<?> purchaseClass = Class.forName("org.onepf.oms.appstore.googleUtils.Purchase");
+            if (includePurchase) {
+                String json = "{\"productId\":\"" + jsonEscape(product) + "\",\"orderId\":\"morphe_fake\",\"purchaseToken\":\"morphe_fake\",\"purchaseState\":0,\"purchaseTime\":0,\"developerPayload\":\"" + jsonEscape(developerPayload == null ? "" : developerPayload) + "\"}";
+                purchase = purchaseClass.getConstructor(String.class, String.class, String.class, String.class)
+                        .newInstance(inapp ? "inapp" : "subs", json, "", "com.google.play");
+            }
             Method callback = findLegacyPurchaseCallback(listener, resultClass, purchaseClass);
             if (callback != null) {
                 callback.setAccessible(true);
