@@ -307,31 +307,6 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
             }
         }
 
-        // OpenIAB's Unity wrapper starts UnityProxyActivity before it reaches
-        // OpenIabHelper.launchPurchaseFlow. Intercept the exact public Unity
-        // entry points in both modes so the proxy is never opened for an
-        // emulated purchase. The runtime policy decides whether to wait for
-        // the optional overlay confirmation.
-        val openIabUnityPlugin = "Lorg/onepf/openiab/UnityPlugin;"
-        for (methodName in listOf("purchaseProduct", "purchaseSubscription")) {
-            patchAll(Fingerprint(
-                name = methodName,
-                definingClass = openIabUnityPlugin,
-                returnType = "V",
-                custom = { method, _ -> method.parameterTypes == listOf("Ljava/lang/String;", "Ljava/lang/String;") },
-            ), "OpenIAB.UnityPlugin.$methodName", 2) { method ->
-                val product = parameterRegister(method, 0)
-                method.addInstructions(0, """
-                    iget-object v0, p0, $openIabUnityPlugin->_purchaseFinishedListener:Lorg/onepf/oms/appstore/googleUtils/IabHelper${'$'}OnIabPurchaseFinishedListener;
-                    if-eqz v0, :morphe_openiab_unity_original_purchase
-                    move-object/from16 v1, $product
-                    invoke-static {v0, v1}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatchLegacy(Ljava/lang/Object;Ljava/lang/String;)V
-                    return-void
-                    :morphe_openiab_unity_original_purchase
-                """.trimIndent())
-            }
-        }
-
         // Unity IL2CPP native bridge (BillingClientImpl.launchBillingFlowCpp):
         // exact-name fingerprint above misses it, so cover by return type.
         patchAll(Fingerprint(name = "launchBillingFlowCpp", custom = { _, c -> isBillingNamespace(c.type) }), "launchBillingFlowCpp", 2) {

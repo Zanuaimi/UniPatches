@@ -101,8 +101,7 @@ public final class InAppRuntimePolicy {
         synchronized (InAppRuntimePolicy.class) { request = pending; }
         MAIN.postDelayed(() -> timeout(request), 30000L);
         if (!OverlayRuntime.showInAppPurchaseConfirmation(target, product)) {
-            OverlayRuntimeLogger.log("WARN", "InApp", "Purchase confirmation popup could not be attached: product=" + product);
-            cancelPending();
+            OverlayRuntimeLogger.log("INFO", "InApp", "Purchase confirmation popup queued until an active overlay Activity is available: product=" + product);
         }
     }
 
@@ -121,6 +120,7 @@ public final class InAppRuntimePolicy {
             if (!configured || !popupEnabled || SAVED.contains(normalized)) {
                 lastEvent = "Emulated legacy purchase delivered: " + normalized;
                 deliverLegacy(listener, normalized, true);
+                finishLegacyProxy(target);
                 return;
             }
             if (pending != null) {
@@ -135,9 +135,14 @@ public final class InAppRuntimePolicy {
         synchronized (InAppRuntimePolicy.class) { request = pending; }
         MAIN.postDelayed(() -> timeout(request), 30000L);
         if (!OverlayRuntime.showInAppPurchaseConfirmation(target, normalized)) {
-            OverlayRuntimeLogger.log("WARN", "InApp", "Legacy purchase confirmation popup could not be attached: product=" + normalized);
-            cancelPending();
+            OverlayRuntimeLogger.log("INFO", "InApp", "Legacy purchase confirmation popup queued until an active overlay Activity is available: product=" + normalized);
         }
+    }
+
+    /** Retries a pending confirmation after the target Activity has resumed and its overlay attached. */
+    public static synchronized void retryPendingConfirmation(Activity target) {
+        if (pending == null) return;
+        OverlayRuntime.showInAppPurchaseConfirmation(target, pending.product);
     }
 
     private static void timeout(Pending request) {
@@ -158,6 +163,7 @@ public final class InAppRuntimePolicy {
                 ? deliverLegacy(request.listener, request.product, true)
                 : deliver(request.listener, request.product, 0, true);
         if (!delivered) OverlayRuntimeLogger.log("WARN", "InApp", "Purchase success callback failed: product=" + request.product);
+        if (request.legacy) finishLegacyProxy(request.activity.get());
     }
 
     public static synchronized void cancelPending() {
@@ -169,6 +175,18 @@ public final class InAppRuntimePolicy {
                 ? deliverLegacy(request.listener, request.product, false)
                 : deliver(request.listener, request.product, 1, false);
         if (!delivered) OverlayRuntimeLogger.log("WARN", "InApp", "Purchase cancellation callback failed: product=" + request.product);
+        if (request.legacy) finishLegacyProxy(request.activity.get());
+    }
+
+    /** Mirrors UnityProxyActivity's original result-handled cleanup for emulated legacy flows. */
+    private static void finishLegacyProxy(Activity target) {
+        if (target == null || !"org.onepf.openiab.UnityProxyActivity".equals(target.getClass().getName())) return;
+        MAIN.post(() -> {
+            if (!target.isFinishing() && (android.os.Build.VERSION.SDK_INT < 17 || !target.isDestroyed())) {
+                try { target.finish(); }
+                catch (RuntimeException ignored) { }
+            }
+        });
     }
 
     private static String productId(Object first, Object second) {

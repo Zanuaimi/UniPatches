@@ -283,6 +283,7 @@ public final class OverlayRuntime {
         if (InAppRuntimePolicy.isConfigured()) InAppRuntimePolicy.registerActivity(activity);
         Controller existing = CONTROLLERS.get(activity);
         if (existing != null) {
+            existing.resume();
             existing.applyRememberedStates();
             if (existing.needsReattach()) {
                 try {
@@ -295,6 +296,7 @@ public final class OverlayRuntime {
                     OverlayRuntimeLogger.log("WARN", "Overlay", "Overlay reattach failed: " + error.getClass().getSimpleName());
                 }
             }
+            InAppRuntimePolicy.retryPendingConfirmation(activity);
             return;
         }
         Controller controller = null;
@@ -303,6 +305,7 @@ public final class OverlayRuntime {
             CONTROLLERS.put(activity, controller);
             controller.attach();
             OverlayRuntimeLogger.log("INFO", "Overlay", "Overlay attached to " + activity.getClass().getName());
+            InAppRuntimePolicy.retryPendingConfirmation(activity);
         } catch (RuntimeException ignored) {
             if (controller != null) controller.detach();
             // Never let overlay setup failure crash the host application.
@@ -421,6 +424,7 @@ public final class OverlayRuntime {
         private boolean fullyClosed;
         private boolean attached;
         private boolean detached;
+        private boolean paused;
         private float downX;
         private float downY;
         private float startX;
@@ -509,6 +513,7 @@ public final class OverlayRuntime {
 
         void attach() {
             if (attached || detached) return;
+            paused = false;
             try {
                 root.addView(floatingButton, buttonParams());
                 root.addView(menuLayer, new FrameLayout.LayoutParams(
@@ -544,6 +549,7 @@ public final class OverlayRuntime {
 
         boolean reattach() {
             if (detached) return false;
+            paused = false;
             if (!attached) {
                 attach();
                 return attached;
@@ -572,8 +578,13 @@ public final class OverlayRuntime {
             removeRoot();
         }
 
+        void resume() {
+            if (!detached) paused = false;
+        }
+
         void pause() {
             if (detached) return;
+            paused = true;
             root.removeCallbacks(dragVisibilityFade);
             // A paused Activity cannot reliably display or interact with the in-app
             // confirmation layer. Release the intercepted billing request here so a
@@ -1845,7 +1856,7 @@ public final class OverlayRuntime {
         }
 
         private boolean canShowInAppPurchaseConfirmation() {
-            return !detached && root != null && !activity.isFinishing()
+            return !detached && !paused && root != null && !activity.isFinishing()
                     && (android.os.Build.VERSION.SDK_INT < 17 || !activity.isDestroyed());
         }
 
