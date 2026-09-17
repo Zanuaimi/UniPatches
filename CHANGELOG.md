@@ -1,3 +1,15 @@
+## [1.29.0-dev.32](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.31...v1.29.0-dev.32) (2026-09-17)
+
+### 🐛 Bug Fixes
+
+* centralize emulated purchase delivery ([c8d735b](https://github.com/Zanuaimi/UniPatches/commit/c8d735bec27ec70e46b9850baedf8bf0402ed104))
+* clean patch formatting ([0808519](https://github.com/Zanuaimi/UniPatches/commit/0808519490a64501be19f3d8c8acfd81a11632f1))
+
+### ✨ New Features
+
+* organize inapp coverage strategies ([562ae94](https://github.com/Zanuaimi/UniPatches/commit/562ae94d535a4e935f39afcfeb4590b234d97b60))
+* update overlay and patch documentation ([3fbc755](https://github.com/Zanuaimi/UniPatches/commit/3fbc755d81276e8795e46cf2d40a549536a6737b))
+
 ## [1.29.0-dev.31](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.30...v1.29.0-dev.31) (2026-09-17)
 
 ### 🐛 Bug Fixes
