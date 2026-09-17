@@ -1,3 +1,9 @@
+## [1.29.0-dev.21](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.20...v1.29.0-dev.21) (2026-09-17)
+
+### ✨ New Features
+
+* **compatibility:** split into multiple files ([297d7f8](https://github.com/Zanuaimi/UniPatches/commit/297d7f80b74a0d5b6513e36473e4473cf22f2b27))
+
 ## [1.29.0-dev.20](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.19...v1.29.0-dev.20) (2026-09-17)
 
 ### ✨ New Features
