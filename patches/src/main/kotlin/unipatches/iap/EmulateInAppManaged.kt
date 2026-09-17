@@ -293,12 +293,34 @@ internal fun emulateInAppManagedPatch(inventoryOptionsProvider: () -> Triple<Boo
                         val purchaseActivity = parameterRegister(method, 0)
                         val sku = parameterRegister(method, skuIndex)
                         val listener = parameterRegister(method, listenerIndex)
+                        val developerPayload = if (signature.size >= 5) parameterRegister(method, signature.lastIndex) else "null"
+                        val developerPayloadInstruction = if (developerPayload == "null") {
+                            "const-string v3, \"\""
+                        } else {
+                            "move-object/from16 v3, $developerPayload"
+                        }
+                        val inappInstruction = if (signature.size == 6 && flowName == "launchPurchaseFlow") {
+                            val itemType = parameterRegister(method, 2)
+                            """
+                            const-string v4, "subs"
+                            move-object/from16 v5, $itemType
+                            invoke-virtual {v5, v4}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+                            move-result v4
+                            xor-int/lit8 v4, v4, 0x1
+                            """.trimIndent()
+                        } else {
+                            "const/4 v4, ${if (flowName == "launchPurchaseFlow") "0x1" else "0x0"}"
+                        }
                         method.addInstructions(0, """
                             move-object/from16 v0, $listener
                             if-eqz v0, :morphe_openiab_original_purchase_flow
                             move-object/from16 v1, $sku
                             move-object/from16 v2, $purchaseActivity
-                            invoke-static {v0, v2, v1}, Lunipatch/overlaycore/InAppRuntimePolicy;->dispatchLegacy(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;)V
+                            $developerPayloadInstruction
+                            $inappInstruction
+                            invoke-static {v0, v2, v1, v3, v4}, Lunipatch/overlaycore/InAppRuntimePolicy;->routeLegacyPurchase(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;Z)Z
+                            move-result v5
+                            if-eqz v5, :morphe_openiab_original_purchase_flow
                             return-void
                             :morphe_openiab_original_purchase_flow
                         """.trimIndent())

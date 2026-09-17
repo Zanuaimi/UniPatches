@@ -1,6 +1,7 @@
 package unipatch.overlaycore;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
 import java.lang.ref.WeakReference;
@@ -23,6 +24,7 @@ public final class InAppRuntimePolicy {
     private static final Set<String> SAVED = new LinkedHashSet<>();
     private static WeakReference<Activity> activity = new WeakReference<>(null);
     private static Pending pending;
+    private static Redirect redirect;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static boolean configured;
     private static boolean popupEnabled = true;
@@ -33,6 +35,7 @@ public final class InAppRuntimePolicy {
     public static synchronized void configure(String encoded) {
         configured = false;
         pending = null;
+        redirect = null;
         SAVED.clear();
         OverlaySessionState.clearModule(MODULE);
         if (encoded == null) return;
@@ -52,6 +55,7 @@ public final class InAppRuntimePolicy {
         configured = false;
         popupEnabled = true;
         pending = null;
+        redirect = null;
         SAVED.clear();
         activity.clear();
         lastEvent = "No purchase request this session";
@@ -138,6 +142,101 @@ public final class InAppRuntimePolicy {
         if (!OverlayRuntime.showInAppPurchaseConfirmation(target, normalized)) {
             OverlayRuntimeLogger.log("INFO", "InApp", "Legacy purchase confirmation popup queued until an active overlay Activity is available: product=" + normalized);
         }
+    }
+
+    /** Routes an OpenIAB call while preserving the proxy Activity used by old Unity plugins. */
+    public static boolean routeLegacyPurchase(Object listener, Object purchaseActivity, String product,
+                                              String developerPayload, boolean inapp) {
+        Activity target = purchaseActivity instanceof Activity ? (Activity) purchaseActivity : null;
+        if (isProxyActivity(target)) {
+            return dispatchLegacyFromProxy(listener, target, product);
+        }
+        if (listener == null) return false;
+        synchronized (InAppRuntimePolicy.class) {
+            if (!configured || !popupEnabled || SAVED.contains(valid(product) ? normalize(product) : "morphe_fake")) {
+                // Non-overlay mode deliberately keeps the original direct emulation behavior.
+            } else {
+                if (redirect != null || pending != null) {
+                    deliverLegacy(listener, valid(product) ? normalize(product) : "morphe_fake", false);
+                    return true;
+                }
+                redirect = new Redirect(listener, product, developerPayload, inapp);
+            }
+        }
+        if (!isConfigured() || !popupEnabled() || SAVED.contains(valid(product) ? normalize(product) : "morphe_fake")) {
+            dispatchLegacy(listener, target, product);
+            return true;
+        }
+        if (!launchProxy(target, product, developerPayload, inapp)) {
+            synchronized (InAppRuntimePolicy.class) {
+                if (redirect != null && redirect.listener == listener) redirect = null;
+            }
+            deliverLegacy(listener, valid(product) ? normalize(product) : "morphe_fake", false);
+        }
+        return true;
+    }
+
+    private static boolean dispatchLegacyFromProxy(Object fallbackListener, Activity proxy, String product) {
+        Object listener = fallbackListener;
+        String redirectedProduct = product;
+        synchronized (InAppRuntimePolicy.class) {
+            if (redirect != null) {
+                listener = redirect.listener;
+                redirectedProduct = redirect.product;
+                redirect = null;
+            }
+        }
+        if (listener == null) return false;
+        dispatchLegacy(listener, proxy, redirectedProduct);
+        return true;
+    }
+
+    private static boolean isProxyActivity(Activity value) {
+        return value != null && "org.onepf.openiab.UnityProxyActivity".equals(value.getClass().getName());
+    }
+
+    private static boolean launchProxy(Activity source, String product, String developerPayload, boolean inapp) {
+        if (source == null) return false;
+        try {
+            Class<?> plugin = Class.forName("org.onepf.openiab.UnityPlugin");
+            java.lang.reflect.Field request = plugin.getDeclaredField("sendRequest");
+            request.setAccessible(true);
+            request.setBoolean(null, true);
+            Intent intent = new Intent(source, Class.forName("org.onepf.openiab.UnityProxyActivity"));
+            intent.putExtra("sku", product);
+            intent.putExtra("inapp", inapp);
+            intent.putExtra("developerPayload", developerPayload);
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                source.startActivity(intent);
+                return true;
+            }
+            return MAIN.post(() -> {
+                try {
+                    source.startActivity(intent);
+                } catch (RuntimeException error) {
+                    failRedirect(product, listenerForRedirect(product));
+                }
+            });
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            OverlayRuntimeLogger.log("WARN", "InApp", "Could not launch legacy purchase proxy: " + error.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    private static Object listenerForRedirect(String product) {
+        synchronized (InAppRuntimePolicy.class) {
+            return redirect != null && redirect.product.equals(valid(product) ? normalize(product) : "morphe_fake")
+                    ? redirect.listener : null;
+        }
+    }
+
+    private static void failRedirect(String product, Object listener) {
+        if (listener == null) return;
+        synchronized (InAppRuntimePolicy.class) {
+            if (redirect == null || redirect.listener != listener) return;
+            redirect = null;
+        }
+        deliverLegacy(listener, valid(product) ? normalize(product) : "morphe_fake", false);
     }
 
     /** Retries a pending confirmation after the target Activity has resumed and its overlay attached. */
@@ -333,6 +432,20 @@ public final class InAppRuntimePolicy {
         Pending(Object listener, String product, boolean legacy, Activity activity) {
             this.listener = listener; this.product = product; this.legacy = legacy;
             this.activity = new WeakReference<>(activity);
+        }
+    }
+
+    private static final class Redirect {
+        final Object listener;
+        final String product;
+        final String developerPayload;
+        final boolean inapp;
+
+        Redirect(Object listener, String product, String developerPayload, boolean inapp) {
+            this.listener = listener;
+            this.product = valid(product) ? normalize(product) : "morphe_fake";
+            this.developerPayload = developerPayload;
+            this.inapp = inapp;
         }
     }
 }
