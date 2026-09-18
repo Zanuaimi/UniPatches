@@ -1,3 +1,9 @@
+## [1.29.0-dev.35](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.34...v1.29.0-dev.35) (2026-09-18)
+
+### ✨ New Features
+
+* **inapp:** This patch is now removed, because I give up. ([214e7a1](https://github.com/Zanuaimi/UniPatches/commit/214e7a1558cebfb0e5bf325ce3623adf40513164))
+
 ## [1.29.0-dev.34](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0-dev.33...v1.29.0-dev.34) (2026-09-17)
 
 ### 🐛 Bug Fixes
