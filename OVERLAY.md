@@ -31,8 +31,8 @@ not packaged in the APK, including `android.app.NativeActivity`, while excluding
 unrelated framework or SDK Activities.
 
 After injection, the final cloned method is verified to contain `OverlayRuntime.install()` or
-`installActivity()`. Control App Ads and InApp Emulation policies are marked attached only when
-their configuration calls are also present in that same verified bridge. Companion patches share
+`installActivity()`. Control App Ads is marked attached only when its configuration call is also
+present in that same verified bridge. Companion patches share
 the exact owner, method, return type, and parameter list through the temporary patch-run marker,
 so they do not guess separate Activities or create another runtime. If verification fails, runtime
 addons are not exposed even when their provider classes are bundled.
@@ -251,35 +251,6 @@ The Ads provider is registered by `OverlayRuntime`, and its modules are added on
 policy is integrated and contains a selected module bit. Malformed policies fail open and produce no
 Ads modules.
 
-`InApp Emulation Patch ( Experimental, Enhanced, Has Overlay Addon )` can optionally add the
-`InApp Emulation` integrated module. Its `Enable Overlay Module` setting requires Universal Overlay
-in the same patch operation. The separate initial-popup setting controls the first process-session
-state and can later be changed from the module toggle. The module Settings popup manages saved
-product identifiers for the current session.
-
-The purchase popup toggle is the runtime switch for confirmation: enabled shows the Universal
-Overlay confirmation flow, while disabled uses the immediate non-overlay flow. Non-overlay
-emulation does not depend on overlay initialization. The InApp patch's Runtime settings provide
-independent timeout values for both modes, defaulting to 10 seconds for non-overlay purchases and
-30 seconds for overlay confirmations. The confirmation popup displays its countdown and pending
-requests are cancelled when the selected timeout expires.
-
-Its purchase confirmation popup uses the shared `OverlayPopupFrame`, UI color 3 for the description,
-the configured bottom-button styling, and the optional header
-`Emulate InApp Purchase Confirmation`. The description is
-`Do you want to try to emulate in-app purchase for this product?`. The save checkbox is
-`Save purchase for skipping purchase popup`, with exactly `No` and `Yes` buttons. `No` cancels the
-pending request; `Yes` completes the emulated purchase and optionally saves its product identifier.
-The popup also displays `Timeout Countdown: {overlay mode timeout}` below the save checkbox. It
-updates once per second and blinks only during the final five seconds. The value comes from the
-InApp patch's overlay-mode timeout setting.
-This overlay behavior remains separate from catalog discovery, legacy inventory behavior, receipt
-verification, billing availability, and native IL2CPP patching.
-
-If the InApp policy was not configured through a verified shared bridge, the provider remains hidden
-and the InApp module is not shown. Managed purchase emulation and catalog behavior remain separate
-from popup presentation.
-
 Universal Overlay also includes the `Do Not Disturb` system module. Selecting it adds
 `android.permission.ACCESS_NOTIFICATION_POLICY` when needed, but the user must still grant
 notification-policy access in Android system settings. The module does not grant access silently.
@@ -343,12 +314,6 @@ patches/src/main/kotlin/unipatches/overlay/OverlayAdsRuntimeIntegration.kt
 This is the patch-process-only coordination layer between Control App Ads and an overlay patch. It stores the
 pending policy and exact bridge identity temporarily; it does not become part of the patched APK.
 
-patches/src/main/kotlin/unipatches/overlay/OverlayInAppRuntimeIntegration.kt
-
-This is the equivalent patch-process coordination layer for InApp Emulation. It queues the session
-policy when Emulate InApp runs first and records an exact unconfigured bridge when Universal Overlay
-runs first.
-
 patches/src/main/kotlin/unipatches/overlay/OverlayConfigPayload.kt
 
 This is the shared Kotlin wire-format helper. Universal and app-specific patch entries should use
@@ -382,7 +347,6 @@ UniPatches
 |   |-- HillClimbRacingOverlayExamplePatch.kt app-specific shared-core example
 |   |-- OverlayInjection.kt             shared bridge injection and fallback helpers
 |   |-- OverlayAdsRuntimeIntegration.kt patch-process Ads policy coordination
-|   |-- OverlayInAppRuntimeIntegration.kt patch-process InApp policy coordination
 |   |-- presets/OverlayPreset.kt         Shared preset model and value builder
 |   |-- presets/OverlayPresetCatalog.kt Central preset registry
 |   |-- presets/UniPatchesPreset.kt     UniPatches preset
@@ -404,7 +368,6 @@ UniPatches
     |-- OverlayLifecycle.java Lifecycle callback adapter
     |-- OverlayConfig.java    Configuration decoder and fallbacks
     |-- AdsRuntimePolicy.java process-local Ads runtime policy
-    |-- InAppRuntimePolicy.java session-local InApp callback and popup policy
     |-- OverlayViews.java     Shared view and style construction
     |-- OverlayPopupFrame.java shared popup card and header styling
     `-- modules/
@@ -420,7 +383,6 @@ UniPatches
         |-- statistic/                           statistic implementations
         |-- hook/                                hook implementations
         |-- ads/                                 integrated Ads runtime provider and modules
-        `-- iap/                                 integrated InApp Emulation provider
 ```
 
 Module inheritance is intentionally separated by responsibility:
@@ -586,15 +548,8 @@ launch independently from other modules. Runtime logging is best-effort and isol
 ### Integrated modules
 
 Integrated providers are registered centrally by `OverlayRuntime` and activated by a policy from
-another patch. The current providers are Control App Ads and InApp Emulation. They appear in
-separate menu sections only when their policy is valid and active. Provider and module failures are
-isolated from universal modules.
-
-InApp Emulation uses the shared `OverlayActionModule` settings flow for popup enablement and
-session-only saved product management. Its asynchronous purchase confirmation is a separate
-runtime popup, not a one-shot module action. The module settings contain the confirmation toggle
-and a scrollable saved-product list; an empty list displays `No Saved Products`. These timeout
-values are patch settings, not module settings.
+another patch. The current provider is Control App Ads. It appears only when its policy is valid
+and active. Provider and module failures are isolated from universal modules.
 
 ## Runtime flow
 

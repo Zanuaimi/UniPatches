@@ -117,11 +117,10 @@ internal fun injectOverlayBridge(
     config: String,
     application: Boolean,
     adsRuntimePolicy: String?,
-    inAppRuntimePolicy: String?,
 ): MutableMethod {
     val temporaryBase = method.implementation?.registerCount
         ?: error("Cannot inject into ${owner.type}->${method.name} without an implementation")
-    val temporaryCount = 2 + (if (adsRuntimePolicy != null) 1 else 0) + (if (inAppRuntimePolicy != null) 1 else 0)
+    val temporaryCount = 2 + (if (adsRuntimePolicy != null) 1 else 0)
     val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters + temporaryCount)
     val receiver = cloned.p0Register
     val type = if (application) "Landroid/app/Application;" else "Landroid/app/Activity;"
@@ -140,18 +139,10 @@ internal fun injectOverlayBridge(
         invoke-static/range {v${temporaryBase + 2} .. v${temporaryBase + 2}}, Lunipatch/overlaycore/AdsRuntimePolicy;->configure(Ljava/lang/String;)V
         """.trimIndent()
     }.orEmpty()
-    val inAppPolicy = inAppRuntimePolicy?.let { policy ->
-        val register = temporaryBase + 2 + if (adsRuntimePolicy != null) 1 else 0
-        """
-        const-string v$register, "${StartupHooks.escapeSmali(policy)}"
-        invoke-static/range {v$register .. v$register}, Lunipatch/overlaycore/InAppRuntimePolicy;->configure(Ljava/lang/String;)V
-        """.trimIndent()
-    }.orEmpty()
     cloned.addInstructionsWithLabels(index, """
         move-object/from16 v$temporaryBase, v$receiver
         const-string v${temporaryBase + 1}, "${StartupHooks.escapeSmali(config)}"
         $adsPolicy
-        $inAppPolicy
         invoke-static/range {v$temporaryBase .. v${temporaryBase + 1}}, $OVERLAY_RUNTIME_CLASS->${if (application) "install" else "installActivity"}(${type}Ljava/lang/String;)V
     """.trimIndent())
     owner.methods.remove(method)
@@ -160,17 +151,6 @@ internal fun injectOverlayBridge(
     if (adsRuntimePolicy == null) {
         OverlayAdsRuntimeIntegration.recordUnconfiguredBridge(
             OverlayAdsRuntimeIntegration.BridgeTarget(
-                context = context,
-                ownerType = owner.type,
-                methodName = cloned.name,
-                returnType = cloned.returnType,
-                parameterTypes = cloned.parameterTypes.map { it.toString() },
-            ),
-        )
-    }
-    if (inAppRuntimePolicy == null) {
-        OverlayInAppRuntimeIntegration.recordUnconfiguredBridge(
-            OverlayInAppRuntimeIntegration.BridgeTarget(
                 context = context,
                 ownerType = owner.type,
                 methodName = cloned.name,
@@ -224,26 +204,19 @@ internal fun attachExistingOverlayPolicies(
     owner: MutableClass,
     method: MutableMethod,
     adsRuntimePolicy: String?,
-    inAppRuntimePolicy: String?,
 ): MutableMethod {
     val missingAds = adsRuntimePolicy != null && !method.hasRuntimePolicy("AdsRuntimePolicy")
-    val missingInApp = inAppRuntimePolicy != null && !method.hasRuntimePolicy("InAppRuntimePolicy")
-    if (!missingAds && !missingInApp) return method
+    if (!missingAds) return method
 
     val base = method.implementation?.registerCount
         ?: error("Cannot attach overlay policies to ${owner.type}->${method.name} without an implementation")
-    val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters +
-        (if (missingAds) 1 else 0) + (if (missingInApp) 1 else 0))
+    val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters + 1)
     var register = base
     val policies = buildString {
         if (missingAds) {
             appendLine("const-string v$register, \"${helpers.startup.StartupHooks.escapeSmali(adsRuntimePolicy)}\"")
             appendLine("invoke-static/range {v$register .. v$register}, Lunipatch/overlaycore/AdsRuntimePolicy;->configure(Ljava/lang/String;)V")
             register++
-        }
-        if (missingInApp) {
-            appendLine("const-string v$register, \"${helpers.startup.StartupHooks.escapeSmali(inAppRuntimePolicy)}\"")
-            appendLine("invoke-static/range {v$register .. v$register}, Lunipatch/overlaycore/InAppRuntimePolicy;->configure(Ljava/lang/String;)V")
         }
     }.trim()
     cloned.addInstructionsWithLabels(0, policies)
@@ -291,28 +264,6 @@ internal fun BytecodePatchContext.attachQueuedAdsRuntimePolicy(
     cloned.addInstructionsWithLabels(0, """
         const-string v$base, "${StartupHooks.escapeSmali(policy)}"
         invoke-static/range {v$base .. v$base}, Lunipatch/overlaycore/AdsRuntimePolicy;->configure(Ljava/lang/String;)V
-    """.trimIndent())
-    owner.methods.remove(method)
-    owner.methods.add(cloned)
-    return true
-}
-
-/** Adds a queued InApp runtime policy beside a bridge injected earlier in this patch run. */
-internal fun BytecodePatchContext.attachQueuedInAppRuntimePolicy(
-    target: OverlayInAppRuntimeIntegration.BridgeTarget,
-    policy: String,
-): Boolean {
-    val owner = mutableClassDefByOrNull(target.ownerType) ?: return false
-    val method = owner.methods.firstOrNull {
-        it.name == target.methodName && it.returnType == target.returnType &&
-            it.parameterTypes.map { parameter -> parameter.toString() } == target.parameterTypes
-    } ?: return false
-    val base = method.implementation?.registerCount ?: return false
-    if (method.implementation?.instructions?.any { it.toString().contains("InAppRuntimePolicy;->configure") } == true) return true
-    val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters + 1)
-    cloned.addInstructionsWithLabels(0, """
-        const-string v$base, "${StartupHooks.escapeSmali(policy)}"
-        invoke-static/range {v$base .. v$base}, Lunipatch/overlaycore/InAppRuntimePolicy;->configure(Ljava/lang/String;)V
     """.trimIndent())
     owner.methods.remove(method)
     owner.methods.add(cloned)

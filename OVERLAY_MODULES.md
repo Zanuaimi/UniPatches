@@ -26,10 +26,10 @@ unrelated framework or SDK Activities. The patch verifies the final `install()` 
 `installActivity()` call before treating the runtime as installed.
 
 Companion patches coordinate through the exact temporary bridge marker containing the owner, method,
-return type, and parameter list. Control App Ads and InApp Emulation attach their policies to that
-bridge only after it is verified. A missing or unverified bridge produces a diagnostic and no
-dependent runtime module is exposed. Providers can be bundled in the extension without appearing in
-the menu until their process-local policy is configured.
+return type, and parameter list. Control App Ads attaches its policy to that bridge only after it is
+verified. A missing or unverified bridge produces a diagnostic and no dependent runtime module is
+exposed. Providers can be bundled in the extension without appearing in the menu until their
+process-local policy is configured.
 
 Use the matching base class:
 
@@ -110,33 +110,10 @@ or partially configured. Their provider should return an empty list instead of t
 runtime must isolate provider and module failures from universal modules. Session settings belong in
 `OverlaySessionState`; they must not be persisted in Android storage.
 
-The InApp provider is `modules/iap/InAppEmulationRuntimeProvider.java`, registered under the
-`inAppEmulation` profile. It contributes one `InApp Emulation` module when `InAppRuntimePolicy`
-has been configured by Emulate InApp. Its enable toggle controls purchase-time confirmation
-popups, while its Settings popup presents saved product identifiers as checkbox rows. Unchecking a
-row removes it after confirmation. The saved list is bounded, normalized, duplicate-free, and
-process-local. The provider also rejects null or unsupported Activities safely.
-
-The module is available only when the InApp patch's `Enable Overlay Module` runtime option was
-selected and its policy was attached to the verified shared overlay bridge. Its settings popup
-contains the confirmation toggle and a scrollable saved-product list; an empty list displays
-`No Saved Products`. Enabling the toggle requires Universal Overlay confirmation before an
-emulated purchase, while disabling it completes the emulated result immediately. Saved products
-skip confirmation for the current app process. The InApp patch owns the 10-second non-overlay and
-30-second overlay timeout defaults; these are patch settings rather than module settings.
-
-`InAppRuntimePolicy.java` receives the listener and product-related arguments from the managed
-billing patch. It either delivers the emulated result immediately or retains one pending callback
-while the shared confirmation popup is displayed. Saved products and disabled popups bypass the
-prompt. `No` delivers a cancellation result without a purchase; `Yes` delivers the emulated purchase
-and may save the identifier. Timeout and Activity-detach paths cancel pending requests. This policy
-does not control catalog discovery, legacy inventory behavior, receipt verification, billing
-availability, or native IL2CPP patching.
-
 ## Popup windows
 
 All runtime popup windows must use `OverlayPopupFrame` and the controller's shared helpers. This
-includes module Settings, runtime log viewing, close confirmation, and InApp purchase confirmation.
+includes module Settings, runtime log viewing, and close confirmation.
 Popup windows inherit the configured overlay context, background, foreground and text colors,
 corners, outline, spacing, typography, animations, and bottom-button styling.
 
@@ -170,8 +147,7 @@ Universal Overlay currently provides:
 - Hook modules: disable haptics and disable animations.
 - System modules: Do Not Disturb, guarded by notification-policy access.
 - Advanced modules: Overlay Runtime Logs, with optional activation at app launch.
-- Integrated modules: Control App Ads runtime controls and InApp Emulation when their companion
-  policies are configured.
+- Integrated modules: Control App Ads runtime controls when its companion policy is configured.
 
 The Do Not Disturb module also requires the Android notification-policy permission and a user-granted
 system access setting. Universal Overlay adds the manifest declaration when the module is selected,
