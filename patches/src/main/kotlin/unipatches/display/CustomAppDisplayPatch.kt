@@ -54,6 +54,12 @@ val customAppDisplayPatch = bytecodePatch(
 
         Custom App Resolution and game-optimization inspiration: Nai64Patches from Nai64.
         Frame-rate, graphics-driver, ANGLE, and aspect-ratio controls are UniPatches work.
+
+        Compatibility: when combined with Universal Overlay, keep Activity injection and display
+        overrides scoped to the launcher unless a broader scope is required. Broad Activity changes
+        can affect overlay, sign-in, billing, or other third-party screens. When combined with
+        Legacy App Compatibility, both patches may change display or manifest compatibility values;
+        review the final generated manifest.
     """.trimIndent(),
     default = false,
 ) {

@@ -56,6 +56,19 @@ com.heytap.market.*
 com.oppo.market.*
 com.sec.android.app.samsungapps.*
 """.trimIndent()
+
+private fun MutableMethod.hasOverlayBridge(application: Boolean): Boolean {
+    val expectedCall = if (application) "->install(" else "->installActivity("
+    return implementation?.instructions?.any { instruction ->
+        val text = instruction.toString()
+        text.contains(RUNTIME_CLASS) && text.contains(expectedCall)
+    } == true
+}
+
+private fun MutableMethod.hasRuntimePolicy(policyClass: String): Boolean =
+    implementation?.instructions?.any { instruction ->
+        instruction.toString().contains("$policyClass;->configure")
+    } == true
 private val DEFAULT_DESCRIPTION =
     """
     Welcome! This is the UniPatches Universal Overlay Patch Menu.
@@ -516,7 +529,7 @@ private fun validate(
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v2.5.3 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v2.6.0 (Experimental)",
     description = """
         A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual
         preset, select the overlay modules you want, optionally supply an icon image, then patch. Modules
@@ -525,16 +538,30 @@ val universalOverlayPatch = bytecodePatch(
         control Android capabilities, and Advanced modules provide opt-in diagnostics. Text is the
         default legacy icon; an optional image replaces it completely, while the advanced Multi-parts editor
         supports custom drawn icons, and can be conveniently made in Icon Builder local website in UniPatches repo.
-        
-        This is an experimental patch and may not work on all apps. UI presets can save and reuse supported appearance and advanced icon
+
+        UI presets can save and reuse supported appearance and advanced icon
         settings. The title, description, repository button text, and repository button URL remain
         controlled by the visible Morphe settings. Module selections and module behavior are excluded
         because hook and module combinations can be app-specific. 
         
-        If Control App Ads is patched with its optional runtime policy enabled, its selected ad-control modules appear here
-        automatically; Universal Overlay does not patch ad SDKs by itself. When both patches are
-        selected, Control App Ads attaches its runtime policy to this overlay's exact startup bridge,
-        including an explicit Activity override, instead of selecting a separate Activity.
+        Experimental : This patch may not work on all apps.
+
+        Compatibility: this patch owns one shared startup bridge for its runtime and integrated
+        modules. PairIP Bypass preserves that bridge when its Application startup strategies run
+        after Universal Overlay. If a patched APK still has an unusual entry point, use the explicit
+        Activity override rather than selecting a library or SDK Activity. Custom App Display and
+        Control App Ads attach to this bridge when their runtime addons are enabled; they should not
+        create a second overlay runtime.
+
+        Control App Ads can also add runtime ad-control modules here, but Universal Overlay does not
+        patch ad SDKs by itself. To use them, select Control App Ads Patch and Universal Overlay,
+        enable the desired options under Control App Ads' Overlay integration > Runtime controls. The
+        Ads runtime policy is enabled automatically when at least one of those modules is selected.
+        The available modules are Block
+        Ads, Ads Free Rewards, and Block Ads / Tracking Hosts. Their initial runtime values come from
+        the Control App Ads settings, and later changes are session-only. When both patches are selected,
+        Control App Ads attaches its policy to this overlay's exact startup bridge, including an explicit
+        Activity override, instead of selecting a separate Activity.
 
         Attribution: The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.
     """.trimIndent(),
@@ -703,9 +730,9 @@ val universalOverlayPatch = bytecodePatch(
     )
     val showExtraPopupHeaders by booleanOption(
         title = "Quick setup > UI settings > Extra popups > Show headers",
-        default = false,
+        default = true,
         key = "runtimeOverlayShowExtraPopupHeaders",
-        description = "Show title header boxes in settings, logs, confirmation, and module action popups. The main overlay menu title is always shown. LuckyPatcher-inspired preset enables this by default.",
+        description = "Show title header boxes in settings, logs, confirmation, and module action popups. The main overlay menu title is always shown. Enabled by default for a clearer, more polished popup appearance.",
     )
     val activateStatisticsOnLaunch by booleanOption(
         title = "Quick setup > Settings to modules > Monitor behavior > Activate statistics on launch",
@@ -1175,6 +1202,7 @@ val universalOverlayPatch = bytecodePatch(
         key = "runtimeOverlayResetIconToText",
         description = "Use the configured text icon for this patched APK and ignore image and Multi-parts icon inputs.",
     )
+    dependsOn(universalOverlayManifestPatch { includeDoNotDisturb == true })
     execute {
         val logger = Logger.getLogger(this::class.java.name)
         val rawAnimationDuration = animationDuration ?: 180
@@ -1548,8 +1576,7 @@ val universalOverlayPatch = bytecodePatch(
                 if (includeDoNotDisturb == true) "1" else "0",
                 if (includeOverlayRuntimeLogs == true) "1" else "0",
                 if (enableOverlayRuntimeLogsOnLaunch == true) "1" else "0",
-                if (showExtraPopupHeaders == true || selectedUiPreset.showExtraPopupHeaders
-                    || selectedPreset.orEmpty() == "luckyPatcher") "1" else "0",
+                if (selectedUiPreset.showExtraPopupHeaders) "1" else "0",
                 selectedUiPreset.menuWidthLimit.toString(),
                 selectedUiPreset.menuHeightLimit.toString(),
             ),
@@ -1562,18 +1589,64 @@ val universalOverlayPatch = bytecodePatch(
         val appClass = appDescriptor?.let { mutableClassDefByOrNull(it) }
         val appMethod = appClass?.let { findInheritedApplicationOnCreate(it) }
         var bridgeInstalled = false
+        var bridgeAttempted = false
         var adsPolicyAttached = false
         val adsRuntimePolicy = OverlayAdsRuntimeIntegration.pendingPolicy()
-        if (!explicitActivityFirst && appMethod != null) {
-            val (appOwner, appOnCreate) = appMethod
-            if (appOnCreate.implementation?.instructions?.any { it.toString().contains(RUNTIME_CLASS) } == true) {
+        fun tryInjectOverlayBridge(
+            owner: MutableClass,
+            method: MutableMethod,
+            application: Boolean,
+        ): MutableMethod? = try {
+            injectOverlayBridge(this, owner, method, config, application, adsRuntimePolicy)
+        } catch (error: Exception) {
+            logger.warning(
+                "Universal Overlay bridge injection failed at ${owner.type}->${method.name}: " +
+                    "${error.javaClass.simpleName}: ${error.message}",
+            )
+            null
+        }
+        val resolvedLauncher = resolveOverlayLauncherActivity(
+            StartupHooks.resolvedLauncherActivityDescriptor,
+            logger,
+        )
+        // Prefer the process Application entry point whenever it can be resolved. This installs
+        // lifecycle callbacks before Unity's Activity and before BillingClient purchase calls.
+        // Explicit Activity mode remains available for APKs whose Application is incompatible.
+        val applicationTarget = if (!explicitActivityFirst && appMethod != null) {
+            val targetClass = checkNotNull(appClass)
+            val (inheritedOwner, inheritedOnCreate) = appMethod
+            if (inheritedOwner.type == targetClass.type) {
+                targetClass to inheritedOnCreate
+            } else try {
+                val direct = createApplicationOnCreateOverride(targetClass)
+                logger.info("Created direct Application.onCreate override in ${targetClass.type}; inherited implementation remains untouched in ${inheritedOwner.type}")
+                targetClass to direct
+            } catch (error: Exception) {
+                logger.warning("Could not create direct Application.onCreate override in ${targetClass.type}: ${error.message}")
+                null
+            }
+        } else null
+        if (applicationTarget != null) {
+            val (appOwner, appOnCreate) = applicationTarget
+            if (appOnCreate.hasOverlayBridge(application = true)) {
                 logger.info("Runtime overlay bridge already exists in ${appOwner.type}->onCreate")
-                bridgeInstalled = true
+                val configured = attachExistingOverlayPolicies(appOwner, appOnCreate, adsRuntimePolicy)
+                bridgeInstalled = configured.hasOverlayBridge(application = true) &&
+                    (adsRuntimePolicy == null || configured.hasRuntimePolicy("Lunipatch/overlaycore/AdsRuntimePolicy"))
+                adsPolicyAttached = bridgeInstalled && adsRuntimePolicy != null
             } else {
-                injectOverlayBridge(this, appOwner, appOnCreate, config, application = true, adsRuntimePolicy = adsRuntimePolicy)
-                logger.info("Runtime overlay bridge injected into ${appOwner.type}->onCreate")
-                bridgeInstalled = true
-                adsPolicyAttached = adsRuntimePolicy != null
+                bridgeAttempted = true
+                val injected = tryInjectOverlayBridge(appOwner, appOnCreate, application = true)
+                bridgeInstalled = injected?.let { candidate ->
+                    candidate.hasOverlayBridge(application = true) &&
+                        (adsRuntimePolicy == null || candidate.hasRuntimePolicy("Lunipatch/overlaycore/AdsRuntimePolicy"))
+                } == true
+                if (bridgeInstalled) {
+                    logger.info("Runtime overlay bridge injected into ${appOwner.type}->onCreate")
+                    adsPolicyAttached = adsRuntimePolicy != null
+                } else if (injected != null) {
+                    logger.warning("Universal Overlay bridge verification failed in ${appOwner.type}->onCreate: expected install call or dependent policy configuration was not found")
+                }
             }
         }
 
@@ -1582,26 +1655,48 @@ val universalOverlayPatch = bytecodePatch(
         } else {
             selectedUiPreset.activityOverride.trim().takeIf { it.isNotEmpty() }?.let(::descriptor)
                 ?.let { target -> mutableClassDefByOrNull(target) }
+                ?: resolvedLauncher?.owner
                 ?: findOverlayFallbackActivity()
         }
         if (explicitActivityFirst && fallback == null) {
             logger.warning("Explicit Activity injection was requested but no target was found; universal fallback also failed.")
         }
-        val onCreate = fallback?.methods?.firstOrNull {
-            it.name == "onCreate" && it.returnType == "V" && it.parameterTypes == listOf("Landroid/os/Bundle;")
-        }
+        val onCreate = resolvedLauncher
+            ?.takeIf { it.owner.type == fallback?.type }
+            ?.onCreate
+            ?: fallback?.methods?.firstOrNull {
+                it.name == "onCreate" && it.returnType == "V" && it.parameterTypes == listOf("Landroid/os/Bundle;")
+            }
         if (fallback != null && onCreate != null) {
-            if (onCreate.implementation?.instructions?.any { it.toString().contains(RUNTIME_CLASS) } == true) {
+            patchActivityResultForwarding(fallback, logger)
+            if (onCreate.hasOverlayBridge(application = false)) {
                 logger.info("Runtime overlay bridge already exists in ${fallback.type}->onCreate")
-                bridgeInstalled = true
+                val configured = attachExistingOverlayPolicies(fallback, onCreate, adsRuntimePolicy)
+                bridgeInstalled = configured.hasOverlayBridge(application = false) &&
+                    (adsRuntimePolicy == null || configured.hasRuntimePolicy("Lunipatch/overlaycore/AdsRuntimePolicy"))
+                adsPolicyAttached = bridgeInstalled && adsRuntimePolicy != null
             } else {
-                injectOverlayBridge(this, fallback, onCreate, config, application = false, adsRuntimePolicy = adsRuntimePolicy)
-                logger.warning("Runtime overlay used Activity fallback: ${fallback.type}->onCreate")
-                bridgeInstalled = true
-                adsPolicyAttached = adsRuntimePolicy != null
+                bridgeAttempted = true
+                val injected = tryInjectOverlayBridge(fallback, onCreate, application = false)
+                bridgeInstalled = injected?.let { candidate ->
+                    candidate.hasOverlayBridge(application = false) &&
+                        (adsRuntimePolicy == null || candidate.hasRuntimePolicy("Lunipatch/overlaycore/AdsRuntimePolicy"))
+                } == true
+                if (bridgeInstalled) {
+                    logger.info("Runtime overlay bridge injected into ${fallback.type}->onCreate")
+                    adsPolicyAttached = adsRuntimePolicy != null
+                } else if (injected != null) {
+                    logger.warning("Universal Overlay bridge verification failed in ${fallback.type}->onCreate: expected installActivity call or dependent policy configuration was not found")
+                }
             }
         } else if (!bridgeInstalled) {
-            logger.warning("No suitable Application or Activity entry point found. No changes applied.")
+            logger.warning(
+                if (bridgeAttempted) {
+                    "Universal Overlay startup bridge could not be verified. Dependent runtime addons were not attached."
+                } else {
+                    "No suitable Application or Activity entry point found. No changes applied."
+                },
+            )
         }
         if (adsPolicyAttached) {
             OverlayAdsRuntimeIntegration.markInjected("Universal Overlay")

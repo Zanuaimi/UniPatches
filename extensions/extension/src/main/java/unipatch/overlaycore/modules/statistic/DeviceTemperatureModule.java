@@ -1,8 +1,10 @@
 package unipatch.overlaycore.modules.statistic;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Build;
 import java.util.Locale;
 import unipatch.overlaycore.modules.OverlayStatisticModule;
 
@@ -17,7 +19,12 @@ public final class DeviceTemperatureModule extends OverlayStatisticModule {
     }
     @Override protected String monitorValue() { return "TMP: " + value(); }
     @Override protected String value() {
-        Intent battery = activity.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        Intent battery;
+        if (Build.VERSION.SDK_INT >= 33) {
+            battery = activity.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED), Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            battery = activity.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        }
         if (battery == null) return "Unavailable";
         int tenthsC = battery.getIntExtra("temperature", Integer.MIN_VALUE);
         if (tenthsC == Integer.MIN_VALUE) return "Unavailable";

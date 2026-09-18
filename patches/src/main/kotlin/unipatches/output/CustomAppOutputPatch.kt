@@ -2,7 +2,6 @@ package unipatches.output
 
 import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.imageOption
-import app.morphe.patcher.patch.intOption
 import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.patch.stringOption
 import helpers.manifest.NS_ANDROID
@@ -13,11 +12,18 @@ import java.io.InputStream
 import java.net.URI
 import java.util.Base64
 import java.util.logging.Logger
+import org.w3c.dom.Document
 import org.w3c.dom.Element
 
 private const val CUSTOM_ICON_RESOURCE = "unipatches_custom_output_icon"
 private const val HIDDEN_ICON_RESOURCE = "unipatches_hidden_output_icon"
 private const val MAX_ICON_BYTES = 4 * 1024 * 1024
+
+private val restrictedBackupAttributes = listOf(
+    "dataExtractionRules",
+    "fullBackupContent",
+    "fullBackupOnly",
+)
 
 private val PACKAGE_NAME = Regex("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$")
 private val PACKAGE_SUFFIX = Regex("^(\\.[a-z][a-z0-9_]*)+$")
@@ -30,13 +36,36 @@ private const val TRANSPARENT_ICON_XML = """
     </shape>
 """
 
+private fun enableAppDataPreservation(document: Document): Int? {
+    val application = document.documentElement.applicationOrNull() ?: return null
+    var changed = 0
+
+    fun setApplicationAttribute(name: String, value: String) {
+        if (application.getAttributeNS(NS_ANDROID, name) == value) return
+        application.setAttributeNS(NS_ANDROID, "android:$name", value)
+        changed++
+    }
+
+    setApplicationAttribute("hasFragileUserData", "true")
+    setApplicationAttribute("allowBackup", "true")
+    setApplicationAttribute("restoreAnyVersion", "true")
+
+    for (attribute in restrictedBackupAttributes) {
+        if (application.hasAttributeNS(NS_ANDROID, attribute)) {
+            application.removeAttributeNS(NS_ANDROID, attribute)
+            changed++
+        }
+    }
+    return changed
+}
+
 @Suppress("unused")
 val customAppOutputPatch = resourcePatch(
     name = "Custom App Output Patch (Experimental, Enhanced)",
     description = """
         Customize an APK's install identity and launcher presentation in one patch. Start with the
         launcher name or icon; enable Clone only when you need a side-by-side copy. Name, icon,
-        hide-icon, and target-SDK options are
+        hide-icon, and clone options are
         independent. This cannot preserve original-app data when a package or signing identity
         changes. Clone mode rewrites supported manifest identifiers only; it does not rewrite
         bytecode strings, explicit process names, task affinities, or arbitrary SDK configuration.
@@ -45,8 +74,12 @@ val customAppOutputPatch = resourcePatch(
         licenses may therefore not work and cannot be repaired safely by this patch. If PairIP
         Bypass is also enabled, server/package-bound PairIP enforcement can still reject the clone.
 
-        Inspired by Nai64Patches from Nai64: Clone, Custom App Icon, Hide App Icon, and target
-        SDK customization patches.
+        Inspired by Nai64Patches from Nai64: Clone, Custom App Icon, and Hide App Icon patches.
+        The optional Preserve App Data After Uninstall setting applies Android's fragile-user-data
+        and backup compatibility flags. It does not guarantee data retention, and it cannot carry
+        data from the original package into a clone with a different package identity.
+        For target SDK compatibility, use Improve Legacy App / Game Compatibility for Modern
+        Android Patch. Keeping target SDK handling there avoids duplicate manifest changes.
     """.trimIndent(),
     default = false,
 ) {
@@ -95,6 +128,12 @@ val customAppOutputPatch = resourcePatch(
         key = "customAppOutputExpandRelativeComponents",
         description = "Expand relative Activity, Service, Receiver, Provider, and alias class names to the original package before cloning. This prevents Android from searching for classes in the new package.",
     )
+    val preserveAppData by booleanOption(
+        title = "Advanced > App data compatibility > Preserve App Data After Uninstall",
+        default = false,
+        key = "customAppOutputPreserveAppData",
+        description = "Ask Android to preserve app data when uninstalling and offer it for restoration on reinstall. This is best-effort, may be affected by Android version and backup policy, and cannot preserve data across a changed clone package identity.",
+    )
 
     val appName by stringOption(
         title = "Quick setup > Launcher presentation > App name",
@@ -128,19 +167,6 @@ val customAppOutputPatch = resourcePatch(
         default = "",
         key = "customAppOutputCustomIconInput",
         description = "Fallback icon source when Local image is empty: a raw Base64 image string, data:image/...;base64,..., or an HTTPS image URL. Example Base64 input: <base64 string here>. You can encode an image at https://base64.guru/converter/encode/image.",
-    )
-
-    val targetSdkEnabled by booleanOption(
-        title = "Advanced > Android compatibility > Override target SDK",
-        default = false,
-        key = "customAppOutputTargetSdkEnabled",
-        description = "Write a targetSdkVersion into the manifest. Enable only when you need to address an installer compatibility issue, because changing it can alter Android behavior.",
-    )
-    val targetSdk by intOption(
-        title = "Advanced > Android compatibility > Target SDK version",
-        default = 35,
-        key = "customAppOutputTargetSdk",
-        description = "Target SDK used when Override target SDK is enabled. Common current values are 34 or 35. Valid range: 1 to 100.",
     )
 
     execute {
@@ -235,21 +261,16 @@ val customAppOutputPatch = resourcePatch(
                 }
             } ?: logger.warning("Custom App Output: no <application> element found; name and icon changes were skipped.")
 
-            if (targetSdkEnabled == true) {
-                val requestedTarget = (targetSdk ?: 35).coerceIn(1, 100)
-                val usesSdk = root.getElementsByTagName("uses-sdk").item(0) as? Element
-                val minSdk = usesSdk?.getAttributeNS(NS_ANDROID, "minSdkVersion")?.toIntOrNull()
-                val target = maxOf(requestedTarget, minSdk ?: 1)
-                if (target != requestedTarget) logger.warning("Custom App Output: requested target SDK $requestedTarget is below minSdkVersion $minSdk; using $target instead.")
-                if (usesSdk != null) {
-                    usesSdk.setAttributeNS(NS_ANDROID, "android:targetSdkVersion", target.toString())
-                } else {
-                    val created = manifest.createElement("uses-sdk")
-                    created.setAttributeNS(NS_ANDROID, "android:targetSdkVersion", target.toString())
-                    root.insertBefore(created, root.applicationOrNull())
+            if (preserveAppData == true) {
+                val changes = enableAppDataPreservation(manifest)
+                when {
+                    changes == null -> logger.warning("Custom App Output: no <application> element found; app-data preservation was skipped.")
+                    changes == 0 -> logger.info("Custom App Output: app-data preservation settings were already applied.")
+                    else -> logger.info("Custom App Output: enabled app-data preservation with $changes manifest change(s).")
                 }
-                logger.info("Custom App Output: targetSdkVersion set to $target")
-                logger.info("Custom App Output compatibility: test runtime overlay installation and display overrides after changing target SDK, because Android window and compatibility behavior can vary by target level.")
+                if (changes != null && clonedPackage != null) {
+                    logger.warning("Custom App Output: app-data preservation applies to the cloned package only; it cannot transfer data from the original package.")
+                }
             }
         }
     }

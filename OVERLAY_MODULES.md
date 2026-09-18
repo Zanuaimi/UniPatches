@@ -18,6 +18,19 @@ Activity controllers, view attachment, state restoration, update scheduling, pro
 and failure isolation. It is shared by ordinary Android apps, Unity games, Godot games, and apps
 with multiple Activities.
 
+Universal Overlay installs one shared startup bridge. It prefers the manifest-resolved Application
+entry point, then the manifest-resolved launcher Activity, and finally a restricted application-owned
+Activity fallback. The launcher resolver is namespace-safe and accepts valid framework ancestors
+that are not packaged in the APK, such as `android.app.NativeActivity`. It excludes no-history and
+unrelated framework or SDK Activities. The patch verifies the final `install()` or
+`installActivity()` call before treating the runtime as installed.
+
+Companion patches coordinate through the exact temporary bridge marker containing the owner, method,
+return type, and parameter list. Control App Ads attaches its policy to that bridge only after it is
+verified. A missing or unverified bridge produces a diagnostic and no dependent runtime module is
+exposed. Providers can be bundled in the extension without appearing in the menu until their
+process-local policy is configured.
+
 Use the matching base class:
 
 - OverlayActivityModule for temporary Activity/window behavior.
@@ -97,6 +110,51 @@ or partially configured. Their provider should return an empty list instead of t
 runtime must isolate provider and module failures from universal modules. Session settings belong in
 `OverlaySessionState`; they must not be persisted in Android storage.
 
+## Popup windows
+
+All runtime popup windows must use `OverlayPopupFrame` and the controller's shared helpers. This
+includes module Settings, runtime log viewing, and close confirmation.
+Popup windows inherit the configured overlay context, background, foreground and text colors,
+corners, outline, spacing, typography, animations, and bottom-button styling.
+
+Headers must be added through `OverlayPopupFrame.addHeader`, which honors `Show extra popup headers`.
+Popup code must not create platform dialogs, system-level windows, persistent storage, or
+app-specific theme assumptions. Popup creation is dispatched to the Android main thread and must
+reject finishing or destroyed Activities.
+
+Extra popup headers are enabled by default in the current Universal Overlay settings, although a
+preset or imported Custom configuration may explicitly disable them. Header titles use the shared
+title typography, alignment, icon placement, separator, and colors.
+
+The InApp confirmation popup has this exact contract:
+
+- optional header: `Emulate InApp Purchase Confirmation`;
+- description using UI color 3: `Do you want to try to emulate in-app purchase for this product?`;
+- checkbox: `Save purchase for skipping purchase popup`;
+- bottom buttons: `No` and `Yes`.
+
+The module Settings popup reuses the existing `OverlayActionModule` checkbox-list contract and has
+no one-shot action button. Saved purchases are cleared when the app process ends or the overlay is
+fully closed.
+
+## Current built-in module inventory
+
+Universal Overlay currently provides:
+
+- Statistic modules: FPS, battery, memory, network, device information, temperature, system time,
+  and session time, with optional floating monitors.
+- Activity modules: keep awake, fullscreen, screenshots, brightness, rotation, and app audio mute.
+- Hook modules: disable haptics and disable animations.
+- System modules: Do Not Disturb, guarded by notification-policy access.
+- Advanced modules: Overlay Runtime Logs, with optional activation at app launch.
+- Integrated modules: Control App Ads runtime controls when its companion policy is configured.
+
+The Do Not Disturb module also requires the Android notification-policy permission and a user-granted
+system access setting. Universal Overlay adds the manifest declaration when the module is selected,
+but it cannot grant the access itself. Battery, temperature, and DND dynamic receivers use
+`RECEIVER_NOT_EXPORTED` on Android 13 and newer where they are internal or system-state observers,
+while older Android releases use the two-argument compatibility overload.
+
 ## Statistic modules
 
 Menu values update only while the menu is visible. Floating monitors update only while the menu is
@@ -151,6 +209,12 @@ to valid bounds, and patch-time warnings identify values that were clamped.
 ## Review checklist
 
 - No target-package, class-name, engine, or APK-specific assumptions.
+- Startup injection must prefer the manifest-resolved Application or launcher and verify the final
+  bridge before dependent policies are marked attached.
+- Integrated providers must return no modules until their policy is configured and the shared bridge
+  has succeeded.
+- Dynamic receivers must use API-appropriate flags and must not broaden export scope without a
+  verified external broadcast requirement.
 - No local patch build is required for normal development; the release workflow builds the patch.
 - git diff --check passes.
 - New UI uses the overlay context and configured colors, not the host Activity theme.

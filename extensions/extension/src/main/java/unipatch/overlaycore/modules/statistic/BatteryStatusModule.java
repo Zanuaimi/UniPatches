@@ -1,8 +1,10 @@
 package unipatch.overlaycore.modules.statistic;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Build;
 import unipatch.overlaycore.modules.OverlayStatisticModule;
 
 /** Shows the current device battery percentage without polling more often than the base sampler. */
@@ -14,7 +16,12 @@ public final class BatteryStatusModule extends OverlayStatisticModule {
     }
     @Override protected String monitorValue() { return "BAT: " + value(); }
     @Override protected String value() {
-        Intent battery = activity.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        Intent battery;
+        if (Build.VERSION.SDK_INT >= 33) {
+            battery = activity.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED), Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            battery = activity.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        }
         if (battery == null) return "Unavailable";
         int level = battery.getIntExtra("level", -1);
         int scale = battery.getIntExtra("scale", -1);

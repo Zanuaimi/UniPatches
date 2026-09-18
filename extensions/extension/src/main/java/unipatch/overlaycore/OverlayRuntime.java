@@ -203,13 +203,40 @@ public final class OverlayRuntime {
         configuration.appSpecificModules = pendingAppSpecificModules == null ? "" : pendingAppSpecificModules;
     }
 
+    public static void logActivityResultEntry(Activity activity, int requestCode, int resultCode) {
+        logActivityResult("entry", activity, requestCode, resultCode);
+    }
+
+    public static void logActivityResultExit(Activity activity, int requestCode, int resultCode) {
+        logActivityResult("exit", activity, requestCode, resultCode);
+    }
+
+    private static void logActivityResult(String phase, Activity activity, int requestCode, int resultCode) {
+        OverlayRuntimeLogger.log("INFO", "Lifecycle", "onActivityResult " + phase +
+                ": activity=" + (activity == null ? "null" : activity.getClass().getName()) +
+                ", requestCode=" + requestCode + ", resultCode=" + resultCode);
+    }
+
     static synchronized void showActivity(Activity activity) {
+        if (activity == null) return;
         if (configuration == null || globallyClosed) return;
         if (isActivityInstallBanned(activity)) return;
         if (activity.isFinishing() || (android.os.Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
         Controller existing = CONTROLLERS.get(activity);
         if (existing != null) {
+            existing.resume();
             existing.applyRememberedStates();
+            if (existing.needsReattach()) {
+                try {
+                    if (existing.reattach()) {
+                        OverlayRuntimeLogger.log("INFO", "Overlay", "Overlay reattached to resumed Activity: " + activity.getClass().getName());
+                    } else {
+                        OverlayRuntimeLogger.log("WARN", "Overlay", "Overlay reattach did not attach to resumed Activity: " + activity.getClass().getName());
+                    }
+                } catch (RuntimeException error) {
+                    OverlayRuntimeLogger.log("WARN", "Overlay", "Overlay reattach failed: " + error.getClass().getSimpleName());
+                }
+            }
             return;
         }
         Controller controller = null;
@@ -334,6 +361,7 @@ public final class OverlayRuntime {
         private boolean fullyClosed;
         private boolean attached;
         private boolean detached;
+        private boolean paused;
         private float downX;
         private float downY;
         private float startX;
@@ -422,6 +450,7 @@ public final class OverlayRuntime {
 
         void attach() {
             if (attached || detached) return;
+            paused = false;
             try {
                 root.addView(floatingButton, buttonParams());
                 root.addView(menuLayer, new FrameLayout.LayoutParams(
@@ -434,7 +463,8 @@ public final class OverlayRuntime {
                 menuLayer.setVisibility(View.GONE);
                 confirmationLayer.setVisibility(View.GONE);
                 activity.addContentView(root, contentLayoutParams());
-                attached = true;
+                attached = root.getParent() != null;
+                if (!attached) throw new IllegalStateException("Overlay root was not attached to the Activity content view");
                 root.post(this::constrainFloatingButton);
                 for (OverlaySystemModule module : systemRegistry.snapshot()) module.startSafely(activity);
                 for (OverlayAdvancedModule module : advancedRegistry.snapshot()) {
@@ -448,6 +478,25 @@ public final class OverlayRuntime {
                 removeRoot();
                 throw failure;
             }
+        }
+
+        boolean needsReattach() {
+            return !attached || root.getParent() == null;
+        }
+
+        boolean reattach() {
+            if (detached) return false;
+            paused = false;
+            if (!attached) {
+                attach();
+                return attached;
+            }
+            if (root.getParent() == null) {
+                activity.addContentView(root, contentLayoutParams());
+                attached = root.getParent() != null;
+                if (attached) root.post(this::constrainFloatingButton);
+            }
+            return attached;
         }
 
         void detach() {
@@ -465,8 +514,13 @@ public final class OverlayRuntime {
             removeRoot();
         }
 
+        void resume() {
+            if (!detached) paused = false;
+        }
+
         void pause() {
             if (detached) return;
+            paused = true;
             root.removeCallbacks(dragVisibilityFade);
             menuVisible = false;
             menuState = MenuState.CLOSED;
@@ -1544,6 +1598,8 @@ public final class OverlayRuntime {
 
             final String textValue = module.settingsTextValue();
             final EditText input;
+            final CheckBox[] settingsToggleRef = new CheckBox[1];
+            final int[] settingsChoiceCount = new int[1];
             if (textValue != null) {
                 TextView hint = text(module.settingsTextHint(), 13, config.menuTextColor3);
                 LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
@@ -1564,8 +1620,21 @@ public final class OverlayRuntime {
                 card.addView(input, inputParams);
             } else {
                 input = null;
+                if (module.hasSettingsToggle()) {
+                    CheckBox settingsToggle = new CheckBox(overlayContext);
+                    settingsToggleRef[0] = settingsToggle;
+                    settingsToggle.setText(module.settingsToggleLabel());
+                    settingsToggle.setTextColor(config.menuTextColor2);
+                    settingsToggle.setChecked(module.settingsToggleValue());
+                    settingsToggle.setContentDescription(module.settingsToggleLabel());
+                    styleCheckBox(settingsToggle);
+                    LinearLayout.LayoutParams toggleParams = new LinearLayout.LayoutParams(-1, -2);
+                    toggleParams.topMargin = dp(8);
+                    card.addView(settingsToggle, toggleParams);
+                }
                 String[] choices = module.settingsChoices();
                 if (choices == null) choices = new String[0];
+                settingsChoiceCount[0] = choices.length;
                 String[] descriptions = module.settingsDescriptions();
                 if (descriptions == null) descriptions = new String[0];
                 boolean[] values = module.settingsValues();
@@ -1595,6 +1664,15 @@ public final class OverlayRuntime {
                     choiceRow.setTag(check);
                     choicesLayout.addView(choiceRow, new LinearLayout.LayoutParams(-1, -2));
                 }
+                if (choices.length == 0 && module.settingsEmptyText() != null) {
+                    choicesLayout.setGravity(Gravity.CENTER);
+                    choicesLayout.setMinimumHeight(dp(96));
+                    TextView empty = text(module.settingsEmptyText(), 14, config.menuTextColor3);
+                    empty.setGravity(Gravity.CENTER);
+                    empty.setTextIsSelectable(false);
+                    choicesLayout.addView(empty, new LinearLayout.LayoutParams(-1, -1));
+                    scroll.setFillViewport(true);
+                }
                 scroll.addView(choicesLayout, new ScrollView.LayoutParams(-1, -2));
                 LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(-1, -2);
                 scrollParams.topMargin = dp(8);
@@ -1612,12 +1690,17 @@ public final class OverlayRuntime {
             addAction(actions, module.settingsConfirmationLabel(), v -> {
                 boolean applied;
                 try {
+                    if (settingsToggleRef[0] != null) {
+                        module.applySettingsToggle(settingsToggleRef[0].isChecked());
+                    }
                     if (input != null) {
                         applied = module.applySettingsText(input.getText().toString());
                     } else {
                         LinearLayout choicesLayout = (LinearLayout) card.getTag();
-                        boolean[] values = new boolean[choicesLayout.getChildCount()];
-                        for (int i = 0; i < values.length; i++) values[i] = ((CheckBox) choicesLayout.getChildAt(i).getTag()).isChecked();
+                        boolean[] values = new boolean[settingsChoiceCount[0]];
+                        for (int i = 0; i < values.length; i++) {
+                            values[i] = ((CheckBox) choicesLayout.getChildAt(i).getTag()).isChecked();
+                        }
                         module.applySettings(values);
                         applied = true;
                     }
@@ -1679,13 +1762,18 @@ public final class OverlayRuntime {
             if (!hasIntegratedModules()) return;
             for (OverlayAppSpecificModuleProvider provider : APP_SPECIFIC_PROVIDERS) {
                 try {
-                    if (!AdsControlRuntimeProvider.PROFILE_ID.equals(provider.profileId())) continue;
+                    String profileId = provider.profileId();
+                    String section;
+                    if (AdsControlRuntimeProvider.PROFILE_ID.equals(profileId) && AdsRuntimePolicy.hasAnyModule()) {
+                        section = "Ad control hook modules";
+                    } else {
+                        continue;
+                    }
                     List<OverlayAppSpecificModule> modules = provider.create(activity);
-                    if (modules == null || modules.isEmpty()) return;
-                    addSectionLabel(parent, "Ad control hook modules");
-                    for (OverlayAppSpecificModule module : modules) addAppSpecificModuleSafely(parent, () -> module, "Ads");
+                    if (modules == null || modules.isEmpty()) continue;
+                    addSectionLabel(parent, section);
+                    for (OverlayAppSpecificModule module : modules) addAppSpecificModuleSafely(parent, () -> module, section);
                 } catch (RuntimeException ignored) { }
-                return;
             }
         }
 

@@ -583,9 +583,10 @@ val controlAppAdsPatch = bytecodePatch(
         sign-in, billing, and attribution flows, which this patch cannot restore.
 
         This patch includes an optional Universal Overlay addon. To use the addon, patch Control App Ads
-        together with Universal Overlay, enable “Overlay integration >
-        Enable runtime controls”, and select one or more of its three overlay addon modules:
-        “Block Ads”, “Ads Free Rewards”, and “Block ad/tracking hosts”. The selected modules
+        together with Universal Overlay and select one or more of its three overlay addon modules:
+        “Block Ads”, “Ads Free Rewards”, and “Block Ads / Tracking Hosts”. Ad runtime policy is
+        enabled automatically when at least one of these Ads runtime modules is enabled in patch
+        settings. The selected modules
         appear under “Ad control hook modules” in Universal Overlay when selected. Host blocking
         starts according to the Enable Block Ads / Tracking Hosts master setting. Universal Overlay is required for the runtime policy to be
         installed; if it is not selected, the normal static ad controls still work but these
@@ -696,10 +697,9 @@ val controlAppAdsPatch = bytecodePatch(
     val peterLoweFilter by booleanOption(title = "Host filters > Peter Lowe's ad and tracking list", default = true, key = "adsFilterPeterLowe", description = "Enable a small embedded subset of Peter Lowe's ad and tracking list. Disable it if a site or account flow behaves unexpectedly.")
     val wildcardHosts by booleanOption(title = "Host filters > Match subdomains", default = true, key = "adsFilterWildcardHosts", description = "When enabled, an entry such as example.com also redirects ads.example.com and other subdomains. Disable for exact-host matching only.")
     val customFilterHosts by stringsOption(title = "Host filters > Custom host entries", default = emptyList(), key = "adsCustomFilterHosts", description = "Optional domains, URLs, or hosts-file lines to redirect. Add one per row, for example ads.example.com or 0.0.0.0 tracker.example.com. Entries match subdomains while Match subdomains is enabled.")
-    val runtimeHookModules by booleanOption(title = "Overlay integration > Enable runtime controls", default = false, key = "adsRuntimeHookModules", description = "Optional. Enable this and one or more controls below, then select Universal Overlay in the same patch operation. The controls appear in Universal Overlay; they are session-only and affect only methods and literal hosts instrumented by this patch. Without Universal Overlay, the runtime policy is not installed.")
-    val runtimeBlockAdsModule by booleanOption(title = "Overlay integration > Runtime controls > Block Ads", default = false, key = "adsRuntimeBlockAdsModule", description = "Add one Block Ads settings control to the overlay. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths. Requires Enable runtime controls.")
-    val runtimeRewardsModule by booleanOption(title = "Overlay integration > Runtime controls > Ads Free Rewards", default = false, key = "adsRuntimeRewardsModule", description = "Add one Ads Free Rewards settings control to Universal Overlay. Its three controls mirror the Ads Free Rewards patch settings initially and affect only safely instrumented reward paths; unsupported reward paths remain unchanged. Supported native MAX paths use request-scoped callbacks. Requires Enable runtime controls and Universal Overlay.")
-    val runtimeHostsModule by booleanOption(title = "Overlay integration > Runtime controls > Block Ads / Tracking Hosts", default = false, key = "adsRuntimeHostsModule", description = "Add one host-blocking checkbox to the overlay. Its initial state follows Enable Block Ads / Tracking Hosts and controls literal hosts instrumented by this patch; encrypted or dynamically generated requests remain unchanged. Requires Enable runtime controls.")
+    val runtimeBlockAdsModule by booleanOption(title = "Overlay integration > Runtime controls > Block Ads", default = false, key = "adsRuntimeBlockAdsModule", description = "Add one Block Ads settings control to the overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths.")
+    val runtimeRewardsModule by booleanOption(title = "Overlay integration > Runtime controls > Ads Free Rewards", default = false, key = "adsRuntimeRewardsModule", description = "Add one Ads Free Rewards settings control to Universal Overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its three controls mirror the Ads Free Rewards patch settings initially and affect only safely instrumented reward paths; unsupported reward paths remain unchanged. Supported native MAX paths use request-scoped callbacks.")
+    val runtimeHostsModule by booleanOption(title = "Overlay integration > Runtime controls > Block Ads / Tracking Hosts", default = false, key = "adsRuntimeHostsModule", description = "Add one host-blocking checkbox to the overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its initial state follows Enable Block Ads / Tracking Hosts and controls literal hosts instrumented by this patch; encrypted or dynamically generated requests remain unchanged.")
     val broadHeuristics by booleanOption(title = "Advanced > Heuristic matching > Enable broad audio-ad heuristics", default = false, key = "adsBroadAudioHeuristics", description = "Normal SDK coverage changes only exact, known ad-SDK methods. Enable this only when an audio or radio app still plays inserted ads after normal controls find nothing: it additionally looks for stream-like classes and ad-metadata methods such as adsIdentityToken, adsResponse, adsDuration, adsId, or cuepoints, then returns empty metadata so detected server-inserted audio ad breaks may be skipped. It does not block every audio ad, visual ad, network request, or unknown SDK. Because it matches names rather than an exact fingerprint, unrelated playback or stream code can match and break app features; disabled by default.")
 
     execute {
@@ -750,7 +750,7 @@ val controlAppAdsPatch = bytecodePatch(
             broadHeuristics = broadHeuristics == true,
         )
         val selection = AdsRuntimeSelection(
-            policyEnabled = runtimeHookModules == true,
+            policyEnabled = runtimeBlockAdsModule == true || runtimeRewardsModule == true || runtimeHostsModule == true,
             noAdsModuleSelected = runtimeBlockAdsModule == true,
             rewardsModuleSelected = runtimeRewardsModule == true,
             hostsModuleSelected = runtimeHostsModule == true,
@@ -762,9 +762,6 @@ val controlAppAdsPatch = bytecodePatch(
         val runtimeRewardsEnabled = patchPlan.rewards.mode == AdsPatchMode.RUNTIME
         runtimeHostsEnabled = patchPlan.hosts.mode == AdsPatchMode.RUNTIME
         adsFreeRewardsRuntimeGuardEnabled = runtimeRewardsEnabled
-        if (selection.policyEnabled && !runtimeHooksEnabled) {
-            detectionLogger.info("Control App Ads: runtime controls requested without an eligible module; using the resolved static plan.")
-        }
         if (settings.blockRewarded && patchPlan.rewards.mode == AdsPatchMode.DISABLED && settings.rewardsEnabled) {
             detectionLogger.info("Control App Ads: disabled Ads Free Rewards because static rewarded blocking is authoritative.")
         }
