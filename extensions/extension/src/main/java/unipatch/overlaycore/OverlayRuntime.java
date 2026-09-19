@@ -161,6 +161,10 @@ public final class OverlayRuntime {
             return;
         }
         configuration = OverlayConfig.decode(encodedConfig);
+        AdsRuntimePolicy.configureManager(application, configuration.managerPersistence);
+        if (configuration.managerIntegration) {
+            initializeUniManager(application, encodedConfig);
+        }
         applyPendingAppSpecificConfiguration();
         installedConfigurationPayload = encodedConfig;
         if (sessionStartElapsed == 0) sessionStartElapsed = SystemClock.elapsedRealtime();
@@ -170,6 +174,23 @@ public final class OverlayRuntime {
             application.registerActivityLifecycleCallbacks(lifecycleCallbacks);
             callbacksRegistered = true;
         }
+    }
+
+    private static void initializeUniManager(Application application, String encodedConfig) {
+        String capabilities = AdsRuntimePolicy.hasAnyModule()
+                ? "[\"overlay.config.v2\",\"block_ads.v1\",\"ads_free_rewards.v1\"]"
+                : "[\"overlay.config.v2\"]";
+        String patches = AdsRuntimePolicy.hasAnyModule()
+                ? "[{\"id\":\"universal-overlay\",\"version\":\"1\"},{\"id\":\"control-app-ads\",\"version\":\"1\"}]"
+                : "[{\"id\":\"universal-overlay\",\"version\":\"1\"}]";
+        String label = String.valueOf(application.getApplicationInfo().loadLabel(application.getPackageManager()))
+                .replace("\\", "\\\\").replace("\"", "\\\"");
+        String registration = "{\"package_name\":\"" + application.getPackageName() +
+                "\",\"app_label\":\"" + label +
+                "\",\"protocol_version\":1,\"source_version\":\"unipatches-dev\"" +
+                ",\"patches\":" + patches + ",\"capabilities\":" + capabilities +
+                ",\"configuration\":" + AdsRuntimePolicy.managerConfigurationJson() + "}";
+        UniManagerBridge.registerAndRead(application, registration, "{}", AdsRuntimePolicy::applyManagedConfiguration);
     }
 
     /** Compatibility fallback for APKs where Application.onCreate cannot be resolved. */

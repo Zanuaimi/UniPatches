@@ -1190,6 +1190,18 @@ val universalOverlayPatch = bytecodePatch(
             "Explicit target Activity, then universal fallback" to OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE,
         ),
     )
+    val enableUniManagerIntegration by booleanOption(
+        title = "Quick setup > Enable UniManager integration",
+        default = true,
+        key = "runtimeOverlayEnableUniManagerIntegration",
+        description = "Read optional startup configuration from the separate UniManager companion app. The embedded patch settings remain the fallback when UniManager is absent.",
+    )
+    val rememberUniManagerRuntimeChanges by booleanOption(
+        title = "Quick setup > UniManager > Remember runtime changes",
+        default = false,
+        key = "runtimeOverlayRememberUniManagerRuntimeChanges",
+        description = "Allow supported runtime controls to become the next-launch defaults when UniManager accepts the update.",
+    )
     val activityInstallBanlist by stringsOption(
         title = "Advanced > Activity injection > Install banlist",
         default = DEFAULT_ACTIVITY_INSTALL_BANLIST.lines(),
@@ -1579,6 +1591,8 @@ val universalOverlayPatch = bytecodePatch(
                 if (selectedUiPreset.showExtraPopupHeaders) "1" else "0",
                 selectedUiPreset.menuWidthLimit.toString(),
                 selectedUiPreset.menuHeightLimit.toString(),
+                if (enableUniManagerIntegration == true) "1" else "0",
+                if (rememberUniManagerRuntimeChanges == true) "1" else "0",
             ),
         )
 

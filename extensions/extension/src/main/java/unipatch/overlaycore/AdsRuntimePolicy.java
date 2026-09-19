@@ -1,10 +1,12 @@
 package unipatch.overlaycore;
 
+import android.content.Context;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
+import org.json.JSONObject;
 import java.util.regex.Pattern;
 import unipatch.overlaycore.modules.OverlaySessionState;
 
@@ -26,6 +28,8 @@ public final class AdsRuntimePolicy {
     private static final Set<String> hosts = new HashSet<>();
     private static final Map<String, Integer> instantRewardRequests = new HashMap<>();
     private static final Map<String, Integer> armedInstantRewards = new HashMap<>();
+    private static Context managerContext;
+    private static boolean managerPersistence;
 
     private AdsRuntimePolicy() { }
 
@@ -103,6 +107,26 @@ public final class AdsRuntimePolicy {
     public static synchronized boolean shouldGrantReward() { return hasModule(MODULE_REWARDS) && grantReward; }
     public static synchronized boolean shouldFakeRewardAvailability() { return hasModule(MODULE_REWARDS) && fakeAvailability; }
 
+    public static synchronized void configureManager(Context context, boolean persistChanges) {
+        managerContext = context == null ? null : context.getApplicationContext();
+        managerPersistence = persistChanges;
+    }
+
+    /** Applies only values explicitly supplied by UniManager; malformed or missing values are ignored. */
+    public static synchronized void applyManagedConfiguration(String encoded) {
+        if (encoded == null || encoded.isEmpty()) return;
+        try {
+            JSONObject values = new JSONObject(encoded);
+            if (values.has("block_ads")) blockedFormats = values.optBoolean("block_ads") ? blockedFormats : 0;
+            if (values.has("skip_rewarded")) skipRewarded = values.optBoolean("skip_rewarded");
+            if (values.has("instant_reward")) grantReward = values.optBoolean("instant_reward");
+            if (values.has("fake_ad_availability")) fakeAvailability = values.optBoolean("fake_ad_availability");
+            if (values.has("block_hosts")) hostsEnabled = values.optBoolean("block_hosts");
+        } catch (org.json.JSONException ignored) {
+            // Manager data is an optional override. The embedded patch-time values remain active.
+        }
+    }
+
     /** Starts a one-shot native or Unity request that received an immediate reward. */
     public static synchronized void beginInstantReward(String requestId) {
         if (!hasModule(MODULE_REWARDS) || !grantReward || requestId == null || requestId.isEmpty()) return;
@@ -157,13 +181,40 @@ public final class AdsRuntimePolicy {
         return true;
     }
 
-    public static synchronized void setBlockedFormats(int value) { blockedFormats = value; }
+    public static synchronized void setBlockedFormats(int value) { blockedFormats = value; persistIfEnabled(); }
     public static synchronized int blockedFormats() { return blockedFormats; }
     public static synchronized void setRewardPolicy(boolean skip, boolean grant, boolean fake) {
-        skipRewarded = skip; grantReward = grant; fakeAvailability = fake;
+        skipRewarded = skip; grantReward = grant; fakeAvailability = fake; persistIfEnabled();
     }
-    public static synchronized void setHostsEnabled(boolean enabled) { hostsEnabled = enabled; }
+    public static synchronized void setHostsEnabled(boolean enabled) { hostsEnabled = enabled; persistIfEnabled(); }
     public static synchronized boolean hostsEnabled() { return hostsEnabled; }
+
+    public static synchronized String managerConfigurationJson() {
+        try {
+            JSONObject values = new JSONObject();
+            values.put("block_ads", blockedFormats != 0);
+            values.put("skip_rewarded", skipRewarded);
+            values.put("instant_reward", grantReward);
+            values.put("fake_ad_availability", fakeAvailability);
+            values.put("block_hosts", hostsEnabled);
+            return values.toString();
+        } catch (org.json.JSONException ignored) {
+            return "{}";
+        }
+    }
+
+    private static void persistIfEnabled() {
+        if (!managerPersistence || managerContext == null) return;
+        try {
+            JSONObject values = new JSONObject();
+            values.put("block_ads", blockedFormats != 0);
+            values.put("skip_rewarded", skipRewarded);
+            values.put("instant_reward", grantReward);
+            values.put("fake_ad_availability", fakeAvailability);
+            values.put("block_hosts", hostsEnabled);
+            UniManagerBridge.update(managerContext, managerContext.getPackageName(), values.toString());
+        } catch (org.json.JSONException ignored) { }
+    }
 
     /** Returns the original URL or the loopback replacement according to the current policy. */
     public static synchronized String rewriteHost(String value) {

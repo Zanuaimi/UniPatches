@@ -17,6 +17,7 @@ import helpers.ads.*
 import helpers.bytecode.*
 import unipatches.overlay.OverlayAdsRuntimeIntegration
 import unipatches.overlay.attachQueuedAdsRuntimePolicy
+import helpers.startup.StartupHooks
 
 private val logger = Logger.getLogger("unipatches.ads.NoAdsPatch")
 private const val ADS_POLICY_CLASS = "Lunipatch/overlaycore/AdsRuntimePolicy;"
@@ -604,12 +605,19 @@ val controlAppAdsPatch = bytecodePatch(
     // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
     try { category("Control App Ads Enhanced") } catch (_: NoSuchMethodError) {}
     extendWith("extensions/extension.mpe")
+    dependsOn(StartupHooks.resolveRealApplicationPatch)
 
     val enableNoAds by booleanOption(
         title = "Enable No Ads",
         default = true,
         key = "enableNoAds",
         description = "Enable permanent or runtime-controlled blocking for the selected ad formats below.",
+    )
+    val enableUniManagerIntegration by booleanOption(
+        title = "Enable UniManager integration",
+        default = true,
+        key = "enableUniManagerIntegration",
+        description = "Allow UniManager to provide startup ad-control values when available. If it is absent, the patch-time settings remain active.",
     )
     val blockInterstitials by booleanOption(
         title = "Ad formats > Block interstitial ads",
@@ -749,11 +757,12 @@ val controlAppAdsPatch = bytecodePatch(
             customFilterHosts = customFilterHosts.orEmpty(),
             broadHeuristics = broadHeuristics == true,
         )
+        val managerIntegration = enableUniManagerIntegration == true
         val selection = AdsRuntimeSelection(
-            policyEnabled = runtimeBlockAdsModule == true || runtimeRewardsModule == true || runtimeHostsModule == true,
-            noAdsModuleSelected = runtimeBlockAdsModule == true,
-            rewardsModuleSelected = runtimeRewardsModule == true,
-            hostsModuleSelected = runtimeHostsModule == true,
+            policyEnabled = managerIntegration || runtimeBlockAdsModule == true || runtimeRewardsModule == true || runtimeHostsModule == true,
+            noAdsModuleSelected = managerIntegration || runtimeBlockAdsModule == true,
+            rewardsModuleSelected = managerIntegration || runtimeRewardsModule == true,
+            hostsModuleSelected = managerIntegration || runtimeHostsModule == true,
         )
         val patchPlan = AdsPatchPlanner.resolve(settings, selection, sdkCoverage)
         runtimeHooksEnabled = patchPlan.runtimePolicyEnabled
@@ -1031,6 +1040,7 @@ val controlAppAdsPatch = bytecodePatch(
             if (settings.peterLoweFilter) addAll(peterLoweHosts)
             addAll(parseFilterHosts(settings.customFilterHosts))
         }
+        var managerPolicy: String? = null
         if (runtimeHooksEnabled) {
             val moduleMask = patchPlan.runtimeModuleMask
             val policy = serializeAdsRuntimePolicy(
@@ -1045,12 +1055,40 @@ val controlAppAdsPatch = bytecodePatch(
                 hostsAllowedEnabled = settings.hostsEnabled,
             )
             OverlayAdsRuntimeIntegration.queue(policy)
+            managerPolicy = policy
             val earlierBridge = OverlayAdsRuntimeIntegration.takeUnconfiguredBridge(this)
             if (earlierBridge != null && attachQueuedAdsRuntimePolicy(earlierBridge, policy)) {
                 OverlayAdsRuntimeIntegration.markInjected("previously injected overlay bridge")
                 detectionLogger.info("Control App Ads: attached runtime policy to the previously injected overlay bridge.")
             } else {
                 detectionLogger.info("Control App Ads: queued runtime policy for Universal Overlay injection.")
+            }
+        }
+        if (managerIntegration && managerPolicy != null) {
+            val application = StartupHooks.resolvedApplicationDescriptor?.let(::mutableClassDefByOrNull)
+            val applicationMethod = application?.methods?.firstOrNull {
+                it.name == "onCreate" && it.returnType == "V" &&
+                    it.parameterTypes.map { parameter -> parameter.toString() } == listOf("Landroid/os/Bundle;")
+            }
+            val launcher = StartupHooks.resolvedLauncherActivityDescriptor?.let(::mutableClassDefByOrNull)
+            val launcherMethod = launcher?.methods?.firstOrNull {
+                it.name == "onCreate" && it.returnType == "V" &&
+                    it.parameterTypes.map { parameter -> parameter.toString() } == listOf("Landroid/os/Bundle;")
+            }
+            runCatching {
+                when {
+                    application != null && applicationMethod != null -> {
+                        injectUniManagerStartup(application, applicationMethod, managerPolicy)
+                        detectionLogger.info("Control App Ads: injected UniManager startup configuration into the Application.")
+                    }
+                    launcher != null && launcherMethod != null -> {
+                        injectUniManagerStartup(launcher, launcherMethod, managerPolicy)
+                        detectionLogger.info("Control App Ads: injected UniManager startup configuration into the launcher Activity.")
+                    }
+                    else -> detectionLogger.warning("Control App Ads: UniManager integration could not find a safe startup entry point; embedded defaults remain active.")
+                }
+            }.onFailure { error ->
+                detectionLogger.warning("Control App Ads: UniManager startup injection failed: ${error.message}")
             }
         }
         // In runtime mode, host rewriting is installed only for the selected Hosts module and

@@ -66,6 +66,7 @@ final class OverlayConfig {
             iconShapeColor1, iconShapeColor2, iconShapeGradientAngle, iconShapeStrokeWidth, iconShapeScale,
             iconOutlineColor2, iconOutlineGradientAngle, iconBackgroundColor3, iconBackgroundColor4;
     boolean bottomButtonPadding, titleSeparator, iconShapeGradient, iconHighlight, iconShadow, iconOutlineGradient;
+    boolean managerIntegration, managerPersistence;
 
     static OverlayConfig decode(String encoded) {
         OverlayConfig c = new OverlayConfig();
@@ -204,6 +205,8 @@ final class OverlayConfig {
         c.includeOverlayRuntimeLogs = "1".equals(field(v, offset, 91));
         c.enableOverlayRuntimeLogsOnLaunch = "1".equals(field(v, offset, 92));
         c.showExtraPopupHeaders = "1".equals(field(v, offset, 93));
+        c.managerIntegration = "1".equals(field(v, offset, 96));
+        c.managerPersistence = "1".equals(field(v, offset, 97));
         applyLegacyIconJson(c);
         c.appendDescriptionColor = color(field(v, offset, 60), c.menuTextColor3);
         c.showNoModulesWarning = !"0".equals(field(v, offset, 61));
