@@ -1,3 +1,9 @@
+## [1.30.0-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0...v1.30.0-dev.1) (2026-09-19)
+
+### ✨ New Features
+
+* add UniManager bridge integration ([33cf8a9](https://github.com/Zanuaimi/UniPatches/commit/33cf8a9e20ea022f65ff877ea1633f50b8279039))
+
 ## [1.29.0](https://github.com/Zanuaimi/UniPatches/compare/v1.28.0...v1.29.0) (2026-09-18)
 
 ### 🐛 Bug Fixes
