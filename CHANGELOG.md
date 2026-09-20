@@ -1,3 +1,9 @@
+## [1.30.0-dev.2](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.1...v1.30.0-dev.2) (2026-09-20)
+
+### ✨ New Features
+
+* remove ads free rewards ([458783b](https://github.com/Zanuaimi/UniPatches/commit/458783bd886f6108f8316027e747a331e388b1c1))
+
 ## [1.30.0-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0...v1.30.0-dev.1) (2026-09-19)
 
 ### ✨ New Features
