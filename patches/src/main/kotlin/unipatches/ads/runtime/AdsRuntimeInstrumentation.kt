@@ -18,8 +18,6 @@ internal fun booleanReturnInstructions(value: Boolean): String =
 internal fun hasSafeLocalRegister(registerCount: Int, parameterRegisters: Int): Boolean =
     registerCount - parameterRegisters >= 1
 
-internal fun shouldSkipMaxUnityWrapperForRuntime(runtimeRewards: Boolean): Boolean = runtimeRewards
-
 /** A runtime-owned path must never fall back to an unguarded permanent edit. */
 internal fun shouldSkipUnplannedRuntimePatch(
     runtimeNoAds: Boolean,
@@ -29,6 +27,5 @@ internal fun shouldSkipUnplannedRuntimePatch(
 /** MAX runtime instrumentation is disabled until every hook is request-scoped and register-safe. */
 internal fun shouldSkipMaxRuntimeCoverage(
     runtimeBlockAds: Boolean,
-    runtimeRewards: Boolean,
     maxCoverageEnabled: Boolean,
-): Boolean = maxCoverageEnabled && (runtimeBlockAds || runtimeRewards)
+): Boolean = maxCoverageEnabled && runtimeBlockAds

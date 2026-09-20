@@ -198,21 +198,20 @@ same patch run. If Universal did not inject a bridge, HCR fails instead of produ
 overlay patch.
 
 `Control App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` includes an optional overlay
-addon. Its three overlay addon modules are `Block Ads`, `Ads Free Rewards`, and `Block Ads / Tracking
+addon. Its two overlay addon modules are `Block Ads` and `Block Ads / Tracking
 hosts`. They expose session-local runtime controls through the shared overlay and start with values
-copied from the Ads patch settings. The Ads patch has separate `Enable No Ads`, `Enable Ads Free
-Rewards`, and `Enable Block Ads / Tracking Hosts` master switches. The first two masters control
-whether their matching runtime modules are exposed. The host module only requires runtime policy,
+copied from the Ads patch settings. The Ads patch has separate `Enable No Ads` and `Enable Block Ads
+/ Tracking Hosts` master switches. The No Ads master controls whether its matching runtime module
+is exposed. The host module only requires runtime policy,
 while its master controls its initial enabled state. Enable the addon and choose its modules in the Ads settings,
 then select Universal Overlay or an app-specific overlay patch. The complete user flow is:
 
 1. Select `Control App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` and `UniPatches Universal Overlay Patch`, or select the HCR
    companion together with Universal Overlay when building the HCR example. App-specific companions
    add modules to Universal; they do not install a second shared overlay bridge.
-2. Under `Overlay integration > Runtime controls`, enable `Block Ads`, `Ads Free Rewards`,
-   and/or `Block Ads / Tracking Hosts`. These module switches are disabled by default. `Block Ads`
-   requires `Enable No Ads`, and `Ads Free Rewards` requires `Enable Ads Free Rewards`; disabling
-   either master prevents its runtime module from being exposed. The host module requires only
+2. Under `Overlay integration > Runtime controls`, enable `Block Ads` and/or `Block Ads / Tracking Hosts`.
+   These module switches are disabled by default. `Block Ads` requires `Enable No Ads`; disabling
+   that master prevents its runtime module from being exposed. The host module requires only
    runtime policy and starts according to `Enable Block Ads / Tracking Hosts`. The runtime controls
    mirror the relevant Ads patch settings initially.
 3. Selecting at least one runtime control automatically enables the Ads runtime policy. Patch the
@@ -231,12 +230,9 @@ settings. The selected runtime module controls which instrumented paths are poli
 SDK initialization and unsupported paths retain their original behavior. Later changes are
 session-local and reset when the process restarts. If a selected control is incompatible with its
 master setting, that control is not exposed and unaffected paths retain their ordinary behavior.
-Only SDK methods,
-availability checks, and literal hosts successfully instrumented by Control App Ads can respond;
+Only SDK methods and literal hosts successfully instrumented by Control App Ads can respond;
 native, encrypted, dynamically generated, or unsupported paths remain unchanged. If no overlay patch
 is selected, Control App Ads still applies its normal static changes, but no runtime menu can be
-displayed. The Ads Free Rewards module can change matched availability and policy guards, but it
-cannot create a missing SDK-specific reward callback.
 
 The patch-time coordination is implemented by `OverlayAdsRuntimeIntegration.kt`. Control App Ads queues
 its serialized policy, and the selected overlay consumes it at the same bridge target. If the overlay

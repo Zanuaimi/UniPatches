@@ -529,7 +529,6 @@
 
 * **ads:** honor SDK coverage in reward hooks ([2c4244c](https://github.com/Zanuaimi/UniPatches/commit/2c4244c811206499223a1ea4f3896bf80e8a9a69))
 * **ads:** make runtime reward controls reversible ([acf5828](https://github.com/Zanuaimi/UniPatches/commit/acf58288cb3939cc1adc8320bf6f825b2a603550))
-* **ads:** separate instant rewards from ad skipping ([8f1ba43](https://github.com/Zanuaimi/UniPatches/commit/8f1ba434c90261d04ab78e625b7dd958cc81fffc))
 
 ### ✨ New Features
 

@@ -1146,10 +1146,10 @@ internal object AdMobLegacyRewardedVideoShowFingerprint : Fingerprint(
     parameters = emptyList(),
 )
 
-// -- Ad "available / ready" gates (Fake Ad Availability patch) --
+// -- Ad "available / ready" gates used by ordinary ad blocking --
 // These report whether an ad can currently be shown. Forcing them to
 // return true makes the game's UI treat ads as available, so it proceeds
-// to call show() and the existing Ads Free Rewards instant-reward hooks fire.
+// to call show() in SDK-specific ad flows.
 // All are matched opportunistically (methodOrNull); a wrong guess simply
 // does not apply on a given app.
 

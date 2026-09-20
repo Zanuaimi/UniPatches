@@ -32,7 +32,7 @@ public final class UniManagerBridge {
     public static void initialize(final Context context, final String fallbackPolicy) {
         AdsRuntimePolicy.configure(fallbackPolicy);
         String capabilities = AdsRuntimePolicy.hasAnyModule()
-                ? "[\"block_ads.v1\",\"ads_free_rewards.v1\"]" : "[]";
+                ? "[\"block_ads.v1\"]" : "[]";
         String label = String.valueOf(context.getApplicationInfo().loadLabel(context.getPackageManager()))
                 .replace("\\", "\\\\").replace("\"", "\\\"");
         String registration = "{\"package_name\":\"" + context.getPackageName() +

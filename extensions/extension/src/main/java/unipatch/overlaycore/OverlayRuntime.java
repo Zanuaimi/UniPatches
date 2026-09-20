@@ -178,7 +178,7 @@ public final class OverlayRuntime {
 
     private static void initializeUniManager(Application application, String encodedConfig) {
         String capabilities = AdsRuntimePolicy.hasAnyModule()
-                ? "[\"overlay.config.v2\",\"block_ads.v1\",\"ads_free_rewards.v1\"]"
+                ? "[\"overlay.config.v2\",\"block_ads.v1\"]"
                 : "[\"overlay.config.v2\"]";
         String patches = AdsRuntimePolicy.hasAnyModule()
                 ? "[{\"id\":\"universal-overlay\",\"version\":\"1\"},{\"id\":\"control-app-ads\",\"version\":\"1\"}]"

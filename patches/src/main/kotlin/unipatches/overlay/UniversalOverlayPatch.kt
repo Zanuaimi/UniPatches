@@ -557,8 +557,7 @@ val universalOverlayPatch = bytecodePatch(
         patch ad SDKs by itself. To use them, select Control App Ads Patch and Universal Overlay,
         enable the desired options under Control App Ads' Overlay integration > Runtime controls. The
         Ads runtime policy is enabled automatically when at least one of those modules is selected.
-        The available modules are Block
-        Ads, Ads Free Rewards, and Block Ads / Tracking Hosts. Their initial runtime values come from
+        The available modules are Block Ads and Block Ads / Tracking Hosts. Their initial runtime values come from
         the Control App Ads settings, and later changes are session-only. When both patches are selected,
         Control App Ads attaches its policy to this overlay's exact startup bridge, including an explicit
         Activity override, instead of selecting a separate Activity.

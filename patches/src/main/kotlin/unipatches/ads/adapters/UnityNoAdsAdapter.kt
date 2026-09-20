@@ -45,5 +45,5 @@ internal class UnityNoAdsAdapter(
     override fun applyRuntimeResolved(plan: NoAdsSdkPlan): PatchResult = applyResolved(plan)
 
     private fun runtimePolicyActiveForNoAds(plan: NoAdsSdkPlan): Boolean =
-        plan.mode == AdsPatchMode.RUNTIME || adsFreeRewardsRuntimeGuardEnabled
+        plan.mode == AdsPatchMode.RUNTIME
 }
