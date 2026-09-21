@@ -15,6 +15,9 @@ internal data class OverlayUiPreset(
     val buttonText: String,
     val iconBold: Boolean,
     val buttonTextColor: String,
+    val iconTextGradient: Boolean = false,
+    val iconTextColor2: String = buttonTextColor,
+    val iconTextGradientAngle: Int = 90,
     val gradientBackground: Boolean,
     val buttonBackground: String,
     val iconBackground2: String,
@@ -42,7 +45,7 @@ internal data class OverlayUiPreset(
     val bottomButtonStyle: String = "text",
     val bottomButtonShape: String = "square",
     val bottomButtonPadding: Boolean = false,
-    val bottomButtonTextColor: String = "#FFFFFF",
+    val bottomButtonTextColor: String = "#FF5656",
     val bottomButtonBackground1: String = "#500000",
     val bottomButtonBackground2: String = "#AA0000",
     val menuTextColor1: String = "#FF5656",
@@ -84,6 +87,11 @@ internal data class OverlayUiPreset(
     val iconParts: List<String> = emptyList(),
 )
 
+internal val UNI_PATCHES_ICON_PARTS = listOf(
+    "text|50|53.6|60|60|0|solid|#000000|#000000|2|45|0|U|true|default",
+    "text|50|50|60|60|0|gradient|#FF3C00|#FF9300|0|100|1|U|true|default",
+)
+
 internal data class OverlayPresetDefinition(
     val id: String,
     val displayName: String,
@@ -98,6 +106,9 @@ internal fun explicitOverlayPreset(
     outline: String,
     overlayTextColor: String,
     buttonTextColor: String,
+    iconTextGradient: Boolean = false,
+    iconTextColor2: String = buttonTextColor,
+    iconTextGradientAngle: Int = 90,
     gradientBackground: Boolean,
     buttonBackground: String,
     iconBackground2: String,
@@ -110,7 +121,7 @@ internal fun explicitOverlayPreset(
     bottomButtonStyle: String = "text",
     bottomButtonShape: String = "square",
     bottomButtonPadding: Boolean = false,
-    bottomButtonTextColor: String = "#FFFFFF",
+    bottomButtonTextColor: String = "#FF5656",
     bottomButtonBackground1: String = "#500000",
     bottomButtonBackground2: String = "#AA0000",
     menuTextColor1: String = overlayTextColor,
@@ -178,6 +189,9 @@ internal fun explicitOverlayPreset(
     buttonText = buttonText,
     iconBold = iconBold,
     buttonTextColor = buttonTextColor,
+    iconTextGradient = iconTextGradient,
+    iconTextColor2 = iconTextColor2,
+    iconTextGradientAngle = iconTextGradientAngle,
     gradientBackground = gradientBackground,
     buttonBackground = buttonBackground,
     iconBackground2 = iconBackground2,

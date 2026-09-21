@@ -19,6 +19,7 @@ Open `http://localhost:4173` in a browser. The tool does not send icon rows, ima
 - Position, dimensions, rotation, fill, colors, stroke, opacity, layer, text, bold text, and per-part font choices.
 - Eight font choices: Default (Android), Roboto, Sans serif, Serif, Monospace, Sans condensed, Sans medium, and Sans black.
 - Legacy text/shape mode with shape gradient, shape scale, stroke, background, outline, highlight, size, opacity, position, and button shape controls.
+- Legacy text/shape mode also supports an editable drop shadow with color, opacity, X/Y offset, blur, and spread controls. Android renders spread together with blur for a stable cross-version result.
 - Local image preview without uploading the image.
 - Built-in starting templates for common icon styles.
 - Import from a `.txt` row list, complete editor JSON, or dedicated legacy icon JSON.
