@@ -1,6 +1,7 @@
 package unipatch.overlaycore.modules;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 /** Process-local module values. They survive overlay/controller recreation across Activities only. */
@@ -35,6 +36,9 @@ public final class OverlaySessionState {
     /** Clears one module's values when a fresh runtime policy starts a new app session. */
     public static synchronized void clearModule(String module) {
         String prefix = module + "\u0000";
-        VALUES.keySet().removeIf(value -> value.startsWith(prefix));
+        Iterator<String> keys = VALUES.keySet().iterator();
+        while (keys.hasNext()) {
+            if (keys.next().startsWith(prefix)) keys.remove();
+        }
     }
 }
