@@ -92,11 +92,29 @@
         },
         {
           "key": "enableUniManagerIntegration",
-          "title": "Enable UniManager integration",
-          "description": "Allow UniManager to provide startup ad-control values when available. If it is absent, the patch-time settings remain active.",
+          "title": "Quick setup > UniManager > Enable UniManager integration",
+          "description": "Allow UniManager to provide startup ad-control values when available. If UniManager is not installed or cannot be reached, the patched app falls back to the traditional patching behavior and uses the settings selected here.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": true,
+          "values": null
+        },
+        {
+          "key": "adsRuntimeBlockAdsModule",
+          "title": "Quick setup > UniManager > Runtime controls > Block Ads",
+          "description": "Add one Block Ads settings control to the overlay and expose its state to UniManager. Runtime policy is enabled automatically when at least one Ads runtime control is selected. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "adsRuntimeHostsModule",
+          "title": "Quick setup > UniManager > Runtime controls > Block Ads / Tracking Hosts",
+          "description": "Add one host-blocking checkbox to the overlay and expose its state to UniManager. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its initial state follows Enable Block Ads / Tracking Hosts and controls literal hosts instrumented by this patch; encrypted or dynamically generated requests remain unchanged.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
           "values": null
         },
         {
@@ -385,24 +403,6 @@
           "required": false,
           "type": "kotlin.collections.List<kotlin.String>",
           "default": [],
-          "values": null
-        },
-        {
-          "key": "adsRuntimeBlockAdsModule",
-          "title": "Overlay integration > Runtime controls > Block Ads",
-          "description": "Add one Block Ads settings control to the overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
-          "values": null
-        },
-        {
-          "key": "adsRuntimeHostsModule",
-          "title": "Overlay integration > Runtime controls > Block Ads / Tracking Hosts",
-          "description": "Add one host-blocking checkbox to the overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its initial state follows Enable Block Ads / Tracking Hosts and controls literal hosts instrumented by this patch; encrypted or dynamically generated requests remain unchanged.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
           "values": null
         },
         {
@@ -1704,6 +1704,24 @@
           }
         },
         {
+          "key": "runtimeOverlayEnableUniManagerIntegration",
+          "title": "Quick setup > UniManager > Enable UniManager integration",
+          "description": "Read optional startup configuration from the separate UniManager companion app. If UniManager is not installed or cannot be reached, the patched app falls back to the traditional patching behavior and uses the settings selected here.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
+        },
+        {
+          "key": "runtimeOverlayRememberUniManagerRuntimeChanges",
+          "title": "Quick setup > UniManager > Remember runtime changes",
+          "description": "Allow supported runtime controls to become the next-launch defaults when UniManager accepts the update.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
           "key": "runtimeOverlayMenuWidthLimit",
           "title": "UI settings > Menu size > Width limit (%)",
           "description": "Maximum overlay menu and popup width in portrait as a percentage of the available window width. Landscape transposes this with the height limit. Values are clamped to 45% through 90%.",
@@ -2092,7 +2110,7 @@
           "description": "Text color of the three bottom action buttons.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#FFFFFF",
+          "default": "#FF5656",
           "values": null
         },
         {
@@ -2449,11 +2467,38 @@
         },
         {
           "key": "runtimeOverlayButtonTextColor",
-          "title": "UI settings > Floating button > Text color",
-          "description": "Text color for the default floating icon.",
+          "title": "UI settings > Floating button > IconTextColor1",
+          "description": "First text color for the default floating icon. When text gradient is disabled, this is the only text color used.",
           "required": false,
           "type": "kotlin.String",
-          "default": "#FFFFFF",
+          "default": "#FF3C00",
+          "values": null
+        },
+        {
+          "key": "runtimeOverlayIconTextGradient",
+          "title": "UI settings > Floating button > Enable Icon Text Gradient",
+          "description": "Blend IconTextColor1 and IconTextColor2 across the legacy text icon.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
+        },
+        {
+          "key": "runtimeOverlayIconTextColor2",
+          "title": "UI settings > Floating button > IconTextColor2",
+          "description": "Second text color used when Icon Text Gradient is enabled.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "#FF9300",
+          "values": null
+        },
+        {
+          "key": "runtimeOverlayIconTextGradientAngle",
+          "title": "UI settings > Floating button > Gradient Angle (degrees)",
+          "description": "Direction of the legacy text gradient. 0 degrees runs top to bottom and 90 degrees runs left to right.",
+          "required": false,
+          "type": "kotlin.Int",
+          "default": 90,
           "values": null
         },
         {
@@ -2507,10 +2552,10 @@
           "description": "Text is the simple default. Choose Multi-parts only when you want to build a drawn icon in the Multi-parts icon editor.",
           "required": false,
           "type": "kotlin.String",
-          "default": "text",
+          "default": "parts",
           "values": {
-            "Text icon (default)": "text",
-            "Multi-parts icon": "parts"
+            "Multi-parts icon (default)": "parts",
+            "Text icon": "text"
           }
         },
         {
@@ -2519,13 +2564,16 @@
           "description": "Use only when Icon part type is Multi-parts. Add one string per part.\n\nTemplate:\n<shape>|<x-position>|<y-position>|<x-scale>|<y-scale>|<rotation>|<fill>|<color-1>|<color-2>|<stroke>|<opacity>|<layer>|<text>|<bold>|<font>\n\nTag values:\nshape = triangle, roundedTriangle, v, circle, square, roundedRect, line, arc, diamond, star, heart, or text.\nPosition X/Y and Scale W/H = 0–100 percent. Different scales make rectangles or ellipses.\nrotation = -360 to 360 degrees; for example 0, 45, or 90.\nfill = solid or gradient. Colors use #RRGGBB. stroke = 0–32. opacity = 0–100. Higher layer draws on top.\ntext is optional except for a text part, and is trimmed to three characters. The optional bold field is true or false and applies only to text parts. The optional font field accepts default, roboto, sansSerif, serif, monospace, sansCondensed, sansMedium, or sansBlack.\n\nValid examples:\ntriangle|50|50|55|55|0|solid|#4E97F0|#4E97F0|0|100|0\nv|50|54|57|54|0|solid|#FFFFFF|#FFFFFF|16|100|0\ntriangle|50|39|28|22|0|gradient|#E651A0|#6564D3|0|100|1\ntext|50|50|60|50|0|solid|#FFFFFF|#FFFFFF|0|100|2|LP|true\n\nMaximum 12 parts.",
           "required": false,
           "type": "kotlin.collections.List<kotlin.String>",
-          "default": [],
+          "default": [
+            "text|50|53.6|60|60|0|solid|#000000|#000000|2|45|0|U|true|default",
+            "text|50|50|60|60|0|gradient|#FF3C00|#FF9300|0|100|1|U|true|default"
+          ],
           "values": null
         },
         {
           "key": "runtimeOverlayImportLegacyIconJson",
           "title": "UI settings > Floating button > Multi-parts icon editor > Import legacy icon JSON",
-          "description": "Optional legacy icon JSON exported by the local icon builder website in the UniPatches repository (tools/icon-builder). A valid file takes priority over legacy text/shape settings and the Multi-parts list, but remains below a valid custom icon image. It does not control overlay menu icon existence or placement.",
+          "description": "Optional legacy icon JSON exported by the local icon builder website in the UniPatches repository (tools/icon-builder). It includes editable gradient, stroke, highlight, and drop-shadow settings. A valid file takes priority over legacy text/shape settings and the Multi-parts list, but remains below a valid custom icon image. It does not control overlay menu icon existence or placement.",
           "required": false,
           "type": "kotlin.String",
           "default": "",
@@ -2756,24 +2804,6 @@
             "Universal automatic discovery (default)": "universal",
             "Explicit target Activity, then universal fallback": "explicitActivity"
           }
-        },
-        {
-          "key": "runtimeOverlayEnableUniManagerIntegration",
-          "title": "Quick setup > Enable UniManager integration",
-          "description": "Read optional startup configuration from the separate UniManager companion app. The embedded patch settings remain the fallback when UniManager is absent.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": true,
-          "values": null
-        },
-        {
-          "key": "runtimeOverlayRememberUniManagerRuntimeChanges",
-          "title": "Quick setup > UniManager > Remember runtime changes",
-          "description": "Allow supported runtime controls to become the next-launch defaults when UniManager accepts the update.",
-          "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
-          "values": null
         },
         {
           "key": "runtimeOverlayActivityInstallBanlist",

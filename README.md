@@ -1,6 +1,6 @@
 # UniPatches
 
-![UniPatches profile logo](images/profilelogo.png)
+![UniPatches logo](images/UniPatchesIcon3.png)
 
 Curated list of universal patches for [Morphe](https://morphe.software), including community-driven patches with enhancements and original patches, focusing on quality over quantity
 
