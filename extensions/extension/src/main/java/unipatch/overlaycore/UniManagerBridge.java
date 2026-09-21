@@ -11,6 +11,7 @@ import android.os.RemoteException;
 import android.os.SystemClock;
 
 import java.util.List;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -104,7 +105,7 @@ public final class UniManagerBridge {
     }
 
     private static String transact(IBinder binder, int code, String payload) throws RemoteException {
-        if (payload != null && payload.length() > MAX_PAYLOAD_LENGTH) return null;
+        if (payload != null && payload.getBytes(StandardCharsets.UTF_8).length > MAX_PAYLOAD_LENGTH) return null;
         Parcel data = Parcel.obtain();
         Parcel reply = Parcel.obtain();
         try {
@@ -112,7 +113,9 @@ public final class UniManagerBridge {
             data.writeString(payload == null ? "" : payload);
             binder.transact(code, data, reply, 0);
             reply.readException();
-            return reply.readString();
+            String response = reply.readString();
+            if (response != null && response.getBytes(StandardCharsets.UTF_8).length > MAX_PAYLOAD_LENGTH) return null;
+            return response;
         } finally { data.recycle(); reply.recycle(); }
     }
 }

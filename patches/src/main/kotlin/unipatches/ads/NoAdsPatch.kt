@@ -570,7 +570,7 @@ internal fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildc
 
 @Suppress("unused")
 val adsBlockPatch = bytecodePatch(
-    name = "Ads Block Patch ( Experimental, Enhanced, Has Overlay Addon )",
+    name = "Ads Block Patch ( Experimental, Enhanced, Overlay Support, UniManager Support )",
     description = """
         A merged ad-control patch based on Nai64's No Ads patch, plus literal-host blocking
         inspired by Entree and Adobo. Block common ad formats, choose the SDKs to target, and
@@ -700,12 +700,20 @@ val adsBlockPatch = bytecodePatch(
                 add(JsonObject().apply { addProperty("id", "control-app-ads"); addProperty("version", "1") })
             })
             add("capabilities", JsonArray().apply {
-                if (runtimeBlockAdsModule == true) add("block_ads.v1")
-                if (runtimeHostsModule == true) add("block_ads_hosts.v1")
+                // Integration itself installs the startup policy, even when optional overlay
+                // addon switches were left at their defaults.
+                add("block_ads.v1")
+                add("block_ads_hosts.v1")
             })
             add("configuration", JsonObject().apply {
                 addProperty("block_ads", enableNoAds == true)
                 addProperty("block_hosts", enableBlockHosts == true)
+                addProperty("block_interstitials", blockInterstitials == true)
+                addProperty("block_banners", blockBanners == true)
+                addProperty("block_app_open", blockAppOpen == true)
+                addProperty("block_mrec", blockMRec == true)
+                addProperty("block_rewarded", blockRewarded == true)
+                addProperty("block_native", blockNative == true)
             })
         }
         encodeUniManagerMetadata(registration.toString())

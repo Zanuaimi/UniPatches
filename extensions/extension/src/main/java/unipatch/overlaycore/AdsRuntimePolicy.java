@@ -88,7 +88,18 @@ public final class AdsRuntimePolicy {
         if (encoded == null || encoded.isEmpty()) return;
         try {
             JSONObject values = new JSONObject(encoded);
-            if (values.has("block_ads")) blockedFormats = values.optBoolean("block_ads") ? ALL_BLOCKED_FORMATS : 0;
+            boolean hasFormatValues = values.has("block_interstitials") || values.has("block_banners") ||
+                    values.has("block_app_open") || values.has("block_mrec") ||
+                    values.has("block_rewarded") || values.has("block_native");
+            if (values.has("block_ads") && !values.optBoolean("block_ads")) {
+                blockedFormats = 0;
+            } else if (hasFormatValues) {
+                blockedFormats = applyFormatValues(values, blockedFormats);
+            } else if (values.has("block_ads")) {
+                // Backward compatibility for registrations created before individual format
+                // settings were exposed to UniManager.
+                blockedFormats = values.optBoolean("block_ads") ? ALL_BLOCKED_FORMATS : 0;
+            }
             if (values.has("block_hosts")) hostsEnabled = values.optBoolean("block_hosts");
         } catch (org.json.JSONException ignored) {
             // Manager data is an optional override. The embedded patch-time values remain active.
@@ -105,6 +116,7 @@ public final class AdsRuntimePolicy {
             JSONObject values = new JSONObject();
             values.put("block_ads", blockedFormats != 0);
             values.put("block_hosts", hostsEnabled);
+            putFormatValues(values, blockedFormats);
             return values.toString();
         } catch (org.json.JSONException ignored) {
             return "{}";
@@ -117,8 +129,33 @@ public final class AdsRuntimePolicy {
             JSONObject values = new JSONObject();
             values.put("block_ads", blockedFormats != 0);
             values.put("block_hosts", hostsEnabled);
+            putFormatValues(values, blockedFormats);
             UniManagerBridge.update(managerContext, managerContext.getPackageName(), values.toString());
         } catch (org.json.JSONException ignored) { }
+    }
+
+    private static int applyFormatValues(JSONObject values, int current) {
+        int next = current;
+        next = setBit(next, values, "block_interstitials", 1);
+        next = setBit(next, values, "block_banners", 2);
+        next = setBit(next, values, "block_app_open", 4);
+        next = setBit(next, values, "block_mrec", 8);
+        next = setBit(next, values, "block_rewarded", 16);
+        return setBit(next, values, "block_native", 32);
+    }
+
+    private static int setBit(int current, JSONObject values, String key, int bit) {
+        if (!values.has(key)) return current;
+        return values.optBoolean(key) ? current | bit : current & ~bit;
+    }
+
+    private static void putFormatValues(JSONObject values, int formats) throws org.json.JSONException {
+        values.put("block_interstitials", (formats & 1) != 0);
+        values.put("block_banners", (formats & 2) != 0);
+        values.put("block_app_open", (formats & 4) != 0);
+        values.put("block_mrec", (formats & 8) != 0);
+        values.put("block_rewarded", (formats & 16) != 0);
+        values.put("block_native", (formats & 32) != 0);
     }
 
     /** Returns the original URL or the loopback replacement according to the current policy. */

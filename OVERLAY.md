@@ -197,7 +197,7 @@ it adds its selected app-specific profile and modules to the Universal bridge re
 same patch run. If Universal did not inject a bridge, HCR fails instead of producing a partial
 overlay patch.
 
-`Ads Block Patch ( Experimental, Enhanced, Has Overlay Addon )` includes an optional overlay
+`Ads Block Patch ( Experimental, Enhanced, Overlay Support, UniManager Support )` includes optional overlay
 addon. Its two overlay addon modules are `Block Ads` and `Block Ads / Tracking
 hosts`. They expose session-local runtime controls through the shared overlay and start with values
 copied from the Ads patch settings. The Ads patch has separate `Enable No Ads` and `Enable Block Ads
@@ -206,7 +206,7 @@ is exposed. The host module only requires runtime policy,
 while its master controls its initial enabled state. Enable the addon and choose its modules in the Ads settings,
 then select Universal Overlay or an app-specific overlay patch. The complete user flow is:
 
-1. Select `Ads Block Patch ( Experimental, Enhanced, Has Overlay Addon )` and `UniPatches Universal Overlay Patch`, or select the HCR
+1. Select `Ads Block Patch ( Experimental, Enhanced, Overlay Support, UniManager Support )` and `Universal Overlay Patch v2.6.1 ( Experimental, UniManager Support )`, or select the HCR
    companion together with Universal Overlay when building the HCR example. App-specific companions
    add modules to Universal; they do not install a second shared overlay bridge.
 2. Under `Overlay integration > Runtime controls`, enable `Block Ads` and/or `Block Ads / Tracking Hosts`.

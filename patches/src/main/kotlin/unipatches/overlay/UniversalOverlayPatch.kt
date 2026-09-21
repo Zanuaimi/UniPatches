@@ -541,7 +541,7 @@ private fun validate(
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v2.6.1 (Experimental)",
+    name = "Universal Overlay Patch v2.6.1 ( Experimental, UniManager Support )",
     description = """
         A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual
         preset, select the overlay modules you want, optionally supply an icon image, then patch. Modules
@@ -1244,7 +1244,10 @@ val universalOverlayPatch = bytecodePatch(
         description = "Use the configured text icon for this patched APK and ignore image and Multi-parts icon inputs.",
     )
     dependsOn(universalOverlayManifestPatch(
-        enabledProvider = { includeDoNotDisturb == true },
+        // UniManager metadata must be written even when the DND module is disabled.
+        // Otherwise the overlay works but UniManager cannot discover a default patch.
+        enabledProvider = { includeDoNotDisturb == true || enableUniManagerIntegration == true },
+        permissionProvider = { includeDoNotDisturb == true },
         metadataProvider = {
             if (enableUniManagerIntegration != true) return@universalOverlayManifestPatch null
             val registration = JsonObject().apply {

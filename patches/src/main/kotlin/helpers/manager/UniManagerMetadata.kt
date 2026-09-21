@@ -41,7 +41,10 @@ private fun mergeMetadata(existing: String, incoming: String): String {
         val patches = current.getAsJsonArray("patches") ?: JsonArray().also { current.add("patches", it) }
         next.getAsJsonArray("patches")?.forEach { candidate ->
             val id = candidate.asJsonObject.get("id")?.asString
-            if (id != null && patches.none { it.asJsonObject.get("id")?.asString == id }) patches.add(candidate)
+            if (id != null) {
+                val existingIndex = patches.indexOfFirst { it.asJsonObject.get("id")?.asString == id }
+                if (existingIndex >= 0) patches.set(existingIndex, candidate) else patches.add(candidate)
+            }
         }
         val capabilities = current.getAsJsonArray("capabilities") ?: JsonArray().also { current.add("capabilities", it) }
         next.getAsJsonArray("capabilities")?.forEach { candidate ->
