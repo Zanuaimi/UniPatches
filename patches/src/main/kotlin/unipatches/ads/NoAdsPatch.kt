@@ -964,6 +964,9 @@ val adsBlockPatch = bytecodePatch(
             val matchingMethods = classDef.methods.filter { method ->
                 val name = method.name.lowercase()
                 method.implementation != null &&
+                    (method.implementation?.registerCount ?: 0) - method.numberOfParameterRegisters >= 1 &&
+                    (method.returnType == "Ljava/lang/String;" ||
+                        method.returnType.contains("List") || method.returnType.contains("Collection")) &&
                     (name.contains("adsidentitytoken") || name.contains("adsresponse") ||
                         name.contains("adsduration") || name.contains("cuepoints") || name.contains("adsid"))
             }
@@ -981,10 +984,6 @@ val adsBlockPatch = bytecodePatch(
                     val isAdToken = n.contains("adsidentitytoken") || n.contains("adsresponse") || n.contains("adsduration") || n.contains("cuepoints") || n.contains("adsid")
                     if (!isAdToken) continue
                     try {
-                        if ((method.implementation?.registerCount ?: 0) - method.numberOfParameterRegisters < 1) {
-                            detectionLogger.info("Ads Block Patch: skipped heuristic match ${classDef.type}->$n because it has no safe local register.")
-                            continue
-                        }
                         if (method.returnType == "Ljava/lang/String;" && method.implementation != null) {
                             method.addInstructions(0, "const-string v0, \"\"\nreturn-object v0")
                             totalPatched++
@@ -1032,12 +1031,12 @@ val adsBlockPatch = bytecodePatch(
             }
         }
         if (managerIntegration && managerPolicy != null) {
-            val application = StartupHooks.resolvedApplicationDescriptor?.let(::mutableClassDefByOrNull)
+            val application = StartupHooks.resolvedApplicationDescriptor?.let(::classDefByOrNull)
             val applicationMethod = application?.methods?.firstOrNull {
                 it.name == "onCreate" && it.returnType == "V" &&
-                    it.parameterTypes.map { parameter -> parameter.toString() } == listOf("Landroid/os/Bundle;")
+                    it.parameterTypes.isEmpty()
             }
-            val launcher = StartupHooks.resolvedLauncherActivityDescriptor?.let(::mutableClassDefByOrNull)
+            val launcher = StartupHooks.resolvedLauncherActivityDescriptor?.let(::classDefByOrNull)
             val launcherMethod = launcher?.methods?.firstOrNull {
                 it.name == "onCreate" && it.returnType == "V" &&
                     it.parameterTypes.map { parameter -> parameter.toString() } == listOf("Landroid/os/Bundle;")
@@ -1045,12 +1044,32 @@ val adsBlockPatch = bytecodePatch(
             runCatching {
                 when {
                     application != null && applicationMethod != null -> {
-                        injectUniManagerStartup(application, applicationMethod, managerPolicy)
-                        detectionLogger.info("Ads Block Patch: injected UniManager startup configuration into the Application.")
+                        val mutableApplication = mutableClassDefByOrNull(application.type)
+                        val mutableMethod = mutableApplication?.methods?.firstOrNull {
+                            it.name == applicationMethod.name &&
+                                it.returnType == applicationMethod.returnType &&
+                                it.parameterTypes == applicationMethod.parameterTypes
+                        }
+                        if (mutableApplication != null && mutableMethod != null) {
+                            injectUniManagerStartup(mutableApplication, mutableMethod, managerPolicy)
+                            detectionLogger.info("Ads Block Patch: injected UniManager startup configuration into the Application.")
+                        } else {
+                            detectionLogger.warning("Ads Block Patch: UniManager integration could not resolve a mutable Application startup method; embedded defaults remain active.")
+                        }
                     }
                     launcher != null && launcherMethod != null -> {
-                        injectUniManagerStartup(launcher, launcherMethod, managerPolicy)
-                        detectionLogger.info("Ads Block Patch: injected UniManager startup configuration into the launcher Activity.")
+                        val mutableLauncher = mutableClassDefByOrNull(launcher.type)
+                        val mutableMethod = mutableLauncher?.methods?.firstOrNull {
+                            it.name == launcherMethod.name &&
+                                it.returnType == launcherMethod.returnType &&
+                                it.parameterTypes == launcherMethod.parameterTypes
+                        }
+                        if (mutableLauncher != null && mutableMethod != null) {
+                            injectUniManagerStartup(mutableLauncher, mutableMethod, managerPolicy)
+                            detectionLogger.info("Ads Block Patch: injected UniManager startup configuration into the launcher Activity.")
+                        } else {
+                            detectionLogger.warning("Ads Block Patch: UniManager integration could not resolve a mutable launcher startup method; embedded defaults remain active.")
+                        }
                     }
                     else -> detectionLogger.warning("Ads Block Patch: UniManager integration could not find a safe startup entry point; embedded defaults remain active.")
                 }

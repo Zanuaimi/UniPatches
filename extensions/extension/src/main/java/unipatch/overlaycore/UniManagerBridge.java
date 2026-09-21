@@ -22,6 +22,9 @@ public final class UniManagerBridge {
     private static final String MANAGER_SERVICE = "com.zanuaimi.unimanager.bridge.BridgeService";
     private static final int TRANSACTION_READ = 2;
     private static final int TRANSACTION_UPDATE = 3;
+    // Keep requests below Android Binder's practical transaction limit. Overlay images are
+    // embedded in the APK and are intentionally not sent through this bridge.
+    private static final int MAX_PAYLOAD_LENGTH = 512 * 1024;
     // Keep bridge operations ordered so rapid runtime changes cannot persist out of order.
     private static final Executor EXECUTOR = Executors.newSingleThreadExecutor();
 
@@ -101,6 +104,7 @@ public final class UniManagerBridge {
     }
 
     private static String transact(IBinder binder, int code, String payload) throws RemoteException {
+        if (payload != null && payload.length() > MAX_PAYLOAD_LENGTH) return null;
         Parcel data = Parcel.obtain();
         Parcel reply = Parcel.obtain();
         try {

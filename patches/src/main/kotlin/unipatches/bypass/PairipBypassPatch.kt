@@ -1287,6 +1287,7 @@ val pairipBypassPatch = bytecodePatch(
                     PairipCallerKey(method.name, method.returnType, method.parameterTypes.map { it.toString() })
                 }
                 if (callers.isEmpty()) return@classDefForEach
+                if (callers.none { it.returnType == "V" }) return@classDefForEach
 
                 val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
                 callers.forEach { caller ->

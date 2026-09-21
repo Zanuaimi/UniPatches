@@ -10,12 +10,14 @@ import app.morphe.patcher.patch.stringOption
 import app.morphe.patcher.patch.stringsOption
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
-import helpers.bytecode.*
-import helpers.startup.StartupHooks
+import com.android.tools.smali.dexlib2.iface.ClassDef
+import com.android.tools.smali.dexlib2.iface.Method
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import helpers.bytecode.*
+import helpers.startup.StartupHooks
 import unipatches.overlay.presets.OverlayPresetCatalog
 import unipatches.overlay.presets.OverlayUiPreset
 import unipatches.overlay.presets.UNI_PATCHES_ICON_PARTS
@@ -539,7 +541,7 @@ private fun validate(
 
 @Suppress("unused")
 val universalOverlayPatch = bytecodePatch(
-    name = "UniPatches Universal Overlay Patch v2.6.0 (Experimental)",
+    name = "UniPatches Universal Overlay Patch v2.6.1 (Experimental)",
     description = """
         A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual
         preset, select the overlay modules you want, optionally supply an icon image, then patch. Modules
@@ -1674,7 +1676,7 @@ val universalOverlayPatch = bytecodePatch(
         // for APKs whose Application class or onCreate method cannot be resolved safely.
         val explicitActivityFirst = activityInjectionMode.orEmpty() == OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE
         val appDescriptor = StartupHooks.resolvedApplicationDescriptor
-        val appClass = appDescriptor?.let { mutableClassDefByOrNull(it) }
+        val appClass = appDescriptor?.let { classDefByOrNull(it) }
         val appMethod = appClass?.let { findInheritedApplicationOnCreate(it) }
         var bridgeInstalled = false
         var bridgeAttempted = false
@@ -1701,10 +1703,19 @@ val universalOverlayPatch = bytecodePatch(
         // lifecycle callbacks before Unity's Activity and before BillingClient purchase calls.
         // Explicit Activity mode remains available for APKs whose Application is incompatible.
         val applicationTarget = if (!explicitActivityFirst && appMethod != null) {
-            val targetClass = checkNotNull(appClass)
+            val targetClass = mutableClassDefByOrNull(appClass.type)
             val (inheritedOwner, inheritedOnCreate) = appMethod
-            if (inheritedOwner.type == targetClass.type) {
-                targetClass to inheritedOnCreate
+            if (targetClass == null) null
+            else if (inheritedOwner.type == targetClass.type) {
+                val mutableOnCreate = targetClass.methods.firstOrNull {
+                    it.name == inheritedOnCreate.name &&
+                        it.returnType == inheritedOnCreate.returnType &&
+                        it.parameterTypes == inheritedOnCreate.parameterTypes
+                }
+                if (mutableOnCreate == null) {
+                    logger.warning("Could not resolve mutable Application.onCreate in ${targetClass.type}")
+                    null
+                } else targetClass to mutableOnCreate
             } else try {
                 val direct = createApplicationOnCreateOverride(targetClass)
                 logger.info("Created direct Application.onCreate override in ${targetClass.type}; inherited implementation remains untouched in ${inheritedOwner.type}")
@@ -1742,7 +1753,14 @@ val universalOverlayPatch = bytecodePatch(
             null
         } else {
             selectedUiPreset.activityOverride.trim().takeIf { it.isNotEmpty() }?.let(::descriptor)
-                ?.let { target -> mutableClassDefByOrNull(target) }
+                ?.let { target ->
+                    classDefByOrNull(target)?.takeIf { candidate ->
+                        candidate.methods.any { method ->
+                            method.name == "onCreate" && method.returnType == "V" &&
+                                method.parameterTypes == listOf("Landroid/os/Bundle;") && method.implementation != null
+                        }
+                    }?.let { mutableClassDefByOrNull(it.type) }
+                }
                 ?: resolvedLauncher?.owner
                 ?: findOverlayFallbackActivity()
         }
@@ -1803,10 +1821,10 @@ val universalOverlayPatch = bytecodePatch(
  * class can leave the actual game screen without an overlay.
  */
 private fun app.morphe.patcher.patch.BytecodePatchContext.findInheritedApplicationOnCreate(
-    start: MutableClass,
-): Pair<MutableClass, MutableMethod>? {
+    start: ClassDef,
+): Pair<ClassDef, Method>? {
     val seen = mutableSetOf<String>()
-    var current: MutableClass? = start
+    var current: ClassDef? = start
     while (current != null && seen.add(current.type)) {
         val method = current.methods.firstOrNull {
             it.name == "onCreate" && it.returnType == "V" && it.parameterTypes.isEmpty()
@@ -1815,7 +1833,7 @@ private fun app.morphe.patcher.patch.BytecodePatchContext.findInheritedApplicati
 
         val superclass = current.superclass ?: return null
         if (superclass == "Landroid/app/Application;" || superclass == "Ljava/lang/Object;") return null
-        current = mutableClassDefByOrNull(superclass)
+        current = classDefByOrNull(superclass)
     }
     return null
 }
