@@ -1,3 +1,9 @@
+## [1.30.0-dev.5](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.4...v1.30.0-dev.5) (2026-09-21)
+
+### 🔧 Improvements
+
+* All patches has been optimized to do use immutable class for uncertain mods, and use mutable for certain mods, as it was suggested by LisoUseInAIKyrios. This change improves memory usage. ([39f2e22](https://github.com/Zanuaimi/UniPatches/commit/39f2e227de693a41cae41711b3a0b98c5e267559))
+
 ## [1.30.0-dev.4](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.3...v1.30.0-dev.4) (2026-09-21)
 
 ### ✨ New Features
