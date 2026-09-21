@@ -1,3 +1,9 @@
+## [1.30.0-dev.6](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.5...v1.30.0-dev.6) (2026-09-21)
+
+### 🔧 Improvements
+
+* Improve support for UniManager and fix problem of DND module being a dependency. ([199b678](https://github.com/Zanuaimi/UniPatches/commit/199b678a8c30be120273ac62bd24a32b257f4e0a))
+
 ## [1.30.0-dev.5](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.4...v1.30.0-dev.5) (2026-09-21)
 
 ### 🔧 Improvements
