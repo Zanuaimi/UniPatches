@@ -1,3 +1,14 @@
+## [1.30.0-dev.3](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.2...v1.30.0-dev.3) (2026-09-21)
+
+### 🐛 Bug Fixes
+
+* **extension:** support API 23 session cleanup ([71ee032](https://github.com/Zanuaimi/UniPatches/commit/71ee032974163249b14ffd100c05b35617c1a267))
+
+### ✨ New Features
+
+* **integration:** add UniManager patch bridge ([d0c711f](https://github.com/Zanuaimi/UniPatches/commit/d0c711f8d690fd39d38f71d6a295696e26d566e7))
+* **overlay:** expand multi-part icon editing ([f723211](https://github.com/Zanuaimi/UniPatches/commit/f723211b8acff070cd7f19c34f39874ad7d9a631))
+
 ## [1.30.0-dev.2](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.1...v1.30.0-dev.2) (2026-09-20)
 
 ### ✨ New Features
