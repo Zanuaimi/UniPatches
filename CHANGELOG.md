@@ -1,3 +1,9 @@
+## [1.30.0-dev.4](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.3...v1.30.0-dev.4) (2026-09-21)
+
+### ✨ New Features
+
+* **ads:** rename from Control App Ads Patch to Ads Block Patch ([53140d7](https://github.com/Zanuaimi/UniPatches/commit/53140d7921c59dd6e9d3d71fb72fc7f265e3bafd))
+
 ## [1.30.0-dev.3](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.2...v1.30.0-dev.3) (2026-09-21)
 
 ### 🐛 Bug Fixes
