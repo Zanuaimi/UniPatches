@@ -4,7 +4,7 @@
   <img src="images/UniPatchesIcon3.png" alt="UniPatches logo" width="160">
 </p>
 
-<p align="center"><strong>Curated list of universal patches for <a href="https://morphe.software">Morphe</a>, including community-driven patches with enhancements and original patches, focusing on quality over quantity.</strong></p>
+<p align="center"><strong>UniPatches is a curated collection of universal <a href="https://morphe.software">Morphe</a> patches, combining community-contributed patches, maintained adaptations, enhancements, and original patches.</strong></p>
 
 ## About
 
