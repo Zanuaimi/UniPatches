@@ -12,6 +12,7 @@ import unipatch.overlaycore.modules.OverlaySessionState;
 public final class AdsRuntimePolicy {
     public static final int MODULE_BLOCK_ADS = 1;
     public static final int MODULE_HOSTS = 2;
+    private static final int ALL_BLOCKED_FORMATS = 63;
 
     private static boolean integrated;
     private static int modules;
@@ -87,7 +88,7 @@ public final class AdsRuntimePolicy {
         if (encoded == null || encoded.isEmpty()) return;
         try {
             JSONObject values = new JSONObject(encoded);
-            if (values.has("block_ads")) blockedFormats = values.optBoolean("block_ads") ? blockedFormats : 0;
+            if (values.has("block_ads")) blockedFormats = values.optBoolean("block_ads") ? ALL_BLOCKED_FORMATS : 0;
             if (values.has("block_hosts")) hostsEnabled = values.optBoolean("block_hosts");
         } catch (org.json.JSONException ignored) {
             // Manager data is an optional override. The embedded patch-time values remain active.

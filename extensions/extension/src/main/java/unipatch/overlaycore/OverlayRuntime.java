@@ -177,20 +177,10 @@ public final class OverlayRuntime {
     }
 
     private static void initializeUniManager(Application application, String encodedConfig) {
-        String capabilities = AdsRuntimePolicy.hasAnyModule()
-                ? "[\"overlay.config.v2\",\"block_ads.v1\"]"
-                : "[\"overlay.config.v2\"]";
-        String patches = AdsRuntimePolicy.hasAnyModule()
-                ? "[{\"id\":\"universal-overlay\",\"version\":\"1\"},{\"id\":\"control-app-ads\",\"version\":\"1\"}]"
-                : "[{\"id\":\"universal-overlay\",\"version\":\"1\"}]";
-        String label = String.valueOf(application.getApplicationInfo().loadLabel(application.getPackageManager()))
-                .replace("\\", "\\\\").replace("\"", "\\\"");
-        String registration = "{\"package_name\":\"" + application.getPackageName() +
-                "\",\"app_label\":\"" + label +
-                "\",\"protocol_version\":1,\"source_version\":\"unipatches-dev\"" +
-                ",\"patches\":" + patches + ",\"capabilities\":" + capabilities +
-                ",\"configuration\":" + AdsRuntimePolicy.managerConfigurationJson() + "}";
-        UniManagerBridge.registerAndRead(application, registration, "{}", AdsRuntimePolicy::applyManagedConfiguration);
+        UniManagerBridge.read(application, "{}", values -> {
+            AdsRuntimePolicy.applyManagedConfiguration(values);
+            OverlayConfig.applyManagedConfiguration(configuration, values);
+        });
     }
 
     /** Compatibility fallback for APKs where Application.onCreate cannot be resolved. */
@@ -651,6 +641,14 @@ public final class OverlayRuntime {
                     button.setText(config.buttonText);
                     button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, config.iconTextSize);
                     button.setTypeface(OverlayViews.typeface(config.iconTextFont, config.iconBold ? Typeface.BOLD : Typeface.NORMAL));
+                    applyIconTextColor(button);
+                    if (config.iconShadow) {
+                        button.setShadowLayer(dp(config.iconShadowBlur + config.iconShadowSpread),
+                                dp(config.iconShadowOffsetX), dp(config.iconShadowOffsetY),
+                                withAlpha(config.iconShadowColor, config.iconShadowOpacity / 100f));
+                    } else {
+                        button.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT);
+                    }
                     button.setBackground(OverlayViews.gradientBackground(
                             config.buttonBackground,
                             config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
@@ -686,10 +684,28 @@ public final class OverlayRuntime {
                     config.iconShapeScale / 100f,
                     config.iconHighlight,
                     config.iconShadow,
+                    config.iconShadowColor,
+                    config.iconShadowOpacity,
+                    dp(config.iconShadowOffsetX),
+                    dp(config.iconShadowOffsetY),
+                    dp(config.iconShadowBlur),
+                    dp(config.iconShadowSpread),
                     config.iconBackgroundStyle,
                     config.iconBackgroundColor3,
                     config.iconBackgroundColor4,
                     config.iconParts);
+        }
+
+        private void applyIconTextColor(TextView view) {
+            view.setTextColor(config.buttonTextColor);
+            if (config.iconTextGradient) {
+                float size = dp(Math.max(32, config.buttonSize));
+                view.getPaint().setShader(OverlayViews.textGradient(
+                        config.buttonTextColor, config.iconTextColor2, config.iconTextGradientAngle, size, size));
+            } else {
+                view.getPaint().setShader(null);
+            }
+            view.invalidate();
         }
 
         private String buttonShape() {
@@ -1081,6 +1097,7 @@ public final class OverlayRuntime {
             icon.setText(config.buttonText);
             icon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, Math.max(10, config.iconTextSize - 4));
             icon.setTypeface(OverlayViews.typeface(config.iconTextFont, config.iconBold ? Typeface.BOLD : Typeface.NORMAL));
+            applyIconTextColor(icon);
             Bitmap customIcon = "image".equals(config.iconType) ? decodeCustomIcon(config.customIconImage) : null;
             if (customIcon != null) {
                 icon.setText("");

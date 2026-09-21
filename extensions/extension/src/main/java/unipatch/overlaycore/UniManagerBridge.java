@@ -19,34 +19,27 @@ public final class UniManagerBridge {
     public static final int PROTOCOL_VERSION = 1;
     public static final String ACTION_BRIDGE = "com.zanuaimi.unimanager.BRIDGE";
     private static final String MANAGER_PACKAGE = "com.zanuaimi.unimanager";
-    private static final int TRANSACTION_REGISTER = 1;
+    private static final String MANAGER_SERVICE = "com.zanuaimi.unimanager.bridge.BridgeService";
     private static final int TRANSACTION_READ = 2;
     private static final int TRANSACTION_UPDATE = 3;
-    private static final Executor EXECUTOR = Executors.newCachedThreadPool();
+    // Keep bridge operations ordered so rapid runtime changes cannot persist out of order.
+    private static final Executor EXECUTOR = Executors.newSingleThreadExecutor();
 
     private UniManagerBridge() { }
 
     public interface Callback { void onConfiguration(String json); }
 
-    /** Initializes the local fallback first, then asynchronously applies manager overrides. */
+    /** Initializes the local fallback first, then asynchronously reads manager overrides. */
     public static void initialize(final Context context, final String fallbackPolicy) {
         AdsRuntimePolicy.configure(fallbackPolicy);
-        String capabilities = AdsRuntimePolicy.hasAnyModule()
-                ? "[\"block_ads.v1\"]" : "[]";
-        String label = String.valueOf(context.getApplicationInfo().loadLabel(context.getPackageManager()))
-                .replace("\\", "\\\\").replace("\"", "\\\"");
-        String registration = "{\"package_name\":\"" + context.getPackageName() +
-                "\",\"app_label\":\"" + label + "\",\"protocol_version\":1,\"source_version\":\"unipatches-dev\"" +
-                ",\"patches\":[{\"id\":\"control-app-ads\",\"version\":\"1\"}]" +
-                ",\"capabilities\":" + capabilities +
-                ",\"configuration\":" + AdsRuntimePolicy.managerConfigurationJson() + "}";
-        registerAndRead(context, registration, "{}", AdsRuntimePolicy::applyManagedConfiguration);
+        read(context, "{}", AdsRuntimePolicy::applyManagedConfiguration);
     }
 
-    public static void registerAndRead(final Context context, final String registration,
-                                       final String fallback, final Callback callback) {
+    /** Reads the existing manager record without rewriting patch-time registration data. */
+    public static void read(final Context context, final String fallback, final Callback callback) {
         if (context == null || callback == null) return;
-        request(context, TRANSACTION_REGISTER, registration, fallback, callback);
+        String payload = "{\"package_name\":\"" + context.getPackageName() + "\"}";
+        request(context, TRANSACTION_READ, payload, fallback, callback);
     }
 
     private static void request(final Context context, final int transaction,
@@ -57,14 +50,18 @@ public final class UniManagerBridge {
             try {
                 Intent query = new Intent(ACTION_BRIDGE).setPackage(MANAGER_PACKAGE);
                 List<ResolveInfo> services = context.getPackageManager().queryIntentServices(query, 0);
-                if (services == null || services.isEmpty()) { callback.onConfiguration(fallback); return; }
-                ResolveInfo info = services.get(0);
-                if (info.serviceInfo == null || !MANAGER_PACKAGE.equals(info.serviceInfo.packageName) ||
-                        !"com.zanuaimi.unimanager.permission.BRIDGE".equals(info.serviceInfo.permission)) {
-                    callback.onConfiguration(fallback); return;
+                ComponentName component = null;
+                if (services != null && !services.isEmpty()) {
+                    ResolveInfo info = services.get(0);
+                    if (info.serviceInfo != null && MANAGER_PACKAGE.equals(info.serviceInfo.packageName) &&
+                            "com.zanuaimi.unimanager.permission.BRIDGE".equals(info.serviceInfo.permission)) {
+                        component = new ComponentName(info.serviceInfo.packageName, info.serviceInfo.name);
+                    }
                 }
-                Intent explicit = new Intent(query).setComponent(new ComponentName(
-                        info.serviceInfo.packageName, info.serviceInfo.name));
+                // Explicit binding is also attempted as a package-visibility-safe fallback. This keeps
+                // bridge reads working for APKs patched before the manager package was declared in queries.
+                if (component == null) component = new ComponentName(MANAGER_PACKAGE, MANAGER_SERVICE);
+                Intent explicit = new Intent(query).setComponent(component);
                 final Object lock = new Object();
                 final IBinder[] result = new IBinder[1];
                 ServiceConnection connection = new ServiceConnection() {

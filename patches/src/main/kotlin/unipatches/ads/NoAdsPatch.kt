@@ -18,6 +18,11 @@ import helpers.bytecode.*
 import unipatches.overlay.OverlayAdsRuntimeIntegration
 import unipatches.overlay.attachQueuedAdsRuntimePolicy
 import helpers.startup.StartupHooks
+import helpers.manager.addUniManagerMetadata
+import helpers.manager.encodeUniManagerMetadata
+import helpers.manager.uniManagerMetadataPatch
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
 
 private val logger = Logger.getLogger("unipatches.ads.NoAdsPatch")
 private const val ADS_POLICY_CLASS = "Lunipatch/overlaycore/AdsRuntimePolicy;"
@@ -613,11 +618,13 @@ val controlAppAdsPatch = bytecodePatch(
         description = "Enable permanent or runtime-controlled blocking for the selected ad formats below.",
     )
     val enableUniManagerIntegration by booleanOption(
-        title = "Enable UniManager integration",
+        title = "Quick setup > UniManager > Enable UniManager integration",
         default = true,
         key = "enableUniManagerIntegration",
-        description = "Allow UniManager to provide startup ad-control values when available. If it is absent, the patch-time settings remain active.",
+        description = "Allow UniManager to provide startup ad-control values when available. If UniManager is not installed or cannot be reached, the patched app falls back to the traditional patching behavior and uses the settings selected here.",
     )
+    val runtimeBlockAdsModule by booleanOption(title = "Quick setup > UniManager > Runtime controls > Block Ads", default = false, key = "adsRuntimeBlockAdsModule", description = "Add one Block Ads settings control to the overlay and expose its state to UniManager. Runtime policy is enabled automatically when at least one Ads runtime control is selected. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths.")
+    val runtimeHostsModule by booleanOption(title = "Quick setup > UniManager > Runtime controls > Block Ads / Tracking Hosts", default = false, key = "adsRuntimeHostsModule", description = "Add one host-blocking checkbox to the overlay and expose its state to UniManager. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its initial state follows Enable Block Ads / Tracking Hosts and controls literal hosts instrumented by this patch; encrypted or dynamically generated requests remain unchanged.")
     val blockInterstitials by booleanOption(
         title = "Ad formats > Block interstitial ads",
         default = true,
@@ -680,9 +687,28 @@ val controlAppAdsPatch = bytecodePatch(
     val peterLoweFilter by booleanOption(title = "Host filters > Peter Lowe's ad and tracking list", default = true, key = "adsFilterPeterLowe", description = "Enable a small embedded subset of Peter Lowe's ad and tracking list. Disable it if a site or account flow behaves unexpectedly.")
     val wildcardHosts by booleanOption(title = "Host filters > Match subdomains", default = true, key = "adsFilterWildcardHosts", description = "When enabled, an entry such as example.com also redirects ads.example.com and other subdomains. Disable for exact-host matching only.")
     val customFilterHosts by stringsOption(title = "Host filters > Custom host entries", default = emptyList(), key = "adsCustomFilterHosts", description = "Optional domains, URLs, or hosts-file lines to redirect. Add one per row, for example ads.example.com or 0.0.0.0 tracker.example.com. Entries match subdomains while Match subdomains is enabled.")
-    val runtimeBlockAdsModule by booleanOption(title = "Overlay integration > Runtime controls > Block Ads", default = false, key = "adsRuntimeBlockAdsModule", description = "Add one Block Ads settings control to the overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths.")
-    val runtimeHostsModule by booleanOption(title = "Overlay integration > Runtime controls > Block Ads / Tracking Hosts", default = false, key = "adsRuntimeHostsModule", description = "Add one host-blocking checkbox to the overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its initial state follows Enable Block Ads / Tracking Hosts and controls literal hosts instrumented by this patch; encrypted or dynamically generated requests remain unchanged.")
     val broadHeuristics by booleanOption(title = "Advanced > Heuristic matching > Enable broad audio-ad heuristics", default = false, key = "adsBroadAudioHeuristics", description = "Normal SDK coverage changes only exact, known ad-SDK methods. Enable this only when an audio or radio app still plays inserted ads after normal controls find nothing: it additionally looks for stream-like classes and ad-metadata methods such as adsIdentityToken, adsResponse, adsDuration, adsId, or cuepoints, then returns empty metadata so detected server-inserted audio ad breaks may be skipped. It does not block every audio ad, visual ad, network request, or unknown SDK. Because it matches names rather than an exact fingerprint, unrelated playback or stream code can match and break app features; disabled by default.")
+
+    dependsOn(uniManagerMetadataPatch {
+        if (enableUniManagerIntegration != true) return@uniManagerMetadataPatch null
+        val registration = JsonObject().apply {
+            addProperty("format", "unipatches-unimanager-registration-v1")
+            addProperty("protocol_version", 1)
+            addProperty("source_version", "unipatches-dev")
+            add("patches", JsonArray().apply {
+                add(JsonObject().apply { addProperty("id", "control-app-ads"); addProperty("version", "1") })
+            })
+            add("capabilities", JsonArray().apply {
+                if (runtimeBlockAdsModule == true) add("block_ads.v1")
+                if (runtimeHostsModule == true) add("block_ads_hosts.v1")
+            })
+            add("configuration", JsonObject().apply {
+                addProperty("block_ads", enableNoAds == true)
+                addProperty("block_hosts", enableBlockHosts == true)
+            })
+        }
+        encodeUniManagerMetadata(registration.toString())
+    })
 
     execute {
         val detectionLogger = Logger.getLogger(this::class.java.name)

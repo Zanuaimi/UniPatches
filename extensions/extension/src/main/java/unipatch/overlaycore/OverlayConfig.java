@@ -34,7 +34,8 @@ final class OverlayConfig {
     String appSpecificProfile, injectionMode, appSpecificModules;
     String activityInstallBanlist;
     int background, outline, overlayTextColor, buttonTextColor, buttonBackground, buttonSize, gravity;
-    int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle, iconOutlineWidth, iconTextSize;
+    int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle, iconOutlineWidth, iconTextSize,
+            iconTextColor2, iconTextGradientAngle;
     int menuWidthLimitPercent, menuHeightLimitPercent;
     int backgroundTransparency;
     float opacity;
@@ -64,16 +65,18 @@ final class OverlayConfig {
             menuTextColor1, menuTextColor2, menuTextColor3, menuTextColor4, menuTextColor5, menuTextColor6,
             outlineAnimationSpeed, animationDuration, appendDescriptionColor, separatorBackgroundColor,
             iconShapeColor1, iconShapeColor2, iconShapeGradientAngle, iconShapeStrokeWidth, iconShapeScale,
-            iconOutlineColor2, iconOutlineGradientAngle, iconBackgroundColor3, iconBackgroundColor4;
+            iconOutlineColor2, iconOutlineGradientAngle, iconBackgroundColor3, iconBackgroundColor4,
+            iconShadowColor, iconShadowOpacity, iconShadowOffsetX, iconShadowOffsetY,
+            iconShadowBlur, iconShadowSpread;
     boolean bottomButtonPadding, titleSeparator, iconShapeGradient, iconHighlight, iconShadow, iconOutlineGradient;
-    boolean managerIntegration, managerPersistence;
+    boolean managerIntegration, managerPersistence, iconTextGradient;
 
     static OverlayConfig decode(String encoded) {
         OverlayConfig c = new OverlayConfig();
         String[] values = encoded == null ? new String[0] : encoded.split("\\|", -1);
         // Version 1 through 16 prepends a version field. Keep accepting the original 14-field format so an
         // older generated patch remains safe when paired with this newer extension.
-        String[] v = new String[100];
+        String[] v = new String[110];
         for (int i = 0; i < v.length; i++) v[i] = i < values.length ? decodePart(values[i]) : "";
         int offset = ("1".equals(v[0]) || "2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0])) ? 1 : 0;
         c.title = limit(field(v, offset, 0), 80, "UniPatches Universal Overlay Patch");
@@ -160,7 +163,7 @@ final class OverlayConfig {
         c.bottomButtonStyle = choice(field(v, offset, 37), "text", "text", "solid", "gradient");
         c.bottomButtonShape = choice(field(v, offset, 38), "square", "square", "squircle");
         c.bottomButtonPadding = "1".equals(field(v, offset, 39));
-        c.bottomButtonTextColor = color(field(v, offset, 40), 0xFFFFFFFF);
+        c.bottomButtonTextColor = color(field(v, offset, 40), 0xFFFF5656);
         c.bottomButtonBackground1 = color(field(v, offset, 41), 0xFF500000);
         c.bottomButtonBackground2 = color(field(v, offset, 42), 0xFFAA0000);
         c.menuTextColor1 = color(field(v, offset, 43), c.overlayTextColor);
@@ -188,6 +191,12 @@ final class OverlayConfig {
         c.iconBackgroundStyle = choice(field(v, offset, 79), "flat", "flat", "faceted");
         c.iconBackgroundColor3 = color(field(v, offset, 80), c.iconBackground2);
         c.iconBackgroundColor4 = color(field(v, offset, 81), c.background);
+        c.iconShadowColor = 0xFF000000;
+        c.iconShadowOpacity = 60;
+        c.iconShadowOffsetX = 0;
+        c.iconShadowOffsetY = 3;
+        c.iconShadowBlur = 4;
+        c.iconShadowSpread = 0;
         c.iconParts = field(v, offset, 84).isEmpty()
                 ? new String[0]
                 : field(v, offset, 84).split("[\\r\\n]+", 13);
@@ -207,6 +216,9 @@ final class OverlayConfig {
         c.showExtraPopupHeaders = "1".equals(field(v, offset, 93));
         c.managerIntegration = "1".equals(field(v, offset, 96));
         c.managerPersistence = "1".equals(field(v, offset, 97));
+        c.iconTextGradient = "1".equals(field(v, offset, 98));
+        c.iconTextColor2 = color(field(v, offset, 99), c.buttonTextColor);
+        c.iconTextGradientAngle = integer(field(v, offset, 100), 90, 0, 360);
         applyLegacyIconJson(c);
         c.appendDescriptionColor = color(field(v, offset, 60), c.menuTextColor3);
         c.showNoModulesWarning = !"0".equals(field(v, offset, 61));
@@ -271,6 +283,13 @@ final class OverlayConfig {
             c.iconShapeGradientAngle = jsonInt(settings, "legacyShapeAngle", c.iconShapeGradientAngle, 0, 360);
             c.iconShapeStrokeWidth = jsonInt(settings, "legacyShapeStroke", c.iconShapeStrokeWidth, 1, 12);
             c.iconShapeScale = jsonInt(settings, "legacyShapeScale", c.iconShapeScale, 20, 100);
+            c.iconShadow = settings.optBoolean("shadowEnabled", c.iconShadow);
+            c.iconShadowColor = parseJsonColor(settings, "shadowColor", c.iconShadowColor);
+            c.iconShadowOpacity = jsonInt(settings, "shadowOpacity", c.iconShadowOpacity, 0, 100);
+            c.iconShadowOffsetX = jsonInt(settings, "shadowOffsetX", c.iconShadowOffsetX, -32, 32);
+            c.iconShadowOffsetY = jsonInt(settings, "shadowOffsetY", c.iconShadowOffsetY, -32, 32);
+            c.iconShadowBlur = jsonInt(settings, "shadowBlur", c.iconShadowBlur, 0, 32);
+            c.iconShadowSpread = jsonInt(settings, "shadowSpread", c.iconShadowSpread, 0, 16);
 
             JSONArray parts = settings.optJSONArray("iconParts");
             String iconMode = settings.optString("iconMode", "");
@@ -287,6 +306,42 @@ final class OverlayConfig {
             }
         } catch (Exception ignored) {
             // Invalid optional JSON must leave the normal payload settings active.
+        }
+    }
+
+    /** Applies manager-owned startup overrides while retaining patch-time values as fallbacks. */
+    static void applyManagedConfiguration(OverlayConfig c, String encoded) {
+        if (c == null || encoded == null || encoded.trim().isEmpty()) return;
+        try {
+            JSONObject values = new JSONObject(encoded);
+            c.buttonTextColor = parseJsonColor(values, "runtimeOverlayButtonTextColor", c.buttonTextColor);
+            c.iconTextGradient = values.optBoolean("runtimeOverlayIconTextGradient", c.iconTextGradient);
+            c.iconTextColor2 = parseJsonColor(values, "runtimeOverlayIconTextColor2", c.iconTextColor2);
+            c.iconTextGradientAngle = jsonInt(values, "runtimeOverlayIconTextGradientAngle", c.iconTextGradientAngle, 0, 360);
+            c.iconStyle = choice(values.optString("runtimeOverlayIconStyle", c.iconStyle), c.iconStyle, "text", "parts");
+            c.iconHighlight = values.optBoolean("runtimeOverlayIconHighlight", c.iconHighlight);
+            c.gradientBackground = values.optBoolean("runtimeOverlayIconGradientBackground", c.gradientBackground);
+            c.iconBackground2 = parseJsonColor(values, "runtimeOverlayIconBackgroundColor2", c.iconBackground2);
+            c.iconGradientAngle = jsonInt(values, "runtimeOverlayIconGradientAngle", c.iconGradientAngle, 0, 360);
+            c.iconShadow = values.optBoolean("runtimeOverlayIconShadow", c.iconShadow);
+            c.iconShadowColor = parseJsonColor(values, "runtimeOverlayIconShadowColor", c.iconShadowColor);
+            c.iconShadowOpacity = jsonInt(values, "runtimeOverlayIconShadowOpacity", c.iconShadowOpacity, 0, 100);
+            c.iconShadowOffsetX = jsonInt(values, "runtimeOverlayIconShadowOffsetX", c.iconShadowOffsetX, -32, 32);
+            c.iconShadowOffsetY = jsonInt(values, "runtimeOverlayIconShadowOffsetY", c.iconShadowOffsetY, -32, 32);
+            c.iconShadowBlur = jsonInt(values, "runtimeOverlayIconShadowBlur", c.iconShadowBlur, 0, 32);
+            c.iconShadowSpread = jsonInt(values, "runtimeOverlayIconShadowSpread", c.iconShadowSpread, 0, 16);
+            JSONArray parts = values.optJSONArray("runtimeOverlayIconParts");
+            if (parts != null) {
+                List<String> validParts = new ArrayList<>();
+                for (int i = 0; i < parts.length() && validParts.size() < 12; i++) {
+                    String part = parts.optString(i, "");
+                    if (validIconPart(part)) validParts.add(part);
+                }
+                c.iconParts = validParts.toArray(new String[0]);
+                c.iconStyle = validParts.isEmpty() ? "text" : "parts";
+            }
+        } catch (Exception ignored) {
+            // Manager settings are optional overrides. Invalid values keep patch-time defaults.
         }
     }
 

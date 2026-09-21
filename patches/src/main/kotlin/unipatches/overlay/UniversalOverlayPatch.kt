@@ -13,10 +13,14 @@ import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import helpers.bytecode.*
 import helpers.startup.StartupHooks
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import unipatches.overlay.presets.OverlayPresetCatalog
 import unipatches.overlay.presets.OverlayUiPreset
+import unipatches.overlay.presets.UNI_PATCHES_ICON_PARTS
+import helpers.manager.addUniManagerMetadata
+import helpers.manager.encodeUniManagerMetadata
 import java.io.File
 import java.io.ByteArrayOutputStream
 import java.util.Base64
@@ -95,7 +99,10 @@ private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
         addProperty("iconBold", iconBold)
         addProperty("iconTextFont", iconTextFont)
         addProperty("menuTextFont", menuTextFont)
-        addProperty("iconTextColor", buttonTextColor)
+        addProperty("iconTextColor1", buttonTextColor)
+        addProperty("iconTextGradient", iconTextGradient)
+        addProperty("iconTextColor2", iconTextColor2)
+        addProperty("iconTextGradientAngle", iconTextGradientAngle)
         addProperty("gradientBackground", gradientBackground)
         addProperty("iconBackground1", buttonBackground)
         addProperty("iconBackground2", iconBackground2)
@@ -248,7 +255,10 @@ private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Lo
             iconBold = flag("iconBold", fallback.iconBold),
             iconTextFont = choice("iconTextFont", fallback.iconTextFont, FONT_CHOICES.values.toSet()),
             menuTextFont = choice("menuTextFont", fallback.menuTextFont, FONT_CHOICES.values.toSet()),
-            buttonTextColor = rgbColor("iconTextColor", fallback.buttonTextColor),
+            buttonTextColor = rgbColor("iconTextColor1", rgbColor("iconTextColor", fallback.buttonTextColor)),
+            iconTextGradient = flag("iconTextGradient", fallback.iconTextGradient),
+            iconTextColor2 = rgbColor("iconTextColor2", fallback.iconTextColor2),
+            iconTextGradientAngle = number("iconTextGradientAngle", fallback.iconTextGradientAngle, 0..360),
             gradientBackground = flag("gradientBackground", fallback.gradientBackground),
             buttonBackground = rgbColor("iconBackground1", fallback.buttonBackground),
             iconBackground2 = rgbColor("iconBackground2", fallback.iconBackground2),
@@ -582,6 +592,18 @@ val universalOverlayPatch = bytecodePatch(
             OverlayPresetCatalog.definitions.forEach { put(it.displayName, it.id) }
         },
     )
+    val enableUniManagerIntegration by booleanOption(
+        title = "Quick setup > UniManager > Enable UniManager integration",
+        default = true,
+        key = "runtimeOverlayEnableUniManagerIntegration",
+        description = "Read optional startup configuration from the separate UniManager companion app. If UniManager is not installed or cannot be reached, the patched app falls back to the traditional patching behavior and uses the settings selected here.",
+    )
+    val rememberUniManagerRuntimeChanges by booleanOption(
+        title = "Quick setup > UniManager > Remember runtime changes",
+        default = false,
+        key = "runtimeOverlayRememberUniManagerRuntimeChanges",
+        description = "Allow supported runtime controls to become the next-launch defaults when UniManager accepts the update.",
+    )
     val menuWidthLimit by intOption(
         title = "UI settings > Menu size > Width limit (%)",
         default = 90,
@@ -827,7 +849,7 @@ val universalOverlayPatch = bytecodePatch(
     )
     val bottomButtonTextColor by stringOption(
         title = "UI settings > Bottom buttons > Text color",
-        default = "#FFFFFF",
+        default = "#FF5656",
         key = "runtimeOverlayBottomButtonTextColor",
         description = "Text color of the three bottom action buttons.",
     )
@@ -973,10 +995,28 @@ val universalOverlayPatch = bytecodePatch(
         description = "Make the default floating-icon text bold.",
     )
     val buttonTextColor by stringOption(
-        title = "UI settings > Floating button > Text color",
-        default = "#FFFFFF",
+        title = "UI settings > Floating button > IconTextColor1",
+        default = "#FF3C00",
         key = "runtimeOverlayButtonTextColor",
-        description = "Text color for the default floating icon.",
+        description = "First text color for the default floating icon. When text gradient is disabled, this is the only text color used.",
+    )
+    val iconTextGradient by booleanOption(
+        title = "UI settings > Floating button > Enable Icon Text Gradient",
+        default = true,
+        key = "runtimeOverlayIconTextGradient",
+        description = "Blend IconTextColor1 and IconTextColor2 across the legacy text icon.",
+    )
+    val iconTextColor2 by stringOption(
+        title = "UI settings > Floating button > IconTextColor2",
+        default = "#FF9300",
+        key = "runtimeOverlayIconTextColor2",
+        description = "Second text color used when Icon Text Gradient is enabled.",
+    )
+    val iconTextGradientAngle by intOption(
+        title = "UI settings > Floating button > Gradient Angle (degrees)",
+        default = 90,
+        key = "runtimeOverlayIconTextGradientAngle",
+        description = "Direction of the legacy text gradient. 0 degrees runs top to bottom and 90 degrees runs left to right.",
     )
     val iconTextSize by intOption(
         title = "UI settings > Floating button > Text size (sp)",
@@ -1000,14 +1040,14 @@ val universalOverlayPatch = bytecodePatch(
     )
     val iconStyle by stringOption(
         title = "UI settings > Floating button > Icon type",
-        default = "text",
+        default = "parts",
         key = "runtimeOverlayIconStyle",
         description = "Text is the simple default. Choose Multi-parts only when you want to build a drawn icon in the Multi-parts icon editor.",
-        values = linkedMapOf("Text icon (default)" to "text", "Multi-parts icon" to "parts"),
+        values = linkedMapOf("Multi-parts icon (default)" to "parts", "Text icon" to "text"),
     )
     val iconParts by stringsOption(
         title = "UI settings > Floating button > Multi-parts icon editor > Part list",
-        default = emptyList(),
+        default = UNI_PATCHES_ICON_PARTS,
         key = "runtimeOverlayIconParts",
         description = """
             Use only when Icon part type is Multi-parts. Add one string per part.
@@ -1036,7 +1076,7 @@ val universalOverlayPatch = bytecodePatch(
         default = "",
         key = "runtimeOverlayImportLegacyIconJson",
         allowedExtensions = listOf("json"),
-        description = "Optional legacy icon JSON exported by the local icon builder website in the UniPatches repository (tools/icon-builder). A valid file takes priority over legacy text/shape settings and the Multi-parts list, but remains below a valid custom icon image. It does not control overlay menu icon existence or placement.",
+        description = "Optional legacy icon JSON exported by the local icon builder website in the UniPatches repository (tools/icon-builder). It includes editable gradient, stroke, highlight, and drop-shadow settings. A valid file takes priority over legacy text/shape settings and the Multi-parts list, but remains below a valid custom icon image. It does not control overlay menu icon existence or placement.",
     )
     val iconHighlight by booleanOption(
         title = "UI settings > Floating button > Multi-parts icon editor > Add highlight",
@@ -1189,18 +1229,6 @@ val universalOverlayPatch = bytecodePatch(
             "Explicit target Activity, then universal fallback" to OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE,
         ),
     )
-    val enableUniManagerIntegration by booleanOption(
-        title = "Quick setup > Enable UniManager integration",
-        default = true,
-        key = "runtimeOverlayEnableUniManagerIntegration",
-        description = "Read optional startup configuration from the separate UniManager companion app. The embedded patch settings remain the fallback when UniManager is absent.",
-    )
-    val rememberUniManagerRuntimeChanges by booleanOption(
-        title = "Quick setup > UniManager > Remember runtime changes",
-        default = false,
-        key = "runtimeOverlayRememberUniManagerRuntimeChanges",
-        description = "Allow supported runtime controls to become the next-launch defaults when UniManager accepts the update.",
-    )
     val activityInstallBanlist by stringsOption(
         title = "Advanced > Activity injection > Install banlist",
         default = DEFAULT_ACTIVITY_INSTALL_BANLIST.lines(),
@@ -1213,7 +1241,43 @@ val universalOverlayPatch = bytecodePatch(
         key = "runtimeOverlayResetIconToText",
         description = "Use the configured text icon for this patched APK and ignore image and Multi-parts icon inputs.",
     )
-    dependsOn(universalOverlayManifestPatch { includeDoNotDisturb == true })
+    dependsOn(universalOverlayManifestPatch(
+        enabledProvider = { includeDoNotDisturb == true },
+        metadataProvider = {
+            if (enableUniManagerIntegration != true) return@universalOverlayManifestPatch null
+            val registration = JsonObject().apply {
+                addProperty("format", "unipatches-unimanager-registration-v1")
+                addProperty("protocol_version", 1)
+                addProperty("source_version", "unipatches-dev")
+                add("patches", JsonArray().apply {
+                    add(JsonObject().apply { addProperty("id", "universal-overlay"); addProperty("version", "1") })
+                })
+                add("capabilities", JsonArray().apply { add("overlay.config.v2") })
+                add("configuration", JsonObject().apply {
+                    addProperty("runtimeOverlayButtonTextColor", buttonTextColor.orEmpty().ifBlank { "#FF3C00" })
+                    addProperty("runtimeOverlayIconTextGradient", iconTextGradient == true)
+                    addProperty("runtimeOverlayIconTextColor2", iconTextColor2.orEmpty().ifBlank { "#FF9300" })
+                    addProperty("runtimeOverlayIconTextGradientAngle", iconTextGradientAngle ?: 90)
+                    addProperty("runtimeOverlayIconStyle", iconStyle.orEmpty().ifBlank { "parts" })
+                    addProperty("runtimeOverlayIconHighlight", iconHighlight == true)
+                    addProperty("runtimeOverlayIconGradientBackground", gradientBackground != false)
+                    addProperty("runtimeOverlayIconBackgroundColor2", iconBackground2.orEmpty().ifBlank { "#AA0000" })
+                    addProperty("runtimeOverlayIconGradientAngle", iconGradientAngle ?: 0)
+                    addProperty("runtimeOverlayIconShadow", false)
+                    addProperty("runtimeOverlayIconShadowColor", "#000000")
+                    addProperty("runtimeOverlayIconShadowOpacity", 45)
+                    addProperty("runtimeOverlayIconShadowOffsetX", 0)
+                    addProperty("runtimeOverlayIconShadowOffsetY", 2)
+                    addProperty("runtimeOverlayIconShadowBlur", 0)
+                    addProperty("runtimeOverlayIconShadowSpread", 0)
+                    add("runtimeOverlayIconParts", JsonArray().apply {
+                        iconParts.orEmpty().take(12).forEach { add(it) }
+                    })
+                })
+            }
+            encodeUniManagerMetadata(registration.toString())
+        },
+    ))
     execute {
         val logger = Logger.getLogger(this::class.java.name)
         val rawAnimationDuration = animationDuration ?: 180
@@ -1240,7 +1304,10 @@ val universalOverlayPatch = bytecodePatch(
             outlineWidth = (outlineWidth ?: 2).coerceIn(1, 8),
             buttonText = buttonText.orEmpty().trim().take(3).ifBlank { "U" },
             iconBold = iconBold != false,
-            buttonTextColor = buttonTextColor.orEmpty().ifBlank { "#FFFFFF" },
+            buttonTextColor = buttonTextColor.orEmpty().ifBlank { "#FF3C00" },
+            iconTextGradient = iconTextGradient == true,
+            iconTextColor2 = iconTextColor2.orEmpty().ifBlank { "#FF9300" },
+            iconTextGradientAngle = ((iconTextGradientAngle ?: 90) % 361 + 361) % 361,
             gradientBackground = gradientBackground != false,
             buttonBackground = buttonBackgroundColor.orEmpty().ifBlank { "#500000" },
             iconBackground2 = iconBackground2.orEmpty().ifBlank { "#AA0000" },
@@ -1343,6 +1410,9 @@ val universalOverlayPatch = bytecodePatch(
         val backgroundValue = selectedUiPreset.background
         val outlineValue = selectedUiPreset.outline
         val buttonTextColorValue = selectedUiPreset.buttonTextColor
+        val iconTextGradientValue = selectedUiPreset.iconTextGradient
+        val iconTextColor2Value = selectedUiPreset.iconTextColor2
+        val iconTextGradientAngleValue = selectedUiPreset.iconTextGradientAngle
         val buttonBackgroundValue = selectedUiPreset.buttonBackground
         val outlineWidthValue = selectedUiPreset.outlineWidth
         val iconOutlineColorValue = selectedUiPreset.iconOutlineColor
@@ -1440,6 +1510,8 @@ val universalOverlayPatch = bytecodePatch(
         )
         check(iconStyleValue in setOf("text", "parts"))
         check(iconTextFontValue in FONT_CHOICES.values)
+        check(iconTextColor2Value.matches(Regex("#[0-9a-fA-F]{6}")))
+        check(iconTextGradientAngleValue in 0..360)
         check(menuTextFontValue in FONT_CHOICES.values)
         check(iconShapeColor1Value.matches(Regex("#[0-9a-fA-F]{6}")))
         check(iconShapeColor2Value.matches(Regex("#[0-9a-fA-F]{6}")))
@@ -1592,6 +1664,9 @@ val universalOverlayPatch = bytecodePatch(
                 selectedUiPreset.menuHeightLimit.toString(),
                 if (enableUniManagerIntegration == true) "1" else "0",
                 if (rememberUniManagerRuntimeChanges == true) "1" else "0",
+                if (iconTextGradientValue) "1" else "0",
+                iconTextColor2Value,
+                iconTextGradientAngleValue.toString(),
             ),
         )
 

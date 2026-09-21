@@ -1,11 +1,15 @@
 package unipatches.overlay
 
 import app.morphe.patcher.patch.resourcePatch
+import helpers.manager.addUniManagerMetadata
 import helpers.manifest.NS_ANDROID
 import org.w3c.dom.Element
 
 /** Adds only the manifest permission needed by the optional Do Not Disturb module. */
-internal fun universalOverlayManifestPatch(enabledProvider: () -> Boolean) = resourcePatch(
+internal fun universalOverlayManifestPatch(
+    enabledProvider: () -> Boolean,
+    metadataProvider: () -> String? = { null },
+) = resourcePatch(
     name = null,
     default = false,
 ) {
@@ -24,6 +28,7 @@ internal fun universalOverlayManifestPatch(enabledProvider: () -> Boolean) = res
                 val application = root.getElementsByTagName("application").item(0)
                 if (application != null) root.insertBefore(permission, application) else root.appendChild(permission)
             }
+            metadataProvider()?.let { encoded -> addUniManagerMetadata(manifest, encoded) }
         }
     }
 }
