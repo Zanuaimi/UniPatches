@@ -60,7 +60,9 @@ private fun mergeMetadata(existing: String, incoming: String): String {
 
 internal fun uniManagerMetadataPatch(provider: () -> String?) = resourcePatch(
     name = null,
-    default = false,
+    // This is an internal dependency of patches that opt into UniManager.
+    // The provider remains nullable, so it is a no-op when integration is disabled.
+    default = true,
 ) {
     execute {
         provider()?.let { encoded ->
