@@ -1,3 +1,9 @@
+## [1.30.0-dev.7](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.6...v1.30.0-dev.7) (2026-09-21)
+
+### 🐛 Bug Fixes
+
+* Fix ads block patch not being registered to unimanager ([a03d494](https://github.com/Zanuaimi/UniPatches/commit/a03d494719ef85852a923cb129785b90f5f52233))
+
 ## [1.30.0-dev.6](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.5...v1.30.0-dev.6) (2026-09-21)
 
 ### 🔧 Improvements
