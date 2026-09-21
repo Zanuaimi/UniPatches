@@ -1,6 +1,6 @@
 package unipatches.ads
 
-/** Pure helpers for the Control App Ads to Overlay runtime-policy exchange. */
+/** Pure helpers for the Ads Block Patch to Overlay runtime-policy exchange. */
 internal fun isAdsRuntimePolicyActive(
     runtimeControlsRequested: Boolean,
     blockAdsModule: Boolean,

@@ -496,7 +496,7 @@ private fun logHeap(logger: Logger, phase: String) {
     val runtime = Runtime.getRuntime()
     val used = runtime.totalMemory() - runtime.freeMemory()
     logger.info(
-        "Control App Ads heap [$phase]: used=${used / 1024 / 1024}MiB " +
+        "Ads Block Patch heap [$phase]: used=${used / 1024 / 1024}MiB " +
             "committed=${runtime.totalMemory() / 1024 / 1024}MiB " +
             "max=${runtime.maxMemory() / 1024 / 1024}MiB",
     )
@@ -561,16 +561,16 @@ internal fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildc
         }
     }
     if (replacements > 0) {
-        logger.info("Control App Ads: redirected $replacements literal host string(s).")
+        logger.info("Ads Block Patch: redirected $replacements literal host string(s).")
     } else {
-        logger.warning("Control App Ads: no matching literal host strings were found; the runtime Hosts module will have no effect for this APK unless matching endpoints are instrumented.")
+        logger.warning("Ads Block Patch: no matching literal host strings were found; the runtime Hosts module will have no effect for this APK unless matching endpoints are instrumented.")
     }
     return replacements
 }
 
 @Suppress("unused")
-val controlAppAdsPatch = bytecodePatch(
-    name = "Control App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )",
+val adsBlockPatch = bytecodePatch(
+    name = "Ads Block Patch ( Experimental, Enhanced, Has Overlay Addon )",
     description = """
         A merged ad-control patch based on Nai64's No Ads patch, plus literal-host blocking
         inspired by Entree and Adobo. Block common ad formats, choose the SDKs to target, and
@@ -587,7 +587,7 @@ val controlAppAdsPatch = bytecodePatch(
         online and retried. PairIP Firebase cleanup/removal can disable Firebase-backed reward,
         sign-in, billing, and attribution flows, which this patch cannot restore.
 
-        This patch includes an optional Universal Overlay addon. To use the addon, patch Control App Ads
+        This patch includes an optional Universal Overlay addon. To use the addon, patch Ads Block Patch
         together with Universal Overlay and select one or both of its overlay addon modules:
         “Block Ads” and “Block Ads / Tracking Hosts”. Ad runtime policy is
         enabled automatically when at least one of these Ads runtime modules is enabled in patch
@@ -607,7 +607,7 @@ val controlAppAdsPatch = bytecodePatch(
     default = false,
 ) {
     // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
-    try { category("Control App Ads Enhanced") } catch (_: NoSuchMethodError) {}
+    try { category("Ads Block Enhanced") } catch (_: NoSuchMethodError) {}
     extendWith("extensions/extension.mpe")
     dependsOn(StartupHooks.resolveRealApplicationPatch)
 
@@ -696,6 +696,7 @@ val controlAppAdsPatch = bytecodePatch(
             addProperty("protocol_version", 1)
             addProperty("source_version", "unipatches-dev")
             add("patches", JsonArray().apply {
+                // Keep the registration ID stable so existing UniManager records survive the display-name rename.
                 add(JsonObject().apply { addProperty("id", "control-app-ads"); addProperty("version", "1") })
             })
             add("capabilities", JsonArray().apply {
@@ -886,7 +887,7 @@ val controlAppAdsPatch = bytecodePatch(
                     "Meta, Pangle, VK MyTarget, Yandex or Huawei Ads Kit). No changes applied. " +
                     "If this app shows ads but wasn't detected, please report the APK  -  it may use StartApp/MoPub/Chartboost/InMobi or a custom wrapper.",
             )
-            detectionLogger.info("Control App Ads: no selected SDK fingerprint matched; host filters will still be evaluated.")
+            detectionLogger.info("Ads Block Patch: no selected SDK fingerprint matched; host filters will still be evaluated.")
         } else {
             val found = buildList {
                 if (hasMaxUnity) add("MAX Unity")
@@ -981,7 +982,7 @@ val controlAppAdsPatch = bytecodePatch(
                     if (!isAdToken) continue
                     try {
                         if ((method.implementation?.registerCount ?: 0) - method.numberOfParameterRegisters < 1) {
-                            detectionLogger.info("Control App Ads: skipped heuristic match ${classDef.type}->$n because it has no safe local register.")
+                            detectionLogger.info("Ads Block Patch: skipped heuristic match ${classDef.type}->$n because it has no safe local register.")
                             continue
                         }
                         if (method.returnType == "Ljava/lang/String;" && method.implementation != null) {
@@ -1025,9 +1026,9 @@ val controlAppAdsPatch = bytecodePatch(
             val earlierBridge = OverlayAdsRuntimeIntegration.takeUnconfiguredBridge(this)
             if (earlierBridge != null && attachQueuedAdsRuntimePolicy(earlierBridge, policy)) {
                 OverlayAdsRuntimeIntegration.markInjected("previously injected overlay bridge")
-                detectionLogger.info("Control App Ads: attached runtime policy to the previously injected overlay bridge.")
+                detectionLogger.info("Ads Block Patch: attached runtime policy to the previously injected overlay bridge.")
             } else {
-                detectionLogger.info("Control App Ads: queued runtime policy for Universal Overlay injection.")
+                detectionLogger.info("Ads Block Patch: queued runtime policy for Universal Overlay injection.")
             }
         }
         if (managerIntegration && managerPolicy != null) {
@@ -1045,16 +1046,16 @@ val controlAppAdsPatch = bytecodePatch(
                 when {
                     application != null && applicationMethod != null -> {
                         injectUniManagerStartup(application, applicationMethod, managerPolicy)
-                        detectionLogger.info("Control App Ads: injected UniManager startup configuration into the Application.")
+                        detectionLogger.info("Ads Block Patch: injected UniManager startup configuration into the Application.")
                     }
                     launcher != null && launcherMethod != null -> {
                         injectUniManagerStartup(launcher, launcherMethod, managerPolicy)
-                        detectionLogger.info("Control App Ads: injected UniManager startup configuration into the launcher Activity.")
+                        detectionLogger.info("Ads Block Patch: injected UniManager startup configuration into the launcher Activity.")
                     }
-                    else -> detectionLogger.warning("Control App Ads: UniManager integration could not find a safe startup entry point; embedded defaults remain active.")
+                    else -> detectionLogger.warning("Ads Block Patch: UniManager integration could not find a safe startup entry point; embedded defaults remain active.")
                 }
             }.onFailure { error ->
-                detectionLogger.warning("Control App Ads: UniManager startup injection failed: ${error.message}")
+                detectionLogger.warning("Ads Block Patch: UniManager startup injection failed: ${error.message}")
             }
         }
         // In runtime mode, host rewriting is installed only for the selected Hosts module and
@@ -1070,9 +1071,9 @@ val controlAppAdsPatch = bytecodePatch(
         resetAdsFallbackIndex()
 
         if (totalPatched == 0) {
-            detectionLogger.warning("Control App Ads: no selected literal host or patchable ad method was found. The app may use an unsupported SDK, dynamically generated endpoints, or encrypted configuration.")
+            detectionLogger.warning("Ads Block Patch: no selected literal host or patchable ad method was found. The app may use an unsupported SDK, dynamically generated endpoints, or encrypted configuration.")
         } else {
-            detectionLogger.info("Control App Ads: changed $totalPatched item(s)  -  interstitials=$effectiveBlockInterstitials, banners=$effectiveBlockBanners, appOpen=$effectiveBlockAppOpen, mrec=$effectiveBlockMRec, rewarded=$effectiveBlockRewarded, native=$effectiveBlockNative")
+            detectionLogger.info("Ads Block Patch: changed $totalPatched item(s)  -  interstitials=$effectiveBlockInterstitials, banners=$effectiveBlockBanners, appOpen=$effectiveBlockAppOpen, mrec=$effectiveBlockMRec, rewarded=$effectiveBlockRewarded, native=$effectiveBlockNative")
         }
     }
 }

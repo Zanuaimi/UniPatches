@@ -26,7 +26,7 @@ unrelated framework or SDK Activities. The patch verifies the final `install()` 
 `installActivity()` call before treating the runtime as installed.
 
 Companion patches coordinate through the exact temporary bridge marker containing the owner, method,
-return type, and parameter list. Control App Ads attaches its policy to that bridge only after it is
+return type, and parameter list. Ads Block Patch attaches its policy to that bridge only after it is
 verified. A missing or unverified bridge produces a diagnostic and no dependent runtime module is
 exposed. Providers can be bundled in the extension without appearing in the menu until their
 process-local policy is configured.
@@ -99,7 +99,7 @@ It contributes `Block Ads` and `Block Ads / Tracking Hosts` to the
 `Ad control hook modules` section when `AdsRuntimePolicy` is integrated and contains the matching
 module bit.
 
-The Control App Ads patch queues the positional policy and the overlay patch attaches it to the
+The Ads Block Patch queues the positional policy and the overlay patch attaches it to the
 same Application or Activity bridge. The policy uses these module bits: Block Ads = 1 and Block Ads /
 Tracking Hosts = 2. The Block Ads runtime module requires its corresponding Ads master setting. The host module requires runtime policy only; its initial
 checkbox value comes from the `Enable Block Ads / Tracking Hosts` master setting.
@@ -146,7 +146,7 @@ Universal Overlay currently provides:
 - Hook modules: disable haptics and disable animations.
 - System modules: Do Not Disturb, guarded by notification-policy access.
 - Advanced modules: Overlay Runtime Logs, with optional activation at app launch.
-- Integrated modules: Control App Ads runtime controls when its companion policy is configured.
+- Integrated modules: Ads Block Patch runtime controls when its companion policy is configured.
 
 The Do Not Disturb module also requires the Android notification-policy permission and a user-granted
 system access setting. Universal Overlay adds the manifest declaration when the module is selected,

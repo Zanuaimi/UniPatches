@@ -80,7 +80,7 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
         Try to bypass high-confidence client-side “internet required” gates. Start with Auto mode.
         This cannot bypass server-side login, entitlement, multiplayer, or game-state checks.
 
-        Compatibility: Control App Ads can intentionally block ad hosts. Keep “Exclude ad SDK and
+        Compatibility: Ads Block Patch can intentionally block ad hosts. Keep “Exclude ad SDK and
         networking code” enabled when both patches are selected so blocked ads are not falsely told
         the device is online and repeatedly retried. This does not bypass server-enforced online play.
     """.trimIndent(),

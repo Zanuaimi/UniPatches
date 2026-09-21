@@ -31,7 +31,7 @@ not packaged in the APK, including `android.app.NativeActivity`, while excluding
 unrelated framework or SDK Activities.
 
 After injection, the final cloned method is verified to contain `OverlayRuntime.install()` or
-`installActivity()`. Control App Ads is marked attached only when its configuration call is also
+`installActivity()`. Ads Block Patch is marked attached only when its configuration call is also
 present in that same verified bridge. Companion patches share
 the exact owner, method, return type, and parameter list through the temporary patch-run marker,
 so they do not guess separate Activities or create another runtime. If verification fails, runtime
@@ -197,7 +197,7 @@ it adds its selected app-specific profile and modules to the Universal bridge re
 same patch run. If Universal did not inject a bridge, HCR fails instead of producing a partial
 overlay patch.
 
-`Control App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` includes an optional overlay
+`Ads Block Patch ( Experimental, Enhanced, Has Overlay Addon )` includes an optional overlay
 addon. Its two overlay addon modules are `Block Ads` and `Block Ads / Tracking
 hosts`. They expose session-local runtime controls through the shared overlay and start with values
 copied from the Ads patch settings. The Ads patch has separate `Enable No Ads` and `Enable Block Ads
@@ -206,7 +206,7 @@ is exposed. The host module only requires runtime policy,
 while its master controls its initial enabled state. Enable the addon and choose its modules in the Ads settings,
 then select Universal Overlay or an app-specific overlay patch. The complete user flow is:
 
-1. Select `Control App Ads Patch ( Experimental, Enhanced, Has Overlay Addon )` and `UniPatches Universal Overlay Patch`, or select the HCR
+1. Select `Ads Block Patch ( Experimental, Enhanced, Has Overlay Addon )` and `UniPatches Universal Overlay Patch`, or select the HCR
    companion together with Universal Overlay when building the HCR example. App-specific companions
    add modules to Universal; they do not install a second shared overlay bridge.
 2. Under `Overlay integration > Runtime controls`, enable `Block Ads` and/or `Block Ads / Tracking Hosts`.
@@ -215,7 +215,7 @@ then select Universal Overlay or an app-specific overlay patch. The complete use
    runtime policy and starts according to `Enable Block Ads / Tracking Hosts`. The runtime controls
    mirror the relevant Ads patch settings initially.
 3. Selecting at least one runtime control automatically enables the Ads runtime policy. Patch the
-   APK. Control App Ads initializes the session policy from its ordinary settings during
+   APK. Ads Block Patch initializes the session policy from its ordinary settings during
    Application startup, and the overlay reads that policy when its menu opens. The two patches do
    not depend on patch ordering. If no runtime control is selected, no Ads runtime policy is
    created and the ordinary static patch behavior is used.
@@ -225,19 +225,19 @@ then select Universal Overlay or an app-specific overlay patch. The complete use
 
 The runtime module is an optional bridge, not a second ad patch. When at least one eligible runtime
 control is selected, static behavior is replaced by guarded instrumentation for the
-selected capabilities and the initial control values mirror the corresponding Control App Ads
+selected capabilities and the initial control values mirror the corresponding Ads Block Patch
 settings. The selected runtime module controls which instrumented paths are policy-aware; unrelated
 SDK initialization and unsupported paths retain their original behavior. Later changes are
 session-local and reset when the process restarts. If a selected control is incompatible with its
 master setting, that control is not exposed and unaffected paths retain their ordinary behavior.
-Only SDK methods and literal hosts successfully instrumented by Control App Ads can respond;
+Only SDK methods and literal hosts successfully instrumented by Ads Block Patch can respond;
 native, encrypted, dynamically generated, or unsupported paths remain unchanged. If no overlay patch
-is selected, Control App Ads still applies its normal static changes, but no runtime menu can be
+is selected, Ads Block Patch still applies its normal static changes, but no runtime menu can be
 
-The patch-time coordination is implemented by `OverlayAdsRuntimeIntegration.kt`. Control App Ads queues
+The patch-time coordination is implemented by `OverlayAdsRuntimeIntegration.kt`. Ads Block Patch queues
 its serialized policy, and the selected overlay consumes it at the same bridge target. If the overlay
 patch runs first, `OverlayInjection.kt` records the exact owner, method, and parameter signature;
-Control App Ads then attaches its configuration call only when the patching context is the same.
+Ads Block Patch then attaches its configuration call only when the patching context is the same.
 This prevents the two patches from independently guessing different Activities. If no compatible
 bridge target exists, normal static Ads changes remain safe and runtime controls are not exposed.
 `AdsRuntimePolicy.java` is the process-local policy store; it is configured before an app-specific
@@ -297,7 +297,7 @@ in the extension Java code.
 patches/src/main/kotlin/unipatches/overlay/OverlayInjection.kt
 
 This contains the shared safe-register bridge injection and Application/Activity fallback helpers.
-It also attaches a queued Ads policy to the exact overlay bridge when Control App Ads is selected.
+It also attaches a queued Ads policy to the exact overlay bridge when Ads Block Patch is selected.
 App-specific patch entries should call these helpers rather than implementing a second injector.
 
 It also attaches a queued InApp policy to the exact bridge when Emulate InApp is selected. The
@@ -307,7 +307,7 @@ startup bridge.
 
 patches/src/main/kotlin/unipatches/overlay/OverlayAdsRuntimeIntegration.kt
 
-This is the patch-process-only coordination layer between Control App Ads and an overlay patch. It stores the
+This is the patch-process-only coordination layer between Ads Block Patch and an overlay patch. It stores the
 pending policy and exact bridge identity temporarily; it does not become part of the patched APK.
 
 patches/src/main/kotlin/unipatches/overlay/OverlayConfigPayload.kt
@@ -544,7 +544,7 @@ launch independently from other modules. Runtime logging is best-effort and isol
 ### Integrated modules
 
 Integrated providers are registered centrally by `OverlayRuntime` and activated by a policy from
-another patch. The current provider is Control App Ads. It appears only when its policy is valid
+another patch. The current provider is Ads Block Patch. It appears only when its policy is valid
 and active. Provider and module failures are isolated from universal modules.
 
 ## Runtime flow

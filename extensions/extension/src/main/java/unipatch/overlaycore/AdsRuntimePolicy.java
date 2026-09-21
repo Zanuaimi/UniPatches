@@ -8,7 +8,7 @@ import org.json.JSONObject;
 import java.util.regex.Pattern;
 import unipatch.overlaycore.modules.OverlaySessionState;
 
-/** Session-local policy shared by Control App Ads and overlay runtime modules. */
+/** Session-local policy shared by Ads Block Patch and overlay runtime modules. */
 public final class AdsRuntimePolicy {
     public static final int MODULE_BLOCK_ADS = 1;
     public static final int MODULE_HOSTS = 2;

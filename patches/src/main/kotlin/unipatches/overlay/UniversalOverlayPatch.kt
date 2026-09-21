@@ -560,16 +560,16 @@ val universalOverlayPatch = bytecodePatch(
         modules. PairIP Bypass preserves that bridge when its Application startup strategies run
         after Universal Overlay. If a patched APK still has an unusual entry point, use the explicit
         Activity override rather than selecting a library or SDK Activity. Custom App Display and
-        Control App Ads attach to this bridge when their runtime addons are enabled; they should not
+        Ads Block Patch attaches to this bridge when its runtime addons are enabled; it should not
         create a second overlay runtime.
 
-        Control App Ads can also add runtime ad-control modules here, but Universal Overlay does not
-        patch ad SDKs by itself. To use them, select Control App Ads Patch and Universal Overlay,
-        enable the desired options under Control App Ads' Overlay integration > Runtime controls. The
+        Ads Block Patch can also add runtime ad-control modules here, but Universal Overlay does not
+        patch ad SDKs by itself. To use them, select Ads Block Patch and Universal Overlay,
+        enable the desired options under Ads Block Patch's Overlay integration > Runtime controls. The
         Ads runtime policy is enabled automatically when at least one of those modules is selected.
         The available modules are Block Ads and Block Ads / Tracking Hosts. Their initial runtime values come from
-        the Control App Ads settings, and later changes are session-only. When both patches are selected,
-        Control App Ads attaches its policy to this overlay's exact startup bridge, including an explicit
+        the Ads Block Patch settings, and later changes are session-only. When both patches are selected,
+        Ads Block Patch attaches its policy to this overlay's exact startup bridge, including an explicit
         Activity override, instead of selecting a separate Activity.
 
         Attribution: The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.
@@ -765,7 +765,7 @@ val universalOverlayPatch = bytecodePatch(
         title = "Quick setup > Settings to modules > General > Show empty-module message",
         default = true,
         key = "runtimeOverlayShowNoModulesWarning",
-        description = "Show a message in the overlay when no Statistic, Activity, Hook, app-specific, System, Advanced, or integrated module is selected. Control App Ads modules count only when that patch was also configured and patched successfully.",
+        description = "Show a message in the overlay when no Statistic, Activity, Hook, app-specific, System, Advanced, or integrated module is selected. Ads Block Patch modules count only when that patch was also configured and patched successfully.",
     )
     val enableMonitorsOnLaunch by booleanOption(
         title = "Quick setup > Settings to modules > Monitor behavior > Enable monitors on launch",
@@ -1788,9 +1788,9 @@ val universalOverlayPatch = bytecodePatch(
         }
         if (adsPolicyAttached) {
             OverlayAdsRuntimeIntegration.markInjected("Universal Overlay")
-            logger.info("Control App Ads runtime policy was injected beside the Universal Overlay bridge.")
+            logger.info("Ads Block Patch runtime policy was injected beside the Universal Overlay bridge.")
         } else if (bridgeInstalled && adsRuntimePolicy != null) {
-            logger.warning("Control App Ads runtime policy was not attached because this overlay bridge already existed.")
+            logger.warning("Ads Block Patch runtime policy was not attached because this overlay bridge already existed.")
         }
         if (customMode) exportPreset(exportUiPreset.orEmpty().trim(), exportedUiPresetOutputName.orEmpty(), selectedUiPreset, logger)
     }
