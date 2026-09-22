@@ -1,3 +1,9 @@
+## [1.30.0-dev.9](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.8...v1.30.0-dev.9) (2026-09-22)
+
+### 🐛 Bug Fixes
+
+* **ads:** Fix unimanager support ([52f7a74](https://github.com/Zanuaimi/UniPatches/commit/52f7a74e3c877720a5de850dd56588a1e7095436))
+
 ## [1.30.0-dev.8](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.7...v1.30.0-dev.8) (2026-09-22)
 
 ### 🐛 Bug Fixes
