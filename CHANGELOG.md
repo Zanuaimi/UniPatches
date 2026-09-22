@@ -1,3 +1,9 @@
+## [1.30.0-dev.8](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.7...v1.30.0-dev.8) (2026-09-22)
+
+### 🐛 Bug Fixes
+
+* Improve ads block patch and universal overlay patch to support for unimanager ([2e24a7c](https://github.com/Zanuaimi/UniPatches/commit/2e24a7cebd79dab6535c450e6b4c822763acd28d))
+
 ## [1.30.0-dev.7](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.6...v1.30.0-dev.7) (2026-09-21)
 
 ### 🐛 Bug Fixes
