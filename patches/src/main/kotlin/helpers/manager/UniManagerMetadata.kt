@@ -58,8 +58,11 @@ private fun mergeMetadata(existing: String, incoming: String): String {
     }.getOrDefault(incoming)
 }
 
-internal fun uniManagerMetadataPatch(provider: () -> String?) = resourcePatch(
-    name = null,
+internal fun uniManagerMetadataPatch(
+    name: String = "UniManager registration metadata (internal)",
+    provider: () -> String?,
+) = resourcePatch(
+    name = name,
     // This is an internal dependency of patches that opt into UniManager.
     // The provider remains nullable, so it is a no-op when integration is disabled.
     default = true,

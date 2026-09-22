@@ -11,7 +11,7 @@ internal fun universalOverlayManifestPatch(
     permissionProvider: () -> Boolean = enabledProvider,
     metadataProvider: () -> String? = { null },
 ) = resourcePatch(
-    name = null,
+    name = "Universal Overlay manifest integration (internal)",
     default = false,
 ) {
     execute {
