@@ -45,7 +45,9 @@ internal fun serializeAdsRuntimePolicy(
     wildcardHostsEnabled: Boolean,
     hosts: List<String>,
     hostsAllowedEnabled: Boolean = hostsEnabled,
-): String = listOf(
+    overlayModuleMask: Int = moduleMask,
+): String {
+    val fields = mutableListOf(
     "2",
     moduleMask.toString(),
     blockedFormats.toString(),
@@ -53,4 +55,10 @@ internal fun serializeAdsRuntimePolicy(
     if (wildcardHostsEnabled) "1" else "0",
     hosts.sorted().joinToString(","),
     if (hostsAllowedEnabled) "1" else "0",
-).joinToString("|")
+    )
+    // Omit the visibility field when it matches the active policy mask so older
+    // payloads remain byte-for-byte compatible. Include it only when managed
+    // startup needs a policy without exposing overlay controls.
+    if (overlayModuleMask != moduleMask) fields.add(overlayModuleMask.toString())
+    return fields.joinToString("|")
+}

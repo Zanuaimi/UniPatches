@@ -34,6 +34,10 @@ class AdsRuntimePolicyPayloadTest {
             serializeAdsRuntimePolicy(1, 16, true, false, listOf("z.example", "a.example")),
         )
         assertEquals(
+            "2|3|0|0|0||0|0",
+            serializeAdsRuntimePolicy(3, 0, false, false, emptyList(), overlayModuleMask = 0),
+        )
+        assertEquals(
             "2|2|0|0|1||0",
             serializeAdsRuntimePolicy(2, 0, false, true, emptyList(), hostsAllowedEnabled = false),
         )
@@ -65,6 +69,64 @@ class AdsRuntimePolicyPayloadTest {
         assertEquals(AdsPatchMode.RUNTIME, plan.noAds.mode)
         assertEquals(AdsRuntimeModule.BLOCK_ADS, plan.runtimeModuleMask)
         assertTrue(plan.runtimePolicyEnabled)
+    }
+
+    @Test
+    fun managedStartupKeepsPolicyButHidesOverlayModules() {
+        val settings = AdsPatchSettings(
+            noAdsEnabled = true,
+            blockInterstitials = true,
+            blockBanners = false,
+            blockAppOpen = false,
+            blockMRec = false,
+            blockRewarded = false,
+            blockNative = false,
+            hostsEnabled = true,
+            wildcardHosts = false,
+        )
+        val plan = AdsPatchPlanner.resolve(
+            settings = settings,
+            selection = AdsRuntimeSelection(
+                policyEnabled = true,
+                noAdsModuleSelected = true,
+                hostsModuleSelected = true,
+                overlayNoAdsModuleSelected = false,
+                overlayHostsModuleSelected = false,
+            ),
+            sdkCoverage = AdsSdkCoverage(),
+        )
+
+        assertEquals(3, plan.runtimeModuleMask)
+        assertEquals(0, plan.overlayRuntimeModuleMask)
+    }
+
+    @Test
+    fun runtimeOnlyModeExposesOnlySelectedOverlayModule() {
+        val settings = AdsPatchSettings(
+            noAdsEnabled = true,
+            blockInterstitials = true,
+            blockBanners = false,
+            blockAppOpen = false,
+            blockMRec = false,
+            blockRewarded = false,
+            blockNative = false,
+            hostsEnabled = true,
+            wildcardHosts = false,
+        )
+        val plan = AdsPatchPlanner.resolve(
+            settings = settings,
+            selection = AdsRuntimeSelection(
+                policyEnabled = true,
+                noAdsModuleSelected = true,
+                hostsModuleSelected = false,
+                overlayNoAdsModuleSelected = true,
+                overlayHostsModuleSelected = false,
+            ),
+            sdkCoverage = AdsSdkCoverage(),
+        )
+
+        assertEquals(AdsRuntimeModule.BLOCK_ADS, plan.runtimeModuleMask)
+        assertEquals(AdsRuntimeModule.BLOCK_ADS, plan.overlayRuntimeModuleMask)
     }
 
     @Test

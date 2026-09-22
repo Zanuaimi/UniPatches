@@ -28,6 +28,8 @@ internal data class AdsPatchPlan(
     val hosts: PathPlan,
     val sdkCoverage: AdsSdkCoverage,
     val runtimePolicyEnabled: Boolean,
+    val overlayNoAdsModuleSelected: Boolean,
+    val overlayHostsModuleSelected: Boolean,
 ) {
     val executionMode: AdsPatchExecutionMode
         get() {
@@ -48,6 +50,15 @@ internal data class AdsPatchPlan(
             // Hosts visibility is selected by policy and module selection; its master controls
             // the initial switch and whether host instrumentation exists.
             if (hosts.runtimeModuleSelected) mask = mask or AdsRuntimeModule.HOSTS
+            return mask
+        }
+
+    val overlayRuntimeModuleMask: Int
+        get() {
+            if (!runtimePolicyEnabled) return 0
+            var mask = 0
+            if (noAds.runtimeEligible && overlayNoAdsModuleSelected) mask = mask or AdsRuntimeModule.BLOCK_ADS
+            if (hosts.runtimeModuleSelected && overlayHostsModuleSelected) mask = mask or AdsRuntimeModule.HOSTS
             return mask
         }
 }

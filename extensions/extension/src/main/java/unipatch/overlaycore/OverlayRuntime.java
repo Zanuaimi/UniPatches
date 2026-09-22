@@ -1379,7 +1379,7 @@ public final class OverlayRuntime {
         }
 
         private boolean hasIntegratedModules() {
-            return AdsRuntimePolicy.hasAnyModule();
+            return AdsRuntimePolicy.hasAnyOverlayModule();
         }
 
         private void addAppSpecificModules(LinearLayout parent) {
@@ -1802,7 +1802,7 @@ public final class OverlayRuntime {
                 try {
                     String profileId = provider.profileId();
                     String section;
-                    if (AdsControlRuntimeProvider.PROFILE_ID.equals(profileId) && AdsRuntimePolicy.hasAnyModule()) {
+                    if (AdsControlRuntimeProvider.PROFILE_ID.equals(profileId) && AdsRuntimePolicy.hasAnyOverlayModule()) {
                         section = "Ad control hook modules";
                     } else {
                         continue;

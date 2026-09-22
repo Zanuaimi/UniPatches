@@ -16,6 +16,7 @@ public final class AdsRuntimePolicy {
 
     private static boolean integrated;
     private static int modules;
+    private static int overlayModules;
     private static int blockedFormats;
     private static boolean hostsEnabled;
     private static boolean hostsAllowed;
@@ -26,7 +27,7 @@ public final class AdsRuntimePolicy {
 
     private AdsRuntimePolicy() { }
 
-    /** Config format: version|moduleMask|blockedFormats|hostsEnabled|wildcard|hosts|hostsAllowed. */
+    /** Config format: version|moduleMask|blockedFormats|hostsEnabled|wildcard|hosts|hostsAllowed|overlayModuleMask. */
     public static synchronized void configure(String encoded) {
         // The bridge can be reused by recreated Activities. Clear only Ads Control's saved
         // overlay values so a new patch policy cannot inherit checkbox state from an older app
@@ -34,6 +35,7 @@ public final class AdsRuntimePolicy {
         OverlaySessionState.clearModule("adsRuntimeBlockAds");
         integrated = false;
         modules = 0;
+        overlayModules = 0;
         blockedFormats = 0;
         hostsEnabled = false;
         hostsAllowed = false;
@@ -54,6 +56,15 @@ public final class AdsRuntimePolicy {
             hostsEnabled = "1".equals(values[3]);
             wildcardHosts = "1".equals(values[4]);
             hostsAllowed = "1".equals(values[6]);
+            if (values.length >= 8) {
+                int parsedOverlayModules = Integer.parseInt(values[7]);
+                if (parsedOverlayModules < 0 || (parsedOverlayModules & ~3) != 0) return;
+                overlayModules = parsedOverlayModules;
+            } else {
+                // Policies produced before overlay visibility was separated from managed
+                // startup activation expose their active modules by default.
+                overlayModules = modules;
+            }
             for (String host : values[5].split(",")) {
                 String normalized = normalizeHost(host);
                 if (!normalized.isEmpty()) hosts.add(normalized);
@@ -71,6 +82,8 @@ public final class AdsRuntimePolicy {
     public static synchronized boolean isIntegrated() { return integrated; }
     public static synchronized boolean hasModule(int module) { return integrated && (modules & module) != 0; }
     public static synchronized boolean hasAnyModule() { return integrated && modules != 0; }
+    public static synchronized boolean hasOverlayModule(int module) { return integrated && (overlayModules & module) != 0; }
+    public static synchronized boolean hasAnyOverlayModule() { return integrated && overlayModules != 0; }
     public static synchronized boolean shouldBlockInterstitials() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 1) != 0; }
     public static synchronized boolean shouldBlockBanners() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 2) != 0; }
     public static synchronized boolean shouldBlockAppOpen() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 4) != 0; }

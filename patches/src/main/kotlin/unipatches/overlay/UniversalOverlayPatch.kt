@@ -1219,17 +1219,7 @@ val universalOverlayPatch = bytecodePatch(
         title = "Advanced > Activity injection > Target Activity name",
         default = "",
         key = "runtimeOverlayActivityNameOverride",
-        description = "Risk: a wrong Activity can prevent the overlay from appearing. Leave blank for automatic discovery. Only use this with Explicit target Activity first; example: com.example.MainActivity.",
-    )
-    val activityInjectionMode by stringOption(
-        title = "Advanced > Activity injection > Strategy",
-        default = OverlayConfigPayload.UNIVERSAL_INJECTION_MODE,
-        key = "runtimeOverlayActivityInjectionMode",
-        description = "Risk: manual targeting can miss or break an app's startup. Keep automatic discovery unless you know the target Activity. Explicit mode tries the Activity above, then safely falls back to automatic discovery.",
-        values = linkedMapOf(
-            "Universal automatic discovery (default)" to OverlayConfigPayload.UNIVERSAL_INJECTION_MODE,
-            "Explicit target Activity, then universal fallback" to OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE,
-        ),
+        description = "Risk: a wrong Activity can prevent the overlay from appearing. Leave blank for automatic discovery. If provided, this Activity is tried after automatic Application discovery and before the launcher fallback; example: com.example.MainActivity.",
     )
     val activityInstallBanlist by stringsOption(
         title = "Advanced > Activity injection > Install banlist",
@@ -1259,15 +1249,46 @@ val universalOverlayPatch = bytecodePatch(
                 })
                 add("capabilities", JsonArray().apply { add("overlay.config.v2") })
                 add("configuration", JsonObject().apply {
+                    // These are manager-editable runtime UI values. Import/export paths,
+                    // custom image sources, and advanced injection settings intentionally stay
+                    // patch-local because the patched APK cannot safely read manager files.
+                    addProperty("runtimeOverlayMenuWidthLimit", menuWidthLimit ?: 90)
+                    addProperty("runtimeOverlayMenuHeightLimit", menuHeightLimit ?: 45)
+                    addProperty("runtimeOverlayShowExtraPopupHeaders", showExtraPopupHeaders == true)
+                    addProperty("runtimeOverlayTitle", title.orEmpty())
+                    addProperty("runtimeOverlayDescription", descriptionText.orEmpty())
+                    addProperty("runtimeOverlayAppendDescription", appendDescriptionText.orEmpty())
+                    addProperty("runtimeOverlayDescriptionAlignment", descriptionAlignment.orEmpty())
+                    addProperty("runtimeOverlayAppendDescriptionColor", appendDescriptionColor.orEmpty())
+                    addProperty("runtimeOverlayBackgroundColor", backgroundColor.orEmpty())
+                    addProperty("runtimeOverlayBackgroundTransparency", backgroundTransparency ?: 80)
+                    addProperty("runtimeOverlayOutlineColor", outlineColor.orEmpty())
+                    addProperty("runtimeOverlayRepositoryText", repositoryText.orEmpty())
+                    addProperty("runtimeOverlayRepositoryUrl", repositoryUrl.orEmpty())
+                    addProperty("runtimeOverlayButtonText", buttonText.orEmpty())
+                    addProperty("runtimeOverlayIconBold", iconBold == true)
                     addProperty("runtimeOverlayButtonTextColor", buttonTextColor.orEmpty().ifBlank { "#FF3C00" })
                     addProperty("runtimeOverlayIconTextGradient", iconTextGradient == true)
                     addProperty("runtimeOverlayIconTextColor2", iconTextColor2.orEmpty().ifBlank { "#FF9300" })
                     addProperty("runtimeOverlayIconTextGradientAngle", iconTextGradientAngle ?: 90)
+                    addProperty("runtimeOverlayIconTextSizeSp", iconTextSize ?: 18)
+                    addProperty("runtimeOverlayIconTextFont", iconTextFont.orEmpty())
+                    addProperty("runtimeOverlayMenuTextFont", menuTextFont.orEmpty())
                     addProperty("runtimeOverlayIconStyle", iconStyle.orEmpty().ifBlank { "parts" })
                     addProperty("runtimeOverlayIconHighlight", iconHighlight == true)
                     addProperty("runtimeOverlayIconGradientBackground", gradientBackground != false)
+                    addProperty("runtimeOverlayButtonBackgroundColor", buttonBackgroundColor.orEmpty().ifBlank { "#500000" })
                     addProperty("runtimeOverlayIconBackgroundColor2", iconBackground2.orEmpty().ifBlank { "#AA0000" })
                     addProperty("runtimeOverlayIconGradientAngle", iconGradientAngle ?: 0)
+                    addProperty("runtimeOverlayIconBackgroundStyle", iconBackgroundStyle.orEmpty())
+                    addProperty("runtimeOverlayIconBackgroundColor3", iconBackgroundColor3.orEmpty())
+                    addProperty("runtimeOverlayIconBackgroundColor4", iconBackgroundColor4.orEmpty())
+                    addProperty("runtimeOverlayIconOutline", iconOutline == true)
+                    addProperty("runtimeOverlayIconOutlineWidthDp", iconOutlineWidth ?: 3)
+                    addProperty("runtimeOverlayIconOutlineColor", iconOutlineColor.orEmpty())
+                    addProperty("runtimeOverlayIconOutlineGradient", iconOutlineGradient == true)
+                    addProperty("runtimeOverlayIconOutlineColor2", iconOutlineColor2.orEmpty())
+                    addProperty("runtimeOverlayIconOutlineGradientAngle", iconOutlineGradientAngle ?: 0)
                     addProperty("runtimeOverlayIconShadow", false)
                     addProperty("runtimeOverlayIconShadowColor", "#000000")
                     addProperty("runtimeOverlayIconShadowOpacity", 45)
@@ -1278,6 +1299,77 @@ val universalOverlayPatch = bytecodePatch(
                     add("runtimeOverlayIconParts", JsonArray().apply {
                         iconParts.orEmpty().take(12).forEach { add(it) }
                     })
+                    addProperty("runtimeOverlayControlTheme", controlTheme.orEmpty())
+                    addProperty("runtimeOverlayControlBackground", controlBackground.orEmpty())
+                    addProperty("runtimeOverlayControlForeground", controlForeground.orEmpty())
+                    addProperty("runtimeOverlayBottomButtonStyle", bottomButtonStyle.orEmpty())
+                    addProperty("runtimeOverlayBottomButtonShape", bottomButtonShape.orEmpty())
+                    addProperty("runtimeOverlayBottomButtonPadding", bottomButtonPadding == true)
+                    addProperty("runtimeOverlayBottomButtonTextColor", bottomButtonTextColor.orEmpty())
+                    addProperty("runtimeOverlayBottomButtonBackground1", bottomButtonBackground1.orEmpty())
+                    addProperty("runtimeOverlayBottomButtonBackground2", bottomButtonBackground2.orEmpty())
+                    addProperty("runtimeOverlayMenuTextColor1", menuTextColor1.orEmpty())
+                    addProperty("runtimeOverlayMenuTextColor2", menuTextColor2.orEmpty())
+                    addProperty("runtimeOverlayMenuTextColor3", menuTextColor3.orEmpty())
+                    addProperty("runtimeOverlayMenuTextColor4", menuTextColor4.orEmpty())
+                    addProperty("runtimeOverlayMenuTextColor5", menuTextColor5.orEmpty())
+                    addProperty("runtimeOverlayMenuTextColor6", menuTextColor6.orEmpty())
+                    addProperty("runtimeOverlayMenuTextColor7", menuTextColor7.orEmpty())
+                    addProperty("runtimeOverlaySeparatorBackgroundColor", separatorBackgroundColor.orEmpty())
+                    addProperty("runtimeOverlaySeparatorStyle", separatorStyle.orEmpty())
+                    addProperty("runtimeOverlayTitleIconPlacement", titleIconPlacement.orEmpty())
+                    addProperty("runtimeOverlayTitleAlignment", titleAlignment.orEmpty())
+                    addProperty("runtimeOverlayTitleSeparator", titleSeparator == true)
+                    addProperty("runtimeOverlayMenuCorners", menuCorners.orEmpty())
+                    addProperty("runtimeOverlayMenuOutlineAnimation", menuOutlineAnimation.orEmpty())
+                    addProperty("runtimeOverlayOutlineAnimationSpeed", outlineAnimationSpeed ?: 1)
+                    addProperty("runtimeOverlayOpeningAnimation", openingAnimation.orEmpty())
+                    addProperty("runtimeOverlayClosingAnimation", closingAnimation.orEmpty())
+                    addProperty("runtimeOverlayAnimationDuration", animationDuration ?: 180)
+                    addProperty("runtimeOverlayAnimationEasing", animationEasing.orEmpty())
+                    addProperty("runtimeOverlayOutlineWidthDp", outlineWidth ?: 2)
+                    addProperty("runtimeOverlayButtonShape", buttonShape.orEmpty())
+                    addProperty("runtimeOverlayButtonSizeDp", buttonSizeDp ?: 56)
+                    addProperty("runtimeOverlayButtonIdleOpacityPercent", buttonOpacity ?: 50)
+                    addProperty("runtimeOverlayButtonDragVisibilityDurationSeconds", buttonDragVisibilityDurationSeconds ?: 2)
+                    addProperty("runtimeOverlayButtonPosition", buttonPosition.orEmpty())
+                    addProperty("runtimeOverlayShowNoModulesWarning", showNoModulesWarning != false)
+
+                    // A module can only be managed if its implementation was included in the
+                    // APK at patch time. Unselected modules are deliberately omitted.
+                    if (includeDeviceInformation == true) addProperty("runtimeOverlayIncludeDeviceInformation", true)
+                    if (includeFps == true) addProperty("runtimeOverlayIncludeFps", true)
+                    if (includeDeviceTemperature == true) addProperty("runtimeOverlayIncludeDeviceTemperature", true)
+                    if (includeSystemTime == true) addProperty("runtimeOverlayIncludeSystemTime", true)
+                    if (includeSessionTime == true) addProperty("runtimeOverlayIncludeSessionTime", true)
+                    if (includeBatteryStatus == true) addProperty("runtimeOverlayIncludeBatteryStatus", true)
+                    if (includeAppMemory == true) addProperty("runtimeOverlayIncludeAppMemory", true)
+                    if (includeNetworkStatus == true) addProperty("runtimeOverlayIncludeNetworkStatus", true)
+                    if (includeKeepAwake == true) addProperty("runtimeOverlayIncludeKeepScreenAwake", true)
+                    if (includeFullscreen == true) addProperty("runtimeOverlayIncludeFullscreen", true)
+                    if (includeScreenshots == true) addProperty("runtimeOverlayIncludeScreenshots", true)
+                    if (includeAppBrightness == true) addProperty("runtimeOverlayIncludeAppBrightness", true)
+                    if (includeRotationMode == true) addProperty("runtimeOverlayIncludeRotationMode", true)
+                    if (includeAppAudioMute == true) addProperty("runtimeOverlayIncludeAppAudioMute", true)
+                    if (includeDisableHaptics == true) addProperty("runtimeOverlayIncludeDisableHaptics", true)
+                    if (includeDisableAnimations == true) addProperty("runtimeOverlayIncludeDisableAnimations", true)
+                    if (includeDoNotDisturb == true) addProperty("runtimeOverlayIncludeDoNotDisturb", true)
+                    if (includeOverlayRuntimeLogs == true) addProperty("runtimeOverlayIncludeOverlayRuntimeLogs", true)
+                    val hasStatistics = includeDeviceInformation == true || includeFps == true || includeDeviceTemperature == true ||
+                        includeSystemTime == true || includeSessionTime == true || includeBatteryStatus == true ||
+                        includeAppMemory == true || includeNetworkStatus == true
+                    if (hasStatistics) {
+                        addProperty("runtimeOverlayActivateStatisticsOnLaunch", activateStatisticsOnLaunch == true)
+                        addProperty("runtimeOverlayEnableMonitorsOnLaunch", enableMonitorsOnLaunch == true)
+                        addProperty("runtimeOverlayStatisticMonitorPosition", statisticMonitorPosition.orEmpty())
+                        addProperty("runtimeOverlayMonitorScale", monitorScale.orEmpty())
+                        addProperty("runtimeOverlayMonitorColumns", monitorColumns.orEmpty())
+                        addProperty("runtimeOverlayTemperatureFormat", temperatureFormat.orEmpty())
+                        addProperty("runtimeOverlayTimeFormat", timeFormat.orEmpty())
+                    }
+                    if (includeOverlayRuntimeLogs == true) {
+                        addProperty("runtimeOverlayEnableOverlayRuntimeLogsOnLaunch", enableOverlayRuntimeLogsOnLaunch == true)
+                    }
                 })
             }
             encodeUniManagerMetadata(registration.toString())
@@ -1655,9 +1747,8 @@ val universalOverlayPatch = bytecodePatch(
             iconBackgroundColor4Value,
             ),
             profileId = OverlayConfigPayload.UNIVERSAL_PROFILE,
-            injectionMode = activityInjectionMode.orEmpty().ifBlank {
-                OverlayConfigPayload.UNIVERSAL_INJECTION_MODE
-            },
+            // Activity override is a fallback target; automatic Application discovery is always preferred.
+            injectionMode = OverlayConfigPayload.UNIVERSAL_INJECTION_MODE,
             trailingFields = listOf(
                 iconPartsValue.joinToString("\n"), "", menuTextColor7Value,
                 iconTextFontValue, menuTextFontValue, legacyIconJsonValue,
@@ -1677,7 +1768,6 @@ val universalOverlayPatch = bytecodePatch(
 
         // Prefer the process Application entry point. The Activity path is a compatibility fallback
         // for APKs whose Application class or onCreate method cannot be resolved safely.
-        val explicitActivityFirst = activityInjectionMode.orEmpty() == OverlayConfigPayload.EXPLICIT_ACTIVITY_INJECTION_MODE
         val appDescriptor = StartupHooks.resolvedApplicationDescriptor
         val appClass = appDescriptor?.let { classDefByOrNull(it) }
         val appMethod = appClass?.let { findInheritedApplicationOnCreate(it) }
@@ -1704,8 +1794,7 @@ val universalOverlayPatch = bytecodePatch(
         )
         // Prefer the process Application entry point whenever it can be resolved. This installs
         // lifecycle callbacks before Unity's Activity and before BillingClient purchase calls.
-        // Explicit Activity mode remains available for APKs whose Application is incompatible.
-        val applicationTarget = if (!explicitActivityFirst && appMethod != null) {
+        val applicationTarget = if (appMethod != null) {
             val targetClass = mutableClassDefByOrNull(appClass.type)
             val (inheritedOwner, inheritedOnCreate) = appMethod
             if (targetClass == null) null
@@ -1766,9 +1855,6 @@ val universalOverlayPatch = bytecodePatch(
                 }
                 ?: resolvedLauncher?.owner
                 ?: findOverlayFallbackActivity()
-        }
-        if (explicitActivityFirst && fallback == null) {
-            logger.warning("Explicit Activity injection was requested but no target was found; universal fallback also failed.")
         }
         val onCreate = resolvedLauncher
             ?.takeIf { it.owner.type == fallback?.type }

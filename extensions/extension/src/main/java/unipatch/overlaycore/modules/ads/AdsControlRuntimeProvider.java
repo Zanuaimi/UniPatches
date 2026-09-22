@@ -18,8 +18,8 @@ public final class AdsControlRuntimeProvider implements OverlayAppSpecificModule
     @Override public List<OverlayAppSpecificModule> create(Activity activity) {
         List<OverlayAppSpecificModule> modules = new ArrayList<>();
         if (!AdsRuntimePolicy.isIntegrated()) return modules;
-        if (AdsRuntimePolicy.hasModule(AdsRuntimePolicy.MODULE_BLOCK_ADS)) modules.add(new BlockAdsModule());
-        if (AdsRuntimePolicy.hasModule(AdsRuntimePolicy.MODULE_HOSTS)) modules.add(new HostsModule());
+        if (AdsRuntimePolicy.hasOverlayModule(AdsRuntimePolicy.MODULE_BLOCK_ADS)) modules.add(new BlockAdsModule());
+        if (AdsRuntimePolicy.hasOverlayModule(AdsRuntimePolicy.MODULE_HOSTS)) modules.add(new HostsModule());
         return modules;
     }
 

@@ -623,8 +623,8 @@ val adsBlockPatch = bytecodePatch(
         key = "enableUniManagerIntegration",
         description = "Allow UniManager to provide startup ad-control values when available. If UniManager is not installed or cannot be reached, the patched app falls back to the traditional patching behavior and uses the settings selected here.",
     )
-    val runtimeBlockAdsModule by booleanOption(title = "Quick setup > UniManager > Runtime controls > Block Ads", default = false, key = "adsRuntimeBlockAdsModule", description = "Add one Block Ads settings control to the overlay and expose its state to UniManager. Runtime policy is enabled automatically when at least one Ads runtime control is selected. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths.")
-    val runtimeHostsModule by booleanOption(title = "Quick setup > UniManager > Runtime controls > Block Ads / Tracking Hosts", default = false, key = "adsRuntimeHostsModule", description = "Add one host-blocking checkbox to the overlay and expose its state to UniManager. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its initial state follows Enable Block Ads / Tracking Hosts and controls literal hosts instrumented by this patch; encrypted or dynamically generated requests remain unchanged.")
+    val runtimeBlockAdsModule by booleanOption(title = "Overlay integration > Runtime controls > Block Ads", default = false, key = "adsRuntimeBlockAdsModule", description = "Add one Block Ads settings control to the overlay and expose its state to UniManager. Runtime policy is enabled automatically when at least one Ads runtime control is selected. It changes only safely instrumented ad-format methods selected by this patch; it does not force SDK preload or initialization paths.")
+    val runtimeHostsModule by booleanOption(title = "Overlay integration > Runtime controls > Block Ads / Tracking Hosts", default = false, key = "adsRuntimeHostsModule", description = "Add one host-blocking checkbox to the overlay and expose its state to UniManager. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its initial state follows Enable Block Ads / Tracking Hosts and controls literal hosts instrumented by this patch; encrypted or dynamically generated requests remain unchanged.")
     val blockInterstitials by booleanOption(
         title = "Ad formats > Block interstitial ads",
         default = true,
@@ -767,6 +767,8 @@ val adsBlockPatch = bytecodePatch(
             policyEnabled = managerIntegration || runtimeBlockAdsModule == true || runtimeHostsModule == true,
             noAdsModuleSelected = managerIntegration || runtimeBlockAdsModule == true,
             hostsModuleSelected = managerIntegration || runtimeHostsModule == true,
+            overlayNoAdsModuleSelected = runtimeBlockAdsModule == true,
+            overlayHostsModuleSelected = runtimeHostsModule == true,
         )
         val patchPlan = AdsPatchPlanner.resolve(settings, selection, sdkCoverage)
         runtimeHooksEnabled = patchPlan.runtimePolicyEnabled
@@ -1027,6 +1029,7 @@ val adsBlockPatch = bytecodePatch(
                 wildcardHostsEnabled = settings.wildcardHosts,
                 hosts = filterHosts.toList(),
                 hostsAllowedEnabled = settings.hostsEnabled,
+                overlayModuleMask = patchPlan.overlayRuntimeModuleMask,
             )
             OverlayAdsRuntimeIntegration.queue(policy)
             managerPolicy = policy
