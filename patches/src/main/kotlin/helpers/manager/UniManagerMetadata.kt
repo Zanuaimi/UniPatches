@@ -10,25 +10,30 @@ import org.w3c.dom.Document
 import org.w3c.dom.Element
 
 internal const val UNI_MANAGER_METADATA_NAME = "com.zanuaimi.unimanager.REGISTRATION"
+internal const val UNI_MANAGER_ADS_METADATA_NAME = "com.zanuaimi.unimanager.REGISTRATION.ADS_BLOCK"
 private const val NS_ANDROID = "http://schemas.android.com/apk/res/android"
 
 internal fun encodeUniManagerMetadata(json: String): String =
     Base64.getEncoder().encodeToString(json.toByteArray(StandardCharsets.UTF_8))
 
-internal fun addUniManagerMetadata(document: Document, encoded: String) {
+internal fun addUniManagerMetadata(
+    document: Document,
+    encoded: String,
+    metadataName: String = UNI_MANAGER_METADATA_NAME,
+) {
     val root = document.documentElement ?: return
     val application = root.getElementsByTagName("application").item(0) as? Element ?: return
     val metadata = application.getElementsByTagName("meta-data")
     for (index in 0 until metadata.length) {
         val entry = metadata.item(index) as? Element ?: continue
-        if (entry.getAttributeNS(NS_ANDROID, "name") == UNI_MANAGER_METADATA_NAME) {
+        if (entry.getAttributeNS(NS_ANDROID, "name") == metadataName) {
             val existing = entry.getAttributeNS(NS_ANDROID, "value")
             entry.setAttributeNS(NS_ANDROID, "android:value", mergeMetadata(existing, encoded))
             return
         }
     }
     val entry = document.createElement("meta-data")
-    entry.setAttributeNS(NS_ANDROID, "android:name", UNI_MANAGER_METADATA_NAME)
+    entry.setAttributeNS(NS_ANDROID, "android:name", metadataName)
     entry.setAttributeNS(NS_ANDROID, "android:value", encoded)
     application.appendChild(entry)
 }
@@ -60,6 +65,7 @@ private fun mergeMetadata(existing: String, incoming: String): String {
 
 internal fun uniManagerMetadataPatch(
     name: String = "UniManager registration metadata (internal)",
+    metadataName: String = UNI_MANAGER_METADATA_NAME,
     provider: () -> String?,
 ) = resourcePatch(
     name = name,
@@ -70,7 +76,7 @@ internal fun uniManagerMetadataPatch(
     execute {
         provider()?.let { encoded ->
             document("AndroidManifest.xml").use { manifest ->
-                addUniManagerMetadata(manifest, encoded)
+                addUniManagerMetadata(manifest, encoded, metadataName)
             }
         }
     }

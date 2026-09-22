@@ -18,8 +18,8 @@ import helpers.bytecode.*
 import unipatches.overlay.OverlayAdsRuntimeIntegration
 import unipatches.overlay.attachQueuedAdsRuntimePolicy
 import helpers.startup.StartupHooks
-import helpers.manager.addUniManagerMetadata
 import helpers.manager.encodeUniManagerMetadata
+import helpers.manager.UNI_MANAGER_ADS_METADATA_NAME
 import helpers.manager.uniManagerMetadataPatch
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -689,7 +689,10 @@ val adsBlockPatch = bytecodePatch(
     val customFilterHosts by stringsOption(title = "Host filters > Custom host entries", default = emptyList(), key = "adsCustomFilterHosts", description = "Optional domains, URLs, or hosts-file lines to redirect. Add one per row, for example ads.example.com or 0.0.0.0 tracker.example.com. Entries match subdomains while Match subdomains is enabled.")
     val broadHeuristics by booleanOption(title = "Advanced > Heuristic matching > Enable broad audio-ad heuristics", default = false, key = "adsBroadAudioHeuristics", description = "Normal SDK coverage changes only exact, known ad-SDK methods. Enable this only when an audio or radio app still plays inserted ads after normal controls find nothing: it additionally looks for stream-like classes and ad-metadata methods such as adsIdentityToken, adsResponse, adsDuration, adsId, or cuepoints, then returns empty metadata so detected server-inserted audio ad breaks may be skipped. It does not block every audio ad, visual ad, network request, or unknown SDK. Because it matches names rather than an exact fingerprint, unrelated playback or stream code can match and break app features; disabled by default.")
 
-    dependsOn(uniManagerMetadataPatch(name = "Ads Block UniManager registration metadata") {
+    dependsOn(uniManagerMetadataPatch(
+        name = "Ads Block UniManager registration metadata",
+        metadataName = UNI_MANAGER_ADS_METADATA_NAME,
+    ) {
         if (enableUniManagerIntegration != true) return@uniManagerMetadataPatch null
         val registration = JsonObject().apply {
             addProperty("format", "unipatches-unimanager-registration-v1")
