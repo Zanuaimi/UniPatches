@@ -1,3 +1,9 @@
+## [1.30.0-dev.11](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.10...v1.30.0-dev.11) (2026-09-23)
+
+### 🔧 Improvements
+
+* improve metadta configuration sending ([8da4dc5](https://github.com/Zanuaimi/UniPatches/commit/8da4dc562dfae27117044b7a78e6516b40a5cd0e))
+
 ## [1.30.0-dev.10](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.9...v1.30.0-dev.10) (2026-09-22)
 
 ### 🐛 Bug Fixes
