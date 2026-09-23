@@ -16,6 +16,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
@@ -89,6 +90,7 @@ import java.util.WeakHashMap;
  * in ordinary Android apps, Unity/Godot hosts, and game Activities without AppCompat coupling.
  */
 public final class OverlayRuntime {
+    private static final String TAG = "UniPatchesOverlay";
     private static final Map<Activity, Controller> CONTROLLERS = new WeakHashMap<>();
     private static final Map<Activity, Boolean> PENDING_MANAGER_ACTIVITIES = new WeakHashMap<>();
     private static boolean callbacksRegistered;
@@ -184,22 +186,28 @@ public final class OverlayRuntime {
     }
 
     private static void initializeUniManager(Application application) {
-        UniManagerBridge.read(application, "{}", values -> {
-            Runnable applyConfiguration = () -> {
-                synchronized (OverlayRuntime.class) {
-                    if (configuration == null || globallyClosed) return;
-                    AdsRuntimePolicy.applyManagedConfiguration(values);
-                    OverlayConfig.applyManagedConfiguration(configuration, values);
-                    managerConfigurationReady = true;
-                    List<Activity> pending = new ArrayList<>(PENDING_MANAGER_ACTIVITIES.keySet());
-                    PENDING_MANAGER_ACTIVITIES.clear();
-                    for (Activity activity : pending) showActivity(activity);
+        UniManagerBridge.read(application, "{}", new UniManagerBridge.Callback() {
+            @Override public void onConfiguration(String values) {
+                Runnable applyConfiguration = () -> {
+                    synchronized (OverlayRuntime.class) {
+                        if (configuration == null || globallyClosed) return;
+                        AdsRuntimePolicy.applyManagedConfiguration(values);
+                        OverlayConfig.applyManagedConfiguration(configuration, values);
+                        managerConfigurationReady = true;
+                        List<Activity> pending = new ArrayList<>(PENDING_MANAGER_ACTIVITIES.keySet());
+                        PENDING_MANAGER_ACTIVITIES.clear();
+                        for (Activity activity : pending) showActivity(activity);
+                    }
+                };
+                if (Looper.myLooper() == Looper.getMainLooper()) {
+                    applyConfiguration.run();
+                } else {
+                    new Handler(Looper.getMainLooper()).post(applyConfiguration);
                 }
-            };
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                applyConfiguration.run();
-            } else {
-                new Handler(Looper.getMainLooper()).post(applyConfiguration);
+            }
+
+            @Override public void onBridgeStatus(String status, String reason) {
+                Log.d(TAG, "UniManager read status=" + status + " reason=" + reason);
             }
         });
     }
