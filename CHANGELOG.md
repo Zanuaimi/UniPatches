@@ -1,3 +1,9 @@
+## [1.30.0-dev.13](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.12...v1.30.0-dev.13) (2026-09-23)
+
+### 🔧 Improvements
+
+* **overlay:** Include built-in presets in unimanager metadata ([f2b1beb](https://github.com/Zanuaimi/UniPatches/commit/f2b1beb8ab87c2c281fbf7cc9022eb0617eed4e2))
+
 ## [1.30.0-dev.12](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.11...v1.30.0-dev.12) (2026-09-23)
 
 ### 🐛 Bug Fixes
