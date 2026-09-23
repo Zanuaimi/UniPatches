@@ -1,3 +1,9 @@
+## [1.30.0-dev.12](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.11...v1.30.0-dev.12) (2026-09-23)
+
+### 🐛 Bug Fixes
+
+* fix inconsistency between custom preset and unipatches preset ([6ffff85](https://github.com/Zanuaimi/UniPatches/commit/6ffff8528624b52b644c6ba429f625b18dcc6abe))
+
 ## [1.30.0-dev.11](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.10...v1.30.0-dev.11) (2026-09-23)
 
 ### 🔧 Improvements
