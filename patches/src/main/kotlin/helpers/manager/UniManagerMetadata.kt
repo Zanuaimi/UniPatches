@@ -11,6 +11,8 @@ import org.w3c.dom.Element
 
 internal const val UNI_MANAGER_METADATA_NAME = "com.zanuaimi.unimanager.REGISTRATION"
 internal const val UNI_MANAGER_ADS_METADATA_NAME = "com.zanuaimi.unimanager.REGISTRATION.ADS_BLOCK"
+internal const val UNI_MANAGER_PACKAGE = "com.zanuaimi.unimanager"
+internal const val UNI_MANAGER_BRIDGE_PERMISSION = "com.zanuaimi.unimanager.permission.BRIDGE"
 private const val NS_ANDROID = "http://schemas.android.com/apk/res/android"
 
 internal fun encodeUniManagerMetadata(json: String): String =
@@ -36,6 +38,39 @@ internal fun addUniManagerMetadata(
     entry.setAttributeNS(NS_ANDROID, "android:name", metadataName)
     entry.setAttributeNS(NS_ANDROID, "android:value", encoded)
     application.appendChild(entry)
+}
+
+/** Adds the declarations required for a patched APK to call UniManager's Binder bridge. */
+internal fun addUniManagerBridgeAccess(document: Document) {
+    val root = document.documentElement ?: return
+    val permissions = root.getElementsByTagName("uses-permission")
+    val permissionPresent = (0 until permissions.length).any { index ->
+        (permissions.item(index) as? Element)?.getAttributeNS(NS_ANDROID, "name") == UNI_MANAGER_BRIDGE_PERMISSION
+    }
+    if (!permissionPresent) {
+        val permission = document.createElement("uses-permission")
+        permission.setAttributeNS(NS_ANDROID, "android:name", UNI_MANAGER_BRIDGE_PERMISSION)
+        val application = root.getElementsByTagName("application").item(0)
+        if (application != null) root.insertBefore(permission, application) else root.appendChild(permission)
+    }
+
+    val queries = (0 until root.getElementsByTagName("queries").length)
+        .asSequence()
+        .mapNotNull { root.getElementsByTagName("queries").item(it) as? Element }
+        .firstOrNull()
+        ?: document.createElement("queries").also {
+            val application = root.getElementsByTagName("application").item(0)
+            if (application != null) root.insertBefore(it, application) else root.appendChild(it)
+        }
+    val packages = queries.getElementsByTagName("package")
+    val packagePresent = (0 until packages.length).any { index ->
+        (packages.item(index) as? Element)?.getAttributeNS(NS_ANDROID, "name") == UNI_MANAGER_PACKAGE
+    }
+    if (!packagePresent) {
+        val packageElement = document.createElement("package")
+        packageElement.setAttributeNS(NS_ANDROID, "android:name", UNI_MANAGER_PACKAGE)
+        queries.appendChild(packageElement)
+    }
 }
 
 private fun mergeMetadata(existing: String, incoming: String): String {
@@ -85,6 +120,7 @@ internal fun uniManagerMetadataPatch(
     execute {
         provider()?.let { encoded ->
             document("AndroidManifest.xml").use { manifest ->
+                addUniManagerBridgeAccess(manifest)
                 addUniManagerMetadata(manifest, encoded, metadataName)
             }
         }

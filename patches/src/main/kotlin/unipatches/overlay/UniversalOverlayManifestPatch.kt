@@ -1,6 +1,7 @@
 package unipatches.overlay
 
 import app.morphe.patcher.patch.resourcePatch
+import helpers.manager.addUniManagerBridgeAccess
 import helpers.manager.addUniManagerMetadata
 import helpers.manifest.NS_ANDROID
 import org.w3c.dom.Element
@@ -31,7 +32,10 @@ internal fun universalOverlayManifestPatch(
                     if (application != null) root.insertBefore(permission, application) else root.appendChild(permission)
                 }
             }
-            metadataProvider()?.let { encoded -> addUniManagerMetadata(manifest, encoded) }
+            metadataProvider()?.let { encoded ->
+                addUniManagerBridgeAccess(manifest)
+                addUniManagerMetadata(manifest, encoded)
+            }
         }
     }
 }
