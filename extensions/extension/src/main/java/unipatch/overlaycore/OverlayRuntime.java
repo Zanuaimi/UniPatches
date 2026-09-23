@@ -13,6 +13,8 @@ import android.graphics.Typeface;
 import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -88,12 +90,14 @@ import java.util.WeakHashMap;
  */
 public final class OverlayRuntime {
     private static final Map<Activity, Controller> CONTROLLERS = new WeakHashMap<>();
+    private static final Map<Activity, Boolean> PENDING_MANAGER_ACTIVITIES = new WeakHashMap<>();
     private static boolean callbacksRegistered;
     private static boolean globallyClosed;
     private static Application installedApplication;
     private static OverlayLifecycle lifecycleCallbacks;
     private static OverlayConfig configuration;
     private static String installedConfigurationPayload;
+    private static boolean managerConfigurationReady = true;
     private static Boolean keepAwakeState;
     private static Boolean fullscreenState;
     private static Boolean screenshotsState;
@@ -160,13 +164,16 @@ public final class OverlayRuntime {
             // Keep the first complete configuration instead of silently replacing a live menu.
             return;
         }
-        configuration = OverlayConfig.decode(encodedConfig);
-        AdsRuntimePolicy.configureManager(application, configuration.managerPersistence);
-        if (configuration.managerIntegration) {
-            initializeUniManager(application, encodedConfig);
+        if (installedConfigurationPayload == null) {
+            configuration = OverlayConfig.decode(encodedConfig);
+            AdsRuntimePolicy.configureManager(application, configuration.managerPersistence);
+            managerConfigurationReady = !configuration.managerIntegration;
+            installedConfigurationPayload = encodedConfig;
+            if (configuration.managerIntegration) {
+                initializeUniManager(application);
+            }
         }
         applyPendingAppSpecificConfiguration();
-        installedConfigurationPayload = encodedConfig;
         if (sessionStartElapsed == 0) sessionStartElapsed = SystemClock.elapsedRealtime();
         if (!callbacksRegistered) {
             installedApplication = application;
@@ -176,10 +183,24 @@ public final class OverlayRuntime {
         }
     }
 
-    private static void initializeUniManager(Application application, String encodedConfig) {
+    private static void initializeUniManager(Application application) {
         UniManagerBridge.read(application, "{}", values -> {
-            AdsRuntimePolicy.applyManagedConfiguration(values);
-            OverlayConfig.applyManagedConfiguration(configuration, values);
+            Runnable applyConfiguration = () -> {
+                synchronized (OverlayRuntime.class) {
+                    if (configuration == null || globallyClosed) return;
+                    AdsRuntimePolicy.applyManagedConfiguration(values);
+                    OverlayConfig.applyManagedConfiguration(configuration, values);
+                    managerConfigurationReady = true;
+                    List<Activity> pending = new ArrayList<>(PENDING_MANAGER_ACTIVITIES.keySet());
+                    PENDING_MANAGER_ACTIVITIES.clear();
+                    for (Activity activity : pending) showActivity(activity);
+                }
+            };
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                applyConfiguration.run();
+            } else {
+                new Handler(Looper.getMainLooper()).post(applyConfiguration);
+            }
         });
     }
 
@@ -231,6 +252,10 @@ public final class OverlayRuntime {
     static synchronized void showActivity(Activity activity) {
         if (activity == null) return;
         if (configuration == null || globallyClosed) return;
+        if (configuration.managerIntegration && !managerConfigurationReady) {
+            PENDING_MANAGER_ACTIVITIES.put(activity, Boolean.TRUE);
+            return;
+        }
         if (isActivityInstallBanned(activity)) return;
         if (activity.isFinishing() || (android.os.Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
         Controller existing = CONTROLLERS.get(activity);
@@ -299,6 +324,7 @@ public final class OverlayRuntime {
             if (controller != null) controller.detach();
         }
         CONTROLLERS.clear();
+        PENDING_MANAGER_ACTIVITIES.clear();
         MODULE_STATES.clear();
         MONITOR_STATES.clear();
         HOOK_STATES.clear();
@@ -316,6 +342,7 @@ public final class OverlayRuntime {
         callbacksRegistered = false;
         configuration = null;
         installedConfigurationPayload = null;
+        managerConfigurationReady = true;
         pendingAppSpecificProfile = null;
         pendingAppSpecificModules = null;
         sessionStartElapsed = 0;
