@@ -1,3 +1,9 @@
+## [1.30.0-dev.18](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.17...v1.30.0-dev.18) (2026-09-23)
+
+### ✨ New Features
+
+* rewrite unipatches-unimanager bridge ([da2edb9](https://github.com/Zanuaimi/UniPatches/commit/da2edb9685c399153cf900faba7f5aa99225cd73))
+
 ## [1.30.0-dev.17](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.16...v1.30.0-dev.17) (2026-09-23)
 
 ### 🔧 Improvements
