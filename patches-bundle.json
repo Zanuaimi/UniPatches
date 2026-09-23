@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-23T07:36:29",
-  "description": "## [1.30.0-dev.14](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.13...v1.30.0-dev.14) (2026-09-23)\n\n### 🐛 Bug Fixes\n\n* remove preset catalog from universal overlay unimanager metadata ([6bbf574](https://github.com/Zanuaimi/UniPatches/commit/6bbf5743817c05074114068115be1b264361683f))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.30.0-dev.14/patches-1.30.0-dev.14.mpp",
+  "created_at": "2026-09-23T08:00:40",
+  "description": "## [1.30.0-dev.15](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.14...v1.30.0-dev.15) (2026-09-23)\n\n### 🐛 Bug Fixes\n\n* fix unimanager application happening after overlay was already created. ([29af4a5](https://github.com/Zanuaimi/UniPatches/commit/29af4a522a92631adb46ae3d79fb03496da79d31))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.30.0-dev.15/patches-1.30.0-dev.15.mpp",
   "signature_download_url": "",
-  "version": "1.30.0-dev.14"
+  "version": "1.30.0-dev.15"
 }

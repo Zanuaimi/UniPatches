@@ -1,3 +1,9 @@
+## [1.30.0-dev.15](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.14...v1.30.0-dev.15) (2026-09-23)
+
+### 🐛 Bug Fixes
+
+* fix unimanager application happening after overlay was already created. ([29af4a5](https://github.com/Zanuaimi/UniPatches/commit/29af4a522a92631adb46ae3d79fb03496da79d31))
+
 ## [1.30.0-dev.14](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.13...v1.30.0-dev.14) (2026-09-23)
 
 ### 🐛 Bug Fixes
