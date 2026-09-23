@@ -31,6 +31,7 @@ import kotlin.math.roundToInt
 
 private const val RUNTIME_CLASS = OVERLAY_RUNTIME_CLASS
 private const val PRESET_SCHEMA_VERSION = 7
+private const val PRESET_CATALOG_VERSION = 1
 private const val MAX_CUSTOM_ICON_BYTES = 1024 * 1024
 private const val MAX_TITLE_CHARACTERS = 80
 private const val MAX_DESCRIPTION_CHARACTERS = 500
@@ -170,6 +171,74 @@ private fun OverlayUiPreset.toJson(): JsonObject = JsonObject().apply {
         addProperty("animationDuration", animationDuration)
         addProperty("animationEasing", animationEasing)
     })
+}
+
+private val managerPresetKeyAliases = mapOf(
+    "menuOutlineWidth" to "runtimeOverlayOutlineWidthDp",
+    "iconText" to "runtimeOverlayButtonText",
+    "iconTextColor1" to "runtimeOverlayButtonTextColor",
+    "iconBackground1" to "runtimeOverlayButtonBackgroundColor",
+    "iconTextSize" to "runtimeOverlayIconTextSizeSp",
+    "iconOutlineWidth" to "runtimeOverlayIconOutlineWidthDp",
+    "buttonSize" to "runtimeOverlayButtonSizeDp",
+    "buttonOpacity" to "runtimeOverlayButtonIdleOpacityPercent",
+    "dragVisibilityDuration" to "runtimeOverlayButtonDragVisibilityDurationSeconds",
+)
+
+private val managerPresetExcludedKeys = setOf(
+    "format",
+    "version",
+    "title",
+    "description",
+    "appendDescription",
+    "repositoryText",
+    "repositoryUrl",
+    "customIconImageLocal",
+    "customIconImageInput",
+    "activityOverride",
+)
+
+private fun String.toRuntimePresetKey(): String =
+    managerPresetKeyAliases[this]
+        ?: "runtimeOverlay" + replaceFirstChar { it.uppercaseChar() }
+
+private fun JsonObject.toManagerPresetJson(): JsonObject {
+    val runtime = JsonObject()
+    entrySet().forEach { (key, value) ->
+        if (key !in managerPresetExcludedKeys) runtime.add(key.toRuntimePresetKey(), value.deepCopy())
+    }
+    // The preset's generic textColor is represented by the dedicated menu text fields
+    // in the runtime protocol, so the preset catalog must not override those fields.
+    runtime.remove("runtimeOverlayTextColor")
+    return runtime
+}
+
+private fun OverlayUiPreset.toManagerPresetJson(): JsonObject =
+    toJson().getAsJsonObject("settings").toManagerPresetJson()
+
+private fun importedPresetManagerJson(source: String): JsonObject? {
+    if (source.isBlank()) return null
+    val file = runCatching { File(source).canonicalFile }.getOrNull()
+        ?: return null
+    if (!file.isFile || !file.name.endsWith(".json", ignoreCase = true)) return null
+    return runCatching {
+        val root = JsonParser.parseString(file.readText(Charsets.UTF_8)).asJsonObject
+        val version = root.get("version")?.asInt ?: root.get("schemaVersion")?.asInt ?: 0
+        check(version in 0..PRESET_SCHEMA_VERSION)
+        root.getAsJsonObject("settings")?.toManagerPresetJson()
+    }.getOrNull()
+}
+
+private fun presetCatalogJson(): JsonArray = JsonArray().apply {
+    OverlayPresetCatalog.definitions.forEach { definition ->
+        add(JsonObject().apply {
+            addProperty("id", definition.id)
+            addProperty("name", definition.displayName)
+            addProperty("version", PRESET_CATALOG_VERSION)
+            addProperty("description", definition.description)
+            add("configuration", definition.values.toManagerPresetJson())
+        })
+    }
 }
 
 private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Logger): OverlayUiPreset {
@@ -819,7 +888,7 @@ val universalOverlayPatch = bytecodePatch(
     )
     val controlBackground by stringOption(
         title = "UI settings > Controls > Background color",
-        default = "#300000",
+        default = "#FF5656",
         key = "runtimeOverlayControlBackground",
         description = "Background color for overlay controls.",
     )
@@ -1119,13 +1188,13 @@ val universalOverlayPatch = bytecodePatch(
     )
     val iconBackgroundColor3 by stringOption(
         title = "UI settings > Floating button > Background color 3",
-        default = "#3D7806",
+        default = "#AA0000",
         key = "runtimeOverlayIconBackgroundColor3",
         description = "Third color used by Faceted layers. It is ignored when Background style is Flat. Use #RRGGBB.",
     )
     val iconBackgroundColor4 by stringOption(
         title = "UI settings > Floating button > Background color 4",
-        default = "#4F9905",
+        default = "#300000",
         key = "runtimeOverlayIconBackgroundColor4",
         description = "Fourth color used by Faceted layers. It is ignored when Background style is Flat. Use #RRGGBB.",
     )
@@ -1252,7 +1321,13 @@ val universalOverlayPatch = bytecodePatch(
                     })
                 })
                 add("capabilities", JsonArray().apply { add("overlay.config.v2") })
-                add("configuration", JsonObject().apply {
+                addProperty("preset_catalog_version", PRESET_CATALOG_VERSION)
+                addProperty("runtimeOverlaySelectedPreset", selectedPreset.orEmpty().ifBlank { "custom" })
+                addProperty("runtimeOverlaySelectedPresetVersion", PRESET_CATALOG_VERSION)
+                add("preset_catalog", presetCatalogJson())
+                val managerConfiguration = JsonObject().apply {
+                    addProperty("runtimeOverlaySelectedPreset", selectedPreset.orEmpty().ifBlank { "custom" })
+                    addProperty("runtimeOverlaySelectedPresetVersion", PRESET_CATALOG_VERSION)
                     // These are manager-editable runtime UI values. Import/export paths,
                     // custom image sources, and advanced injection settings intentionally stay
                     // patch-local because the patched APK cannot safely read manager files.
@@ -1374,7 +1449,21 @@ val universalOverlayPatch = bytecodePatch(
                     if (includeOverlayRuntimeLogs == true) {
                         addProperty("runtimeOverlayEnableOverlayRuntimeLogsOnLaunch", enableOverlayRuntimeLogsOnLaunch == true)
                     }
-                })
+                }
+                val selectedPresetId = selectedPreset.orEmpty().ifBlank { "custom" }
+                if (selectedPresetId != "custom") {
+                    OverlayPresetCatalog.definitions
+                        .firstOrNull { it.id == selectedPresetId }
+                        ?.values
+                        ?.toManagerPresetJson()
+                        ?.entrySet()
+                        ?.forEach { (key, value) -> managerConfiguration.add(key, value.deepCopy()) }
+                } else {
+                    importedPresetManagerJson(importUiPreset.orEmpty().trim())
+                        ?.entrySet()
+                        ?.forEach { (key, value) -> managerConfiguration.add(key, value.deepCopy()) }
+                }
+                add("configuration", managerConfiguration)
             }
             encodeUniManagerMetadata(registration.toString())
         },
