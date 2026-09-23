@@ -1,3 +1,9 @@
+## [1.30.0-dev.14](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.13...v1.30.0-dev.14) (2026-09-23)
+
+### 🐛 Bug Fixes
+
+* remove preset catalog from universal overlay unimanager metadata ([6bbf574](https://github.com/Zanuaimi/UniPatches/commit/6bbf5743817c05074114068115be1b264361683f))
+
 ## [1.30.0-dev.13](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.12...v1.30.0-dev.13) (2026-09-23)
 
 ### 🔧 Improvements
