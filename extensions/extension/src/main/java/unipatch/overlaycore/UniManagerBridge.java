@@ -23,6 +23,8 @@ public final class UniManagerBridge {
     private static final String MANAGER_SERVICE = "com.zanuaimi.unimanager.bridge.BridgeService";
     private static final int TRANSACTION_READ = 2;
     private static final int TRANSACTION_UPDATE = 3;
+    private static final long INITIAL_TIMEOUT_MILLIS = 5_000L;
+    private static final long RETRY_TIMEOUT_MILLIS = 2_000L;
     // Keep requests below Android Binder's practical transaction limit. Overlay images are
     // embedded in the APK and are intentionally not sent through this bridge.
     private static final int MAX_PAYLOAD_LENGTH = 512 * 1024;
@@ -43,14 +45,25 @@ public final class UniManagerBridge {
     public static void read(final Context context, final String fallback, final Callback callback) {
         if (context == null || callback == null) return;
         String payload = "{\"package_name\":\"" + context.getPackageName() + "\"}";
-        request(context, TRANSACTION_READ, payload, fallback, callback);
+        request(context, TRANSACTION_READ, payload, fallback, callback, true, INITIAL_TIMEOUT_MILLIS);
     }
 
     private static void request(final Context context, final int transaction,
                                 final String payload, final String fallback,
                                 final Callback callback) {
+        request(context, transaction, payload, fallback, callback, false, INITIAL_TIMEOUT_MILLIS);
+    }
+
+    private static void request(final Context context, final int transaction,
+                                final String payload, final String fallback,
+                                final Callback callback, final boolean retryTransportFailure,
+                                final long timeoutMillis) {
         EXECUTOR.execute(() -> {
-            final long deadline = SystemClock.uptimeMillis() + 1200L;
+            // UniManager may be cold-started and has to load its Compose UI/runtime before
+            // the exported bridge service can answer. A short timeout makes the overlay fall
+            // back to embedded patch-time values even though the manager is installed and
+            // contains a valid configuration.
+            final long deadline = SystemClock.uptimeMillis() + timeoutMillis;
             try {
                 Intent query = new Intent(ACTION_BRIDGE).setPackage(MANAGER_PACKAGE);
                 List<ResolveInfo> services = context.getPackageManager().queryIntentServices(query, 0);
@@ -77,7 +90,8 @@ public final class UniManagerBridge {
                     }
                 };
                 if (!context.bindService(explicit, connection, Context.BIND_AUTO_CREATE)) {
-                    callback.onConfiguration(fallback); return;
+                    retryOrFallback(context, transaction, payload, fallback, callback, retryTransportFailure);
+                    return;
                 }
                 try {
                     synchronized (lock) {
@@ -85,16 +99,34 @@ public final class UniManagerBridge {
                             lock.wait(Math.max(1L, deadline - SystemClock.uptimeMillis()));
                         }
                     }
-                    if (result[0] == null) { callback.onConfiguration(fallback); return; }
+                    if (result[0] == null) {
+                        retryOrFallback(context, transaction, payload, fallback, callback, retryTransportFailure);
+                        return;
+                    }
                     String configuration = transact(result[0], transaction, payload);
                     callback.onConfiguration(configuration == null ? fallback : configuration);
                 } finally {
                     context.unbindService(connection);
                 }
             } catch (Exception ignored) {
-                callback.onConfiguration(fallback);
+                retryOrFallback(context, transaction, payload, fallback, callback, retryTransportFailure);
             }
         });
+    }
+
+    private static void retryOrFallback(final Context context, final int transaction,
+                                        final String payload, final String fallback,
+                                        final Callback callback, final boolean retryTransportFailure) {
+        if (transaction == TRANSACTION_READ && retryTransportFailure) {
+            // Keep the retry off the Binder worker's current call while allowing a cold-started
+            // UniManager process a brief opportunity to finish creating its service.
+            EXECUTOR.execute(() -> {
+                SystemClock.sleep(250L);
+                request(context, transaction, payload, fallback, callback, false, RETRY_TIMEOUT_MILLIS);
+            });
+        } else {
+            callback.onConfiguration(fallback);
+        }
     }
 
     public static void update(final Context context, final String packageName, final String json) {
