@@ -700,7 +700,11 @@ val adsBlockPatch = bytecodePatch(
             addProperty("source_version", "unipatches-dev")
             add("patches", JsonArray().apply {
                 // Keep the registration ID stable so existing UniManager records survive the display-name rename.
-                add(JsonObject().apply { addProperty("id", "control-app-ads"); addProperty("version", "1") })
+                add(JsonObject().apply {
+                    addProperty("id", "control-app-ads")
+                    addProperty("version", "1")
+                    add("configuration_prefixes", JsonArray().apply { add("block_") })
+                })
             })
             add("capabilities", JsonArray().apply {
                 // Integration itself installs the startup policy, even when optional overlay

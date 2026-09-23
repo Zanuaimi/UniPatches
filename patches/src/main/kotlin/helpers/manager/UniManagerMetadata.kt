@@ -59,6 +59,14 @@ private fun mergeMetadata(existing: String, incoming: String): String {
         next.getAsJsonObject("configuration")?.entrySet()?.forEach { (key, value) ->
             if (!configuration.has(key)) configuration.add(key, value)
         }
+        val schema = current.getAsJsonArray("configuration_schema") ?: JsonArray().also { current.add("configuration_schema", it) }
+        next.getAsJsonArray("configuration_schema")?.forEach { candidate ->
+            if (!candidate.isJsonObject) return@forEach
+            val candidateKey = candidate.asJsonObject.get("key")?.asString
+            if (candidateKey.isNullOrBlank()) return@forEach
+            val existingIndex = schema.indexOfFirst { it.isJsonObject && it.asJsonObject.get("key")?.asString == candidateKey }
+            if (existingIndex >= 0) schema.set(existingIndex, candidate) else schema.add(candidate)
+        }
         encodeUniManagerMetadata(current.toString())
     }.getOrDefault(incoming)
 }

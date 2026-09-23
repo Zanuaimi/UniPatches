@@ -1245,7 +1245,11 @@ val universalOverlayPatch = bytecodePatch(
                 addProperty("protocol_version", 1)
                 addProperty("source_version", "unipatches-dev")
                 add("patches", JsonArray().apply {
-                    add(JsonObject().apply { addProperty("id", "universal-overlay"); addProperty("version", "1") })
+                    add(JsonObject().apply {
+                        addProperty("id", "universal-overlay")
+                        addProperty("version", "1")
+                        add("configuration_prefixes", JsonArray().apply { add("runtimeOverlay") })
+                    })
                 })
                 add("capabilities", JsonArray().apply { add("overlay.config.v2") })
                 add("configuration", JsonObject().apply {
