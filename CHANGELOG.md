@@ -1,3 +1,9 @@
+## [1.30.0-dev.16](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.15...v1.30.0-dev.16) (2026-09-23)
+
+### 🐛 Bug Fixes
+
+* fix unimanager and bridge not being included in manifest ([22e5bca](https://github.com/Zanuaimi/UniPatches/commit/22e5bca36b547a32f691ede753ce30a255039c0f))
+
 ## [1.30.0-dev.15](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.14...v1.30.0-dev.15) (2026-09-23)
 
 ### 🐛 Bug Fixes
