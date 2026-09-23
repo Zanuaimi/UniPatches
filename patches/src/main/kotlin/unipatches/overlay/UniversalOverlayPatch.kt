@@ -1431,8 +1431,11 @@ val universalOverlayPatch = bytecodePatch(
             iconOutlineColor2 = iconOutlineColor2.orEmpty().ifBlank { "#FFFFFF" },
             iconOutlineGradientAngle = ((iconOutlineGradientAngle ?: 0) % 361 + 361) % 361,
             iconBackgroundStyle = iconBackgroundStyle.orEmpty().ifBlank { "flat" },
-            iconBackgroundColor3 = iconBackgroundColor3.orEmpty().ifBlank { "#3D7806" },
-            iconBackgroundColor4 = iconBackgroundColor4.orEmpty().ifBlank { "#4F9905" },
+            // Keep Custom (UniPatches defaults) identical to the built-in UniPatches preset,
+            // including colors that are currently unused by the flat icon background but may
+            // become visible if the user switches to faceted layers later.
+            iconBackgroundColor3 = iconBackgroundColor3.orEmpty().ifBlank { "#AA0000" },
+            iconBackgroundColor4 = iconBackgroundColor4.orEmpty().ifBlank { "#300000" },
             iconParts = iconParts.orEmpty().map { it.trim() }.filter { it.isNotEmpty() }.take(12),
             customIconImageLocal = customIconImage.orEmpty().trim(),
             customIconImageInput = customIconImageInput.orEmpty().trim(),
@@ -1449,9 +1452,7 @@ val universalOverlayPatch = bytecodePatch(
             iconTextFont = iconTextFont.orEmpty().ifBlank { "default" },
             menuTextFont = menuTextFont.orEmpty().ifBlank { "default" },
             controlTheme = controlTheme.orEmpty().ifBlank { "modern" },
-            controlBackground = controlBackground.orEmpty().ifBlank {
-                outlineColor.orEmpty().ifBlank { "#FF5656" }
-            },
+            controlBackground = controlBackground.orEmpty().ifBlank { "#FF5656" },
             controlForeground = controlForeground.orEmpty().ifBlank { "#FF5656" },
             bottomButtonStyle = bottomButtonStyle.orEmpty().ifBlank { "text" },
             bottomButtonShape = bottomButtonShape.orEmpty().ifBlank { "square" },
