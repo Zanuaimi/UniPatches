@@ -78,8 +78,9 @@ internal fun uniManagerMetadataPatch(
 ) = resourcePatch(
     name = name,
     // This is an internal dependency of patches that opt into UniManager.
-    // The provider remains nullable, so it is a no-op when integration is disabled.
-    default = true,
+    // Parent patches request it explicitly through dependsOn; keeping it disabled
+    // by default avoids Morphe treating it as a standalone universal patch.
+    default = false,
 ) {
     execute {
         provider()?.let { encoded ->

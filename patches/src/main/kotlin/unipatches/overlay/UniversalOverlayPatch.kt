@@ -229,18 +229,6 @@ private fun importedPresetManagerJson(source: String): JsonObject? {
     }.getOrNull()
 }
 
-private fun presetCatalogJson(): JsonArray = JsonArray().apply {
-    OverlayPresetCatalog.definitions.forEach { definition ->
-        add(JsonObject().apply {
-            addProperty("id", definition.id)
-            addProperty("name", definition.displayName)
-            addProperty("version", PRESET_CATALOG_VERSION)
-            addProperty("description", definition.description)
-            add("configuration", definition.values.toManagerPresetJson())
-        })
-    }
-}
-
 private fun readPresetFile(source: String, fallback: OverlayUiPreset, logger: Logger): OverlayUiPreset {
     if (source.isBlank()) return fallback
     val file = runCatching { File(source).canonicalFile }.getOrNull()
@@ -1324,7 +1312,6 @@ val universalOverlayPatch = bytecodePatch(
                 addProperty("preset_catalog_version", PRESET_CATALOG_VERSION)
                 addProperty("runtimeOverlaySelectedPreset", selectedPreset.orEmpty().ifBlank { "custom" })
                 addProperty("runtimeOverlaySelectedPresetVersion", PRESET_CATALOG_VERSION)
-                add("preset_catalog", presetCatalogJson())
                 val managerConfiguration = JsonObject().apply {
                     addProperty("runtimeOverlaySelectedPreset", selectedPreset.orEmpty().ifBlank { "custom" })
                     addProperty("runtimeOverlaySelectedPresetVersion", PRESET_CATALOG_VERSION)
