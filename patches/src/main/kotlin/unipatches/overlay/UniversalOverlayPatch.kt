@@ -1299,7 +1299,7 @@ val universalOverlayPatch = bytecodePatch(
             if (enableUniManagerIntegration != true) return@universalOverlayManifestPatch null
             val registration = JsonObject().apply {
                 addProperty("format", "unipatches-unimanager-registration-v1")
-                addProperty("protocol_version", 1)
+                addProperty("protocol_version", 2)
                 addProperty("source_version", "unipatches-dev")
                 add("patches", JsonArray().apply {
                     add(JsonObject().apply {

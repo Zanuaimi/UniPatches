@@ -696,7 +696,7 @@ val adsBlockPatch = bytecodePatch(
         if (enableUniManagerIntegration != true) return@uniManagerMetadataPatch null
         val registration = JsonObject().apply {
             addProperty("format", "unipatches-unimanager-registration-v1")
-            addProperty("protocol_version", 1)
+            addProperty("protocol_version", 2)
             addProperty("source_version", "unipatches-dev")
             add("patches", JsonArray().apply {
                 // Keep the registration ID stable so existing UniManager records survive the display-name rename.
