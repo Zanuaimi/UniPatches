@@ -1,3 +1,9 @@
+## [1.30.0-dev.20](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.19...v1.30.0-dev.20) (2026-09-24)
+
+### 🔧 Improvements
+
+* update protocol ([70d93cc](https://github.com/Zanuaimi/UniPatches/commit/70d93ccdf0404d97cc416ec2f10c573fff9ed1b5))
+
 ## [1.30.0-dev.19](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.18...v1.30.0-dev.19) (2026-09-24)
 
 ### 🔧 Improvements
