@@ -186,7 +186,7 @@ public final class OverlayRuntime {
     }
 
     private static void initializeUniManager(Application application) {
-        UniManagerBridge.read(application, "{}", new UniManagerBridge.Callback() {
+        UniManagerBridge.resolve(application, "{}", new UniManagerBridge.Callback() {
             @Override public void onConfiguration(String values) {
                 Runnable applyConfiguration = () -> {
                     synchronized (OverlayRuntime.class) {

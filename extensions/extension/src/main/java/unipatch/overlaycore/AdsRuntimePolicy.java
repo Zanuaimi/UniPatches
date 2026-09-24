@@ -24,6 +24,7 @@ public final class AdsRuntimePolicy {
     private static final Set<String> hosts = new HashSet<>();
     private static Context managerContext;
     private static boolean managerPersistence;
+    private static boolean managerPending;
 
     private AdsRuntimePolicy() { }
 
@@ -34,6 +35,7 @@ public final class AdsRuntimePolicy {
         // process/session.
         OverlaySessionState.clearModule("adsRuntimeBlockAds");
         integrated = false;
+        managerPending = false;
         modules = 0;
         overlayModules = 0;
         blockedFormats = 0;
@@ -80,10 +82,10 @@ public final class AdsRuntimePolicy {
     }
 
     public static synchronized boolean isIntegrated() { return integrated; }
-    public static synchronized boolean hasModule(int module) { return integrated && (modules & module) != 0; }
-    public static synchronized boolean hasAnyModule() { return integrated && modules != 0; }
-    public static synchronized boolean hasOverlayModule(int module) { return integrated && (overlayModules & module) != 0; }
-    public static synchronized boolean hasAnyOverlayModule() { return integrated && overlayModules != 0; }
+    public static synchronized boolean hasModule(int module) { return !managerPending && integrated && (modules & module) != 0; }
+    public static synchronized boolean hasAnyModule() { return !managerPending && integrated && modules != 0; }
+    public static synchronized boolean hasOverlayModule(int module) { return !managerPending && integrated && (overlayModules & module) != 0; }
+    public static synchronized boolean hasAnyOverlayModule() { return !managerPending && integrated && overlayModules != 0; }
     public static synchronized boolean shouldBlockInterstitials() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 1) != 0; }
     public static synchronized boolean shouldBlockBanners() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 2) != 0; }
     public static synchronized boolean shouldBlockAppOpen() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 4) != 0; }
@@ -96,8 +98,11 @@ public final class AdsRuntimePolicy {
         managerPersistence = persistChanges;
     }
 
+    public static synchronized void beginManagerResolution() { managerPending = true; }
+
     /** Applies only values explicitly supplied by UniManager; malformed or missing values are ignored. */
     public static synchronized void applyManagedConfiguration(String encoded) {
+        managerPending = false;
         if (encoded == null || encoded.isEmpty()) return;
         try {
             JSONObject values = new JSONObject(encoded);
