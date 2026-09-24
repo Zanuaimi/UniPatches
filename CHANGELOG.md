@@ -1,3 +1,9 @@
+## [1.30.0-dev.19](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.18...v1.30.0-dev.19) (2026-09-24)
+
+### 🔧 Improvements
+
+* improve unimanager support ([a9e9900](https://github.com/Zanuaimi/UniPatches/commit/a9e99007c8fbef9142c5f507d291d3c1bf57667b))
+
 ## [1.30.0-dev.18](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.17...v1.30.0-dev.18) (2026-09-23)
 
 ### ✨ New Features
