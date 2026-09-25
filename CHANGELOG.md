@@ -1,3 +1,9 @@
+## [1.30.0-dev.22](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.21...v1.30.0-dev.22) (2026-09-25)
+
+### 🔧 Improvements
+
+* improve legacy app compatibility patch ([0194fb3](https://github.com/Zanuaimi/UniPatches/commit/0194fb30b7f2d6bb1733310a0be76f32f6bbd312))
+
 ## [1.30.0-dev.21](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.20...v1.30.0-dev.21) (2026-09-25)
 
 ### ✨ New Features

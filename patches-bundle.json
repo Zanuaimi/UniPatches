@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-25T10:46:00",
-  "description": "## [1.30.0-dev.21](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.20...v1.30.0-dev.21) (2026-09-25)\n\n### ✨ New Features\n\n* new patch called Permission Guard ([36c02a2](https://github.com/Zanuaimi/UniPatches/commit/36c02a284ca88422f4dc5cdab75739ee17af05c3))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.30.0-dev.21/patches-1.30.0-dev.21.mpp",
+  "created_at": "2026-09-25T10:57:51",
+  "description": "## [1.30.0-dev.22](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.21...v1.30.0-dev.22) (2026-09-25)\n\n### 🔧 Improvements\n\n* improve legacy app compatibility patch ([0194fb3](https://github.com/Zanuaimi/UniPatches/commit/0194fb30b7f2d6bb1733310a0be76f32f6bbd312))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.30.0-dev.22/patches-1.30.0-dev.22.mpp",
   "signature_download_url": "",
-  "version": "1.30.0-dev.21"
+  "version": "1.30.0-dev.22"
 }

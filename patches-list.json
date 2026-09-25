@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.30.0-dev.21",
+  "version": "1.30.0-dev.22",
   "patches": [
     {
       "name": "Ads Block Patch ( Experimental, Enhanced, Overlay Support, UniManager Support )",
@@ -1054,7 +1054,7 @@
         {
           "key": "legacyCompatibilityTargetSdk",
           "title": "Legacy App Compatibility > Installation and manifest > Target SDK version",
-          "description": "Target SDK to write when Spoof Target SDK is enabled. Values below 23 are rejected because modern Android can block them. Default: 34.",
+          "description": "Target SDK to write when Spoof Target SDK is enabled. Values outside the supported range 23..40 are rejected because modern Android can block them. Default: 34.",
           "required": false,
           "type": "kotlin.Int",
           "default": 34,
