@@ -1,3 +1,9 @@
+## [1.30.0-dev.21](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.20...v1.30.0-dev.21) (2026-09-25)
+
+### ✨ New Features
+
+* new patch called Permission Guard ([36c02a2](https://github.com/Zanuaimi/UniPatches/commit/36c02a284ca88422f4dc5cdab75739ee17af05c3))
+
 ## [1.30.0-dev.20](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.19...v1.30.0-dev.20) (2026-09-24)
 
 ### 🔧 Improvements
