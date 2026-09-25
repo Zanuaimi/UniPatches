@@ -18,9 +18,9 @@ import java.util.logging.Logger
 /** Bytecode compatibility for OpenIAB dynamic receiver registration. */
 private const val OPEN_IAB_UNITY_PLUGIN = "Lorg/onepf/openiab/UnityPlugin;"
 private const val REGISTER_RECEIVER = "registerReceiver"
-private const val RECEIVER_FLAGS_API = 33
-private const val RECEIVER_EXPORTED = 0x2
-private const val RECEIVER_NOT_EXPORTED = 0x4
+internal const val RECEIVER_FLAGS_API = 33
+internal const val RECEIVER_EXPORTED = 0x2
+internal const val RECEIVER_NOT_EXPORTED = 0x4
 private val frameworkContextOwners = setOf(
     "Landroid/content/Context;",
     "Landroid/content/ContextWrapper;",
