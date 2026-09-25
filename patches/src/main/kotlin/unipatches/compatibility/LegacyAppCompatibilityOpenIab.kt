@@ -18,9 +18,9 @@ import java.util.logging.Logger
 /** Bytecode compatibility for OpenIAB dynamic receiver registration. */
 private const val OPEN_IAB_UNITY_PLUGIN = "Lorg/onepf/openiab/UnityPlugin;"
 private const val REGISTER_RECEIVER = "registerReceiver"
-private const val RECEIVER_FLAGS_API = 33
-private const val RECEIVER_EXPORTED = 0x2
-private const val RECEIVER_NOT_EXPORTED = 0x4
+internal const val RECEIVER_FLAGS_API = 33
+internal const val RECEIVER_EXPORTED = 0x2
+internal const val RECEIVER_NOT_EXPORTED = 0x4
 private val frameworkContextOwners = setOf(
     "Landroid/content/Context;",
     "Landroid/content/ContextWrapper;",
@@ -169,7 +169,7 @@ internal fun openIabReceiverFlagsPatch(enabledProvider: () -> String) = bytecode
             logger.warning("Legacy compatibility: unknown OpenIAB receiver mode '$mode'; fix skipped.")
             return@execute
         }
-        val openIab = mutableClassDefByOrNull(OPEN_IAB_UNITY_PLUGIN)
+        val openIab = classDefByOrNull(OPEN_IAB_UNITY_PLUGIN)
         if (openIab == null) {
             logger.info("Legacy compatibility: OpenIAB UnityPlugin was not found; dynamic receiver fix skipped.")
             return@execute
@@ -182,6 +182,7 @@ internal fun openIabReceiverFlagsPatch(enabledProvider: () -> String) = bytecode
         classDefForEach { classDef -> classDef.superclass?.let { parents[classDef.type] = it } }
         for (method in openIab.methods.filter { it.name == "createBroadcasts" }) {
             val implementation = method.implementation ?: continue
+            val immutableInstructions = implementation.instructions.toList()
             methodCount++
             val calls = implementation.instructions.mapIndexedNotNull { index, instruction ->
                 val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference ?: return@mapIndexedNotNull null
@@ -193,19 +194,19 @@ internal fun openIabReceiverFlagsPatch(enabledProvider: () -> String) = bytecode
                         "Landroid/content/IntentFilter;",
                     )
                 ) return@mapIndexedNotNull null
-                index to (instruction as? ReferenceInstruction)
+                index to instruction
             }
             if (calls.isEmpty()) {
                 logger.info("Legacy compatibility: OpenIAB ${openIab.type}->${method.name} has no exact legacy receiver calls.")
                 continue
             }
-            logger.info("Legacy compatibility: inspecting ${openIab.type}->${method.name}; receiver owner(s)=${calls.map { (it.second!!.reference as? MethodReference)?.definingClass }.distinct()}")
+            logger.info("Legacy compatibility: inspecting ${openIab.type}->${method.name}; receiver owner(s)=${calls.map { (it.second.reference as? MethodReference)?.definingClass }.distinct()}")
 
             if (mode == OPEN_IAB_AUTOMATIC) {
                 val unverifiedCall = calls.firstOrNull { call ->
-                    val receiverRegisters = receiverCallRegisters(call.second!!)
+                    val receiverRegisters = receiverCallRegisters(call.second)
                     val owned = receiverRegisters != null && isOpenIabReceiverValue(
-                        implementation.instructions,
+                        immutableInstructions,
                         call.first,
                         receiverRegisters[1],
                     )
@@ -217,7 +218,7 @@ internal fun openIabReceiverFlagsPatch(enabledProvider: () -> String) = bytecode
                     logger.info("Legacy compatibility: automatic OpenIAB receiver fix skipped ${method.name}; receiver ownership was not proven for every call.")
                     continue
                 }
-                val actions = resolvedOpenIabActions(implementation.instructions, calls.last().first)
+                val actions = resolvedOpenIabActions(immutableInstructions, calls.last().first)
                 if (actions == null) {
                     skipped += calls.size
                     logger.info("Legacy compatibility: automatic OpenIAB receiver fix skipped ${method.name}; IntentFilter actions were not uniquely resolved.")
@@ -230,7 +231,7 @@ internal fun openIabReceiverFlagsPatch(enabledProvider: () -> String) = bytecode
                 }
             }
 
-            val actions = resolvedOpenIabActions(implementation.instructions, calls.last().first)
+            val actions = resolvedOpenIabActions(immutableInstructions, calls.last().first)
             val receiverFlags = receiverFlagsForOpenIabActions(actions ?: emptySet()) ?: RECEIVER_NOT_EXPORTED
             logger.info("Legacy compatibility: ${openIab.type}->${method.name}; actions=${actions ?: "unknown"}; selected receiver flag=${if (receiverFlags == RECEIVER_EXPORTED) "RECEIVER_EXPORTED" else "RECEIVER_NOT_EXPORTED"}; calls=${calls.size}")
 
@@ -246,15 +247,15 @@ internal fun openIabReceiverFlagsPatch(enabledProvider: () -> String) = bytecode
             }
 
             val cloned = method.cloneMutable(additionalRegisters = 6)
-            val prologueSize = cloned.implementation!!.instructions.size - implementation.instructions.size
+            val prologueSize = cloned.implementation!!.instructions.size - immutableInstructions.size
             for ((ordinal, call) in calls.asReversed().withIndex()) {
                 val index = call.first + prologueSize
-                val registers = receiverCallRegisters(call.second!!) ?: run {
+                val registers = receiverCallRegisters(call.second) ?: run {
                     skipped++
                     logger.info("Legacy compatibility: skipped OpenIAB receiver call at instruction ${call.first}; unsupported register form.")
                     continue
                 }
-                val oldOwner = ((call.second!!.reference as? MethodReference)?.definingClass)
+                val oldOwner = ((call.second.reference as? MethodReference)?.definingClass)
                     ?: "Landroid/content/Context;"
                 val oldReference = "$oldOwner->registerReceiver(Landroid/content/BroadcastReceiver;Landroid/content/IntentFilter;)Landroid/content/Intent;"
                 val oldLabel = ":morphe_openiab_receiver_old_${ordinal}"
@@ -289,4 +290,3 @@ internal fun openIabReceiverFlagsPatch(enabledProvider: () -> String) = bytecode
         }
     }
 }
-

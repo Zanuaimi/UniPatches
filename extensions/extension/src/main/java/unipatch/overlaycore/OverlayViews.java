@@ -64,17 +64,32 @@ final class OverlayViews {
         return new GradientBackground(first, second, angle, stroke, strokeWidth, buttonShape, true);
     }
 
+    static Shader textGradient(int first, int second, float angle, float width, float height) {
+        float radians = (float) Math.toRadians(angle);
+        float dx = (float) Math.sin(radians);
+        float dy = (float) Math.cos(radians);
+        float length = (float) Math.hypot(width, height);
+        float cx = width / 2f;
+        float cy = height / 2f;
+        return new LinearGradient(cx - dx * length / 2f, cy - dy * length / 2f,
+                cx + dx * length / 2f, cy + dy * length / 2f,
+                first, second, Shader.TileMode.CLAMP);
+    }
+
     static Drawable icon(int background1, int background2, float backgroundAngle, boolean backgroundGradient,
                          int outline1, int outline2, float outlineAngle, boolean outlineGradient,
                          int outlineWidth, String buttonShape, String style, String shape,
                          int shapeColor1, int shapeColor2, boolean shapeGradient, float shapeAngle,
                          float shapeStrokeWidth, float shapeScale, boolean highlight, boolean shadow,
+                         int shadowColor, int shadowOpacity, int shadowOffsetX, int shadowOffsetY,
+                         int shadowBlur, int shadowSpread,
                          String backgroundStyle, int backgroundColor3, int backgroundColor4,
                          String[] iconParts) {
         return new IconDrawable(background1, background2, backgroundAngle, backgroundGradient,
                 outline1, outline2, outlineAngle, outlineGradient, outlineWidth, buttonShape,
                 style, shape, shapeColor1, shapeColor2, shapeGradient, shapeAngle,
-                shapeStrokeWidth, shapeScale, highlight, shadow, backgroundStyle, backgroundColor3, backgroundColor4,
+                shapeStrokeWidth, shapeScale, highlight, shadow, shadowColor, shadowOpacity, shadowOffsetX,
+                shadowOffsetY, shadowBlur, shadowSpread, backgroundStyle, backgroundColor3, backgroundColor4,
                 iconParts);
     }
 
@@ -250,6 +265,7 @@ final class OverlayViews {
         private final int background1, background2, outline1, outline2, shapeColor1, shapeColor2;
         private final float backgroundAngle, outlineAngle, shapeAngle, shapeStrokeWidth, shapeScale;
         private final boolean backgroundGradient, outlineGradient, shapeGradient, highlight, shadow;
+        private final int shadowColor, shadowOpacity, shadowOffsetX, shadowOffsetY, shadowBlur, shadowSpread;
         private final String style, shape, buttonShape, backgroundStyle;
         private final int backgroundColor3, backgroundColor4;
         private final String[] iconParts;
@@ -260,6 +276,8 @@ final class OverlayViews {
                      int outlineWidth, String buttonShape, String style, String shape,
                      int shapeColor1, int shapeColor2, boolean shapeGradient, float shapeAngle,
                      float shapeStrokeWidth, float shapeScale, boolean highlight, boolean shadow,
+                     int shadowColor, int shadowOpacity, int shadowOffsetX, int shadowOffsetY,
+                     int shadowBlur, int shadowSpread,
                      String backgroundStyle, int backgroundColor3, int backgroundColor4,
                      String[] iconParts) {
             this.background1 = background1;
@@ -278,6 +296,12 @@ final class OverlayViews {
             this.shapeScale = Math.max(.2f, Math.min(1f, shapeScale));
             this.highlight = highlight;
             this.shadow = shadow;
+            this.shadowColor = shadowColor;
+            this.shadowOpacity = Math.max(0, Math.min(100, shadowOpacity));
+            this.shadowOffsetX = shadowOffsetX;
+            this.shadowOffsetY = shadowOffsetY;
+            this.shadowBlur = Math.max(0, shadowBlur);
+            this.shadowSpread = Math.max(0, shadowSpread);
             this.backgroundStyle = backgroundStyle == null ? "flat" : backgroundStyle;
             this.backgroundColor3 = backgroundColor3;
             this.backgroundColor4 = backgroundColor4;
@@ -313,8 +337,10 @@ final class OverlayViews {
                 canvas.drawRoundRect(body, radius, radius, paint);
             }
 
+            applyShadow(paint);
             if ("parts".equals(style) && iconParts.length > 0) drawParts(canvas, body);
             else drawShape(canvas, body);
+            paint.clearShadowLayer();
             if (highlight && "parts".equals(style)) {
                 paint.setStyle(Paint.Style.FILL);
                 paint.setShader(null);
@@ -323,6 +349,16 @@ final class OverlayViews {
                         body.left + body.width() * .62f, body.top + body.height() * .33f);
                 canvas.drawOval(shine, paint);
             }
+        }
+
+        private void applyShadow(Paint target) {
+            if (!shadow || (shadowOpacity <= 0) || (shadowBlur <= 0 && shadowSpread <= 0)) {
+                target.clearShadowLayer();
+                return;
+            }
+            target.setShadowLayer(shadowBlur + shadowSpread, shadowOffsetX, shadowOffsetY,
+                    Color.argb(Math.round(255f * shadowOpacity / 100f), Color.red(shadowColor),
+                            Color.green(shadowColor), Color.blue(shadowColor)));
         }
 
         private void drawFacets(Canvas canvas, RectF body, float radius) {
@@ -635,14 +671,6 @@ final class OverlayViews {
 
             if ("smile".equals(shape)) {
                 paint.setStyle(Paint.Style.FILL);
-                if (shadow) {
-                    paint.setShader(null);
-                    paint.setColor(0x66000000);
-                    canvas.drawOval(new RectF(area.left + size * .22f, area.top + size * .22f,
-                            area.left + size * .35f, area.top + size * .48f), paint);
-                    canvas.drawOval(new RectF(area.left + size * .65f, area.top + size * .22f,
-                            area.left + size * .78f, area.top + size * .48f), paint);
-                }
                 paint.setShader(null);
                 paint.setColor(shapeColor1);
                 canvas.drawOval(new RectF(area.left + size * .20f, area.top + size * .18f,

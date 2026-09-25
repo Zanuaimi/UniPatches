@@ -97,7 +97,7 @@ val pairipBypassPatch = bytecodePatch(
         original package or signing certificate. Firebase component removal can break Firebase Auth,
         Google Play Games, billing, analytics, and ad rewards. Device spoofing can also change apps'
         device-integrity behavior. These identity and server-side conditions cannot be fixed safely
-        by combining PairIP Bypass with Custom App Output, Control App Ads, or Emulator Detection.
+        by combining PairIP Bypass with Custom App Output, Ads Block Patch, or Emulator Detection.
 
         Compatibility: when combining this patch with Universal Overlay, the shared overlay startup
         bridge is preserved. PairIP Application redirect and Application.onCreate bypass strategies
@@ -1287,6 +1287,7 @@ val pairipBypassPatch = bytecodePatch(
                     PairipCallerKey(method.name, method.returnType, method.parameterTypes.map { it.toString() })
                 }
                 if (callers.isEmpty()) return@classDefForEach
+                if (callers.none { it.returnType == "V" }) return@classDefForEach
 
                 val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
                 callers.forEach { caller ->

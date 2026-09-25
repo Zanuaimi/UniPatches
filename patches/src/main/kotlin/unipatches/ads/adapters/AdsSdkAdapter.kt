@@ -7,23 +7,11 @@ internal data class DetectionResult(
     val sdkName: String,
     val detected: Boolean,
     val supportedFormats: Set<String> = emptySet(),
-    val supportsRewards: Boolean = false,
-    val supportsAvailability: Boolean = false,
     /** Adapter-owned safety metadata used before any bytecode operation is attempted. */
     val minimumLocalRegisters: Int = 1,
     val preservesParameterRegisters: Boolean = true,
     val callbackStrategy: String? = null,
     val deduplicatesByMethodIdentity: Boolean = true,
-)
-
-internal data class StaticSdkPlan(
-    val settings: AdsPatchSettings,
-    val coverageEnabled: Boolean,
-)
-
-internal data class RuntimeSdkPlan(
-    val settings: AdsPatchSettings,
-    val coverageEnabled: Boolean,
 )
 
 internal data class PatchResult(
@@ -35,17 +23,6 @@ internal data class PatchResult(
  * Adapter boundary for one SDK. Detection and bytecode application belong to the adapter;
  * planners decide which plan is passed to it.
  */
-internal interface AdsSdkAdapter {
-    fun detect(): DetectionResult
-    fun applyStatic(plan: StaticSdkPlan): PatchResult
-    fun applyRuntime(plan: RuntimeSdkPlan): PatchResult
-}
-
-internal abstract class ContextAdsSdkAdapter(
-    protected val context: BytecodePatchContext,
-    protected val logger: Logger,
-) : AdsSdkAdapter
-
 /** Strict No Ads adapter boundary. The resolved path mode selects exactly one entry point. */
 internal interface NoAdsSdkAdapter {
     fun detect(): DetectionResult

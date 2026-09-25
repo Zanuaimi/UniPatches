@@ -1,12 +1,11 @@
 package unipatches.ads
 
-/** Pure helpers for the Control App Ads to Overlay runtime-policy exchange. */
+/** Pure helpers for the Ads Block Patch to Overlay runtime-policy exchange. */
 internal fun isAdsRuntimePolicyActive(
     runtimeControlsRequested: Boolean,
     blockAdsModule: Boolean,
-    rewardsModule: Boolean,
     hostsModule: Boolean,
-): Boolean = runtimeControlsRequested && (blockAdsModule || rewardsModule || hostsModule)
+): Boolean = runtimeControlsRequested && (blockAdsModule || hostsModule)
 
 internal fun isAdsRuntimeModuleEnabled(
     runtimeHooksEnabled: Boolean,
@@ -14,20 +13,13 @@ internal fun isAdsRuntimeModuleEnabled(
     moduleSelected: Boolean,
 ): Boolean = runtimeHooksEnabled && masterEnabled && moduleSelected
 
-internal fun isAdsRuntimeRewardsEnabled(
-    runtimeHooksEnabled: Boolean,
-    runtimeRewardsModule: Boolean,
-): Boolean = isAdsRuntimeModuleEnabled(runtimeHooksEnabled, true, runtimeRewardsModule)
-
 internal fun buildAdsRuntimeModuleMask(
     runtimeHooksEnabled: Boolean,
     blockAdsEnabled: Boolean,
-    rewardsEnabled: Boolean,
     hostsEnabled: Boolean,
 ): Int {
     if (!runtimeHooksEnabled) return 0
     return (if (blockAdsEnabled) AdsRuntimeModule.BLOCK_ADS else 0) or
-        (if (rewardsEnabled) AdsRuntimeModule.REWARDS else 0) or
         (if (hostsEnabled) AdsRuntimeModule.HOSTS else 0)
 }
 
@@ -49,22 +41,24 @@ internal fun buildAdsBlockedFormatsMask(
 internal fun serializeAdsRuntimePolicy(
     moduleMask: Int,
     blockedFormats: Int,
-    skipRewardedAdsEnabled: Boolean,
-    instantRewardEnabled: Boolean,
-    fakeAvailabilityEnabled: Boolean,
     hostsEnabled: Boolean,
     wildcardHostsEnabled: Boolean,
     hosts: List<String>,
     hostsAllowedEnabled: Boolean = hostsEnabled,
-): String = listOf(
-    "1",
+    overlayModuleMask: Int = moduleMask,
+): String {
+    val fields = mutableListOf(
+    "2",
     moduleMask.toString(),
     blockedFormats.toString(),
-    if (skipRewardedAdsEnabled) "1" else "0",
-    if (instantRewardEnabled) "1" else "0",
-    if (fakeAvailabilityEnabled) "1" else "0",
     if (hostsEnabled) "1" else "0",
     if (wildcardHostsEnabled) "1" else "0",
     hosts.sorted().joinToString(","),
     if (hostsAllowedEnabled) "1" else "0",
-).joinToString("|")
+    )
+    // Omit the visibility field when it matches the active policy mask so older
+    // payloads remain byte-for-byte compatible. Include it only when managed
+    // startup needs a policy without exposing overlay controls.
+    if (overlayModuleMask != moduleMask) fields.add(overlayModuleMask.toString())
+    return fields.joinToString("|")
+}

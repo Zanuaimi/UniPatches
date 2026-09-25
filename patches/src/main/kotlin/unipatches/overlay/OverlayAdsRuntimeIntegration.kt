@@ -1,9 +1,9 @@
 package unipatches.overlay
 
 /**
- * Patch-process coordination for optional Control App Ads runtime controls.
+ * Patch-process coordination for optional Ads Block Patch runtime controls.
  *
- * Control App Ads executes before overlay patches, so it queues the policy here. The overlay that
+ * Ads Block Patch executes before overlay patches, so it queues the policy here. The overlay that
  * actually installs the shared runtime consumes it and emits the configure call adjacent to its
  * own bridge. This intentionally avoids guessing an Application or launcher Activity separately.
  */
@@ -23,9 +23,9 @@ internal object OverlayAdsRuntimeIntegration {
     fun queue(policy: String) {
         pendingPolicy = policy
         injectedBy = null
-        // A new policy belongs to the current patch execution. Do not retain a bridge recorded
-        // by an earlier overlay pass or patch context and risk attaching the policy to stale state.
-        unconfiguredBridge = null
+        // Keep a bridge recorded by an overlay pass in the same patch execution. The bridge
+        // target carries its patch context, and takeUnconfiguredBridge() rejects stale contexts.
+        // Clearing it here would make the reverse patch ordering path unreachable.
     }
 
     fun pendingPolicy(): String? = pendingPolicy
@@ -38,7 +38,7 @@ internal object OverlayAdsRuntimeIntegration {
 
     fun injectedBy(): String? = injectedBy
 
-    /** Records a bridge that can receive a policy if Control App Ads executes later. */
+    /** Records a bridge that can receive a policy if Ads Block Patch executes later. */
     fun recordUnconfiguredBridge(target: BridgeTarget) {
         unconfiguredBridge = target
     }

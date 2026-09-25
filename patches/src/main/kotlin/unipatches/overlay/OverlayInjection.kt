@@ -378,7 +378,7 @@ internal fun BytecodePatchContext.findOverlayFallbackActivity(
     }
     val noHistory = StartupHooks.resolvedNoHistoryActivityDescriptors
     val packageName = StartupHooks.resolvedPackageName
-    val candidates = mutableListOf<MutableClass>()
+    val candidates = mutableListOf<String>()
     classDefForEach { classDef ->
         if (!isActivity(classDef.type) || classDef.type in noHistory) return@classDefForEach
         // A missing launcher resolution must not select a support-library,
@@ -388,16 +388,15 @@ internal fun BytecodePatchContext.findOverlayFallbackActivity(
         if (packageName.isNullOrBlank() ||
             !(binaryName == packageName || binaryName.startsWith("$packageName."))
         ) return@classDefForEach
-        val candidate = mutableClassDefBy(classDef)
-        if (candidate.methods.any {
+        if (classDef.methods.any {
                 it.name == "onCreate" && it.returnType == "V" &&
                     it.parameterTypes == listOf("Landroid/os/Bundle;") && it.implementation != null
-            }) candidates += candidate
+            }) candidates += classDef.type
     }
     // The manifest has already identified this component as an Activity. Prefer it even
     // when its final framework superclass is not present in the APK's class pool.
     val preferred = preferredDescriptor?.let { descriptor ->
-        mutableClassDefByOrNull(descriptor)?.takeIf { candidate ->
+        classDefByOrNull(descriptor)?.takeIf { candidate ->
             candidate.type == descriptor &&
                 candidate.type.removePrefix("L").removeSuffix(";").replace('/', '.')
                     .let { binaryName ->
@@ -409,8 +408,8 @@ internal fun BytecodePatchContext.findOverlayFallbackActivity(
                     it.name == "onCreate" && it.returnType == "V" &&
                         it.parameterTypes == listOf("Landroid/os/Bundle;") && it.implementation != null
                 }
-        }
+        }?.type
     }
-    return preferred ?: candidates.firstOrNull { it.type == preferredDescriptor }
-        ?: candidates.firstOrNull()
+    val selected = preferred ?: candidates.firstOrNull { it == preferredDescriptor } ?: candidates.firstOrNull()
+    return selected?.let(::mutableClassDefByOrNull)
 }

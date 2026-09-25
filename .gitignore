@@ -118,6 +118,7 @@ gradle-app.setting
 *.apk
 
 # Ignore vscode config
+.DS_Store
 .vscode/
 
 # Dependency directories
