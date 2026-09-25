@@ -18,6 +18,7 @@ internal const val SCHEDULE_EXACT_ALARM = "android.permission.SCHEDULE_EXACT_ALA
 internal const val USE_EXACT_ALARM = "android.permission.USE_EXACT_ALARM"
 internal const val BLUETOOTH_CONNECT = "android.permission.BLUETOOTH_CONNECT"
 internal const val BLUETOOTH_SCAN = "android.permission.BLUETOOTH_SCAN"
+internal const val READ_PHONE_STATE = "android.permission.READ_PHONE_STATE"
 
 internal fun hasPermission(document: Document, name: String): Boolean =
     listOf("uses-permission", "uses-permission-sdk-23").any { tag ->
@@ -27,11 +28,12 @@ internal fun hasPermission(document: Document, name: String): Boolean =
         }
     }
 
-internal fun addPermission(document: Document, name: String): Boolean {
+internal fun addPermission(document: Document, name: String, maxSdkVersion: Int? = null): Boolean {
     if (hasPermission(document, name)) return false
     val root = document.documentElement ?: return false
     val permission = document.createElement("uses-permission")
     permission.setAttributeNS(NS_ANDROID, "android:name", name)
+    maxSdkVersion?.let { permission.setAttributeNS(NS_ANDROID, "android:maxSdkVersion", it.toString()) }
     root.appendChild(permission)
     return true
 }
@@ -75,6 +77,13 @@ internal fun addLegacyReviver(document: Document, apache: Boolean, foreground: B
     }
     return changed
 }
+
+/** Returns the original targetSdkVersion from the manifest, or null when absent. */
+internal fun originalTargetSdk(document: Document): Int? =
+    (document.getElementsByTagName("uses-sdk").item(0) as? Element)
+        ?.getAttributeNS(NS_ANDROID, "targetSdkVersion")
+        ?.takeIf { it.isNotEmpty() }
+        ?.toIntOrNull()
 
 internal fun updateTargetSdk(document: Document, target: Int): Boolean {
     val root = document.documentElement ?: return false
@@ -192,16 +201,27 @@ internal fun repairMissingComponentExportFlags(document: Document, logger: Logge
     return repaired
 }
 
-internal fun exportAllActivities(document: Document): Int {
+internal fun exportAllActivities(document: Document, logger: Logger): Int {
     var changed = 0
+    var overridden = 0
     for (tagName in listOf("activity", "activity-alias")) {
         val activities = document.getElementsByTagName(tagName)
         for (index in 0 until activities.length) {
             val activity = activities.item(index) as? Element ?: continue
-            if (activity.getAttributeNS(NS_ANDROID, "exported") == "true") continue
+            if (activity.hasAndroidAttribute("exported")) {
+                if (activity.androidAttribute("exported") != "true") {
+                    activity.setAttributeNS(NS_ANDROID, "android:exported", "true")
+                    changed++
+                    overridden++
+                }
+                continue
+            }
             activity.setAttributeNS(NS_ANDROID, "android:exported", "true")
             changed++
         }
+    }
+    if (overridden > 0) {
+        logger.warning("Legacy compatibility: Export All Activities overrode explicit android:exported=\"false\" on $overridden component(s).")
     }
     return changed
 }
@@ -243,7 +263,7 @@ val legacyAppCompatibilityPatch = resourcePatch(
         title = "Legacy App Compatibility > Installation and manifest > Target SDK version",
         default = 34,
         key = "legacyCompatibilityTargetSdk",
-        description = "Target SDK to write when Spoof Target SDK is enabled. Values below 23 are rejected because modern Android can block them. Default: 34.",
+        description = "Target SDK to write when Spoof Target SDK is enabled. Values outside the supported range 23..40 are rejected because modern Android can block them. Default: 34.",
     )
     val legacyReviver by booleanOption(
         title = "Legacy App Compatibility > Installation and manifest > Legacy App Reviver",
@@ -360,9 +380,15 @@ val legacyAppCompatibilityPatch = resourcePatch(
                 val target = targetSdk ?: 34
                 if (target !in 23..40) {
                     logger.warning("Legacy compatibility: target SDK $target is outside the supported range 23..40.")
-                } else if (updateTargetSdk(manifest, target)) {
-                    changed++
-                    logger.info("Legacy compatibility: target SDK set to $target.")
+                } else {
+                    val original = originalTargetSdk(manifest)
+                    if (updateTargetSdk(manifest, target)) {
+                        changed++
+                        logger.info("Legacy compatibility: target SDK set to $target.")
+                        if (original != null && original > target) {
+                            logger.warning("Legacy compatibility: original target SDK $original was higher than $target; platform behavior was downgraded to match target SDK $target.")
+                        }
+                    }
                 }
             }
             if (legacyReviver == true) {
@@ -374,6 +400,10 @@ val legacyAppCompatibilityPatch = resourcePatch(
                     bluetooth = bluetooth == true,
                 )
             }
+            if (spoofImei == true && addPermission(manifest, READ_PHONE_STATE)) {
+                changed++
+                logger.info("Legacy compatibility: added READ_PHONE_STATE so spoofed TelephonyManager calls can succeed.")
+            }
             when {
                 exportAllActivityComponents == true -> {
                     if (repairExportFlags == true) {
@@ -381,7 +411,7 @@ val legacyAppCompatibilityPatch = resourcePatch(
                     } else {
                         logger.info("Legacy compatibility: Export All Activities selected.")
                     }
-                    val exported = exportAllActivities(manifest)
+                    val exported = exportAllActivities(manifest, logger)
                     changed += exported
                     if (exported == 0) {
                         logger.info("Legacy compatibility: all activities and aliases already have android:exported=true, or none were found.")
@@ -407,7 +437,11 @@ val legacyAppCompatibilityPatch = resourcePatch(
             }
             if (legacyStorage == true) {
                 if (setApplicationAttribute(manifest, "requestLegacyExternalStorage", "true")) changed++
-                if (addPermission(manifest, WRITE_EXTERNAL_STORAGE)) changed++
+                if (addPermission(manifest, WRITE_EXTERNAL_STORAGE, maxSdkVersion = 32)) changed++
+                val effectiveTarget = if (spoofTargetSdk == true) (targetSdk ?: 34) else originalTargetSdk(manifest)
+                if (effectiveTarget != null && effectiveTarget >= 30) {
+                    logger.warning("Legacy compatibility: target SDK $effectiveTarget is 30 or higher; requestLegacyExternalStorage is ignored on Android 11 and newer.")
+                }
             }
             if (allScreens == true) {
                 val (removed, updated) = supportAllScreens(manifest)
