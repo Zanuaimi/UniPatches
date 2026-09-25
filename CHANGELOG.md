@@ -1,3 +1,9 @@
+## [1.30.0-dev.23](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.22...v1.30.0-dev.23) (2026-09-25)
+
+### ✨ New Features
+
+* **compatibility:** add few options like hiddenapibypass from lsposed ([c957542](https://github.com/Zanuaimi/UniPatches/commit/c95754246904b5faecca7f76777b8addf8d73664))
+
 ## [1.30.0-dev.22](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.21...v1.30.0-dev.22) (2026-09-25)
 
 ### 🔧 Improvements
