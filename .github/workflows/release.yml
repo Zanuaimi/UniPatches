@@ -55,4 +55,12 @@ jobs:
         if: steps.release.outputs.new_release_published != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew :patches:buildAndroid clean --no-daemon
+        run: ./gradlew clean :patches:buildAndroid --no-daemon
+
+      - name: Upload compiled patches
+        if: steps.release.outputs.new_release_published != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-inapp-mpp
+          path: patches/build/libs/*.mpp
+          if-no-files-found: error
