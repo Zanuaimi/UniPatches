@@ -13,8 +13,6 @@ import android.graphics.Typeface;
 import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -70,7 +68,6 @@ import unipatch.overlaycore.modules.OverlayHookModuleRegistry;
 import unipatch.overlaycore.modules.OverlayAppSpecificModuleRegistry;
 import unipatch.overlaycore.modules.example.HillClimbRacingExampleProvider;
 import unipatch.overlaycore.modules.ads.AdsControlRuntimeProvider;
-import unipatch.overlaycore.modules.iap.InAppEmulationRuntimeProvider;
 import unipatch.overlaycore.modules.system.DoNotDisturbModule;
 import unipatch.overlaycore.modules.advanced.OverlayRuntimeLogsModule;
 import unipatch.overlaycore.modules.advanced.OverlayRuntimeLogger;
@@ -118,14 +115,12 @@ public final class OverlayRuntime {
     private static Integer rotationModeState;
     private static boolean fullyClosedToastShown;
     private static final List<OverlayAppSpecificModuleProvider> APP_SPECIFIC_PROVIDERS = new ArrayList<>();
-    private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static String pendingAppSpecificProfile;
     private static String pendingAppSpecificModules;
 
     static {
         registerAppSpecificProvider(new HillClimbRacingExampleProvider());
         registerAppSpecificProvider(new AdsControlRuntimeProvider());
-        registerAppSpecificProvider(new InAppEmulationRuntimeProvider());
     }
 
     private OverlayRuntime() { }
@@ -208,76 +203,6 @@ public final class OverlayRuntime {
         configuration.appSpecificModules = pendingAppSpecificModules == null ? "" : pendingAppSpecificModules;
     }
 
-    /** Shows the IAP confirmation popup on the currently attached overlay Activity. */
-    public static synchronized boolean showInAppPurchaseConfirmation(String productId) {
-        return showInAppPurchaseConfirmation(null, productId);
-    }
-
-    /** Shows the IAP confirmation popup on the Activity that initiated BillingClient. */
-    public static synchronized boolean showInAppPurchaseConfirmation(Activity target, String productId) {
-        Controller selected = target == null ? null : CONTROLLERS.get(target);
-        if (selected == null || !selected.canShowInAppPurchaseConfirmation()) {
-            for (Controller controller : new ArrayList<>(CONTROLLERS.values())) {
-                if (controller != null && controller.canShowInAppPurchaseConfirmation()) {
-                    selected = controller;
-                    break;
-                }
-            }
-        }
-        if (selected == null || !selected.canShowInAppPurchaseConfirmation()) {
-            OverlayRuntimeLogger.log("WARN", "InApp", "No active overlay controller for purchase Activity=" +
-                    (target == null ? "null" : target.getClass().getName()));
-            return false;
-        }
-        final Controller controller = selected;
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            try {
-                return controller.showInAppPurchaseConfirmation(productId);
-            } catch (RuntimeException error) {
-                OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup creation failed: " + error.getClass().getSimpleName());
-                return false;
-            }
-        }
-        boolean posted = MAIN.post(() -> {
-            boolean shown;
-            try {
-                shown = controller.showInAppPurchaseConfirmation(productId);
-            } catch (RuntimeException error) {
-                shown = false;
-                OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup creation failed: " + error.getClass().getSimpleName());
-            }
-            if (!shown) {
-                OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup was not attached on the main thread");
-                InAppRuntimePolicy.cancelPending();
-            }
-        });
-        if (!posted) {
-            OverlayRuntimeLogger.log("WARN", "InApp", "Could not post purchase popup creation to the main thread");
-            InAppRuntimePolicy.cancelPending();
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * Ensures that a newly-created purchase Activity has an overlay controller before a legacy
-     * billing hook asks for its confirmation surface. Application lifecycle callbacks normally do
-     * this on resume, but UnityProxyActivity starts the billing call from onCreate, before resume.
-     */
-    public static synchronized boolean ensureActivity(Activity activity) {
-        if (activity == null || configuration == null || globallyClosed || isActivityInstallBanned(activity)) {
-            return false;
-        }
-        Controller existing = CONTROLLERS.get(activity);
-        if (existing != null) return existing.canShowInAppPurchaseConfirmation();
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            return MAIN.post(() -> showActivity(activity, false));
-        }
-        showActivity(activity, false);
-        Controller controller = CONTROLLERS.get(activity);
-        return controller != null && controller.canShowInAppPurchaseConfirmation();
-    }
-
     public static void logActivityResultEntry(Activity activity, int requestCode, int resultCode) {
         logActivityResult("entry", activity, requestCode, resultCode);
     }
@@ -293,17 +218,10 @@ public final class OverlayRuntime {
     }
 
     static synchronized void showActivity(Activity activity) {
-        showActivity(activity, true);
-    }
-
-    private static synchronized void showActivity(Activity activity, boolean retryPending) {
+        if (activity == null) return;
         if (configuration == null || globallyClosed) return;
         if (isActivityInstallBanned(activity)) return;
         if (activity.isFinishing() || (android.os.Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
-        // Legacy OpenIAB flows do not always pass their Activity through the listener.
-        // Keep the currently resumed host registered even when the overlay menu has not
-        // been opened yet, so a buy tap can still resolve a valid popup surface.
-        if (InAppRuntimePolicy.isConfigured()) InAppRuntimePolicy.registerActivity(activity);
         Controller existing = CONTROLLERS.get(activity);
         if (existing != null) {
             existing.resume();
@@ -319,7 +237,6 @@ public final class OverlayRuntime {
                     OverlayRuntimeLogger.log("WARN", "Overlay", "Overlay reattach failed: " + error.getClass().getSimpleName());
                 }
             }
-            if (retryPending) InAppRuntimePolicy.retryPendingConfirmation(activity);
             return;
         }
         Controller controller = null;
@@ -328,7 +245,6 @@ public final class OverlayRuntime {
             CONTROLLERS.put(activity, controller);
             controller.attach();
             OverlayRuntimeLogger.log("INFO", "Overlay", "Overlay attached to " + activity.getClass().getName());
-            if (retryPending) InAppRuntimePolicy.retryPendingConfirmation(activity);
         } catch (RuntimeException ignored) {
             if (controller != null) controller.detach();
             // Never let overlay setup failure crash the host application.
@@ -358,7 +274,6 @@ public final class OverlayRuntime {
     static synchronized void removeActivity(Activity activity) {
         Controller controller = CONTROLLERS.remove(activity);
         if (controller != null) controller.detach();
-        else InAppRuntimePolicy.onActivityDetached(activity);
     }
 
     static synchronized void pauseActivity(Activity activity) {
@@ -396,7 +311,6 @@ public final class OverlayRuntime {
         sharedButtonPositionInitialized = false;
         appBrightnessState = null;
         rotationModeState = null;
-        InAppRuntimePolicy.reset();
     }
 
     private static Boolean rememberedState(String key) {
@@ -588,7 +502,6 @@ public final class OverlayRuntime {
         void detach() {
             if (detached) return;
             detached = true;
-            InAppRuntimePolicy.onActivityDetached(activity);
             root.removeCallbacks(dragVisibilityFade);
             dismissSettingsPopupsImmediately();
             if (menuOutline != null) menuOutline.stop();
@@ -609,10 +522,6 @@ public final class OverlayRuntime {
             if (detached) return;
             paused = true;
             root.removeCallbacks(dragVisibilityFade);
-            // A paused Activity cannot reliably display or interact with the in-app
-            // confirmation layer. Release the intercepted billing request here so a
-            // legacy game's purchase spinner cannot survive a lifecycle transition.
-            InAppRuntimePolicy.cancelPending();
             menuVisible = false;
             menuState = MenuState.CLOSED;
             menuScrim.animate().cancel();
@@ -1432,7 +1341,7 @@ public final class OverlayRuntime {
         }
 
         private boolean hasIntegratedModules() {
-            return AdsRuntimePolicy.hasAnyModule() || InAppRuntimePolicy.isConfigured();
+            return AdsRuntimePolicy.hasAnyModule();
         }
 
         private void addAppSpecificModules(LinearLayout parent) {
@@ -1824,97 +1733,6 @@ public final class OverlayRuntime {
             });
         }
 
-        private boolean showInAppPurchaseConfirmation(String productId) {
-            if (!canShowInAppPurchaseConfirmation()) return false;
-            final FrameLayout layer = new FrameLayout(overlayContext);
-            layer.setBackgroundColor(0xB3000000);
-            layer.setClickable(true);
-            layer.setFocusable(true);
-            OverlayPopupFrame card = new OverlayPopupFrame(overlayContext, config);
-            card.addHeader("Emulate InApp Purchase Confirmation", config, popupTitleIcon(true), popupTitleIcon(false));
-            layer.setOnClickListener(v -> {
-                Object ticker = layer.getTag();
-                if (ticker instanceof Runnable) root.removeCallbacks((Runnable) ticker);
-                InAppRuntimePolicy.cancelPending();
-                dismissModuleSettingsPopup(layer, card);
-            });
-            TextView description = text("Do you want to try to emulate in-app purchase for this product?", 14, config.menuTextColor3);
-            description.setSingleLine(false);
-            description.setPadding(0, dp(8), 0, 0);
-            card.addView(description, new LinearLayout.LayoutParams(-1, -2));
-            CheckBox save = new CheckBox(overlayContext);
-            save.setText("Save purchase for skipping purchase popup");
-            save.setTextColor(config.menuTextColor2);
-            save.setSingleLine(false);
-            styleCheckBox(save);
-            LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(-1, -2);
-            saveParams.topMargin = dp(8);
-            card.addView(save, saveParams);
-            TextView countdown = text("Timeout Countdown : " + InAppRuntimePolicy.overlayTimeoutSeconds(), 12, config.menuTextColor3);
-            countdown.setPadding(0, dp(6), 0, 0);
-            card.addView(countdown, new LinearLayout.LayoutParams(-1, -2));
-            final long expiresAt = SystemClock.elapsedRealtime() + InAppRuntimePolicy.overlayTimeoutSeconds() * 1000L;
-            final Runnable[] countdownTicker = new Runnable[1];
-            countdownTicker[0] = () -> {
-                if (layer.getParent() != root) return;
-                long remaining = Math.max(0L, expiresAt - SystemClock.elapsedRealtime());
-                long seconds = (remaining + 999L) / 1000L;
-                countdown.setText("Timeout Countdown : " + seconds);
-                if (seconds > 0L && seconds <= 5L) countdown.setAlpha(countdown.getAlpha() > 0.5f ? 0.25f : 1f);
-                else countdown.setAlpha(1f);
-                if (remaining > 0L) root.postDelayed(countdownTicker[0], 1000L);
-                else {
-                    InAppRuntimePolicy.cancelPending();
-                    dismissModuleSettingsPopup(layer, card);
-                }
-            };
-            layer.setTag(countdownTicker[0]);
-            root.post(countdownTicker[0]);
-            LinearLayout actions = new LinearLayout(overlayContext);
-            actions.setOrientation(LinearLayout.HORIZONTAL);
-            actions.setGravity(Gravity.CENTER);
-            LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(-1, -2);
-            actionParams.topMargin = dp(8);
-            card.addView(actions, actionParams);
-            addAction(actions, "No", v -> {
-                root.removeCallbacks(countdownTicker[0]);
-                InAppRuntimePolicy.complete(false);
-                dismissModuleSettingsPopup(layer, card);
-            });
-            addAction(actions, "Yes", v -> {
-                root.removeCallbacks(countdownTicker[0]);
-                InAppRuntimePolicy.complete(save.isChecked());
-                dismissModuleSettingsPopup(layer, card);
-            });
-            FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(
-                    boundedOverlayPanelWidth(), -2, Gravity.CENTER);
-            cardParams.setMargins(dp(20), dp(20), dp(20), dp(20));
-            layer.addView(card, cardParams);
-            layer.setAlpha(0f);
-            root.addView(layer);
-            settingsPopupLayers.add(layer);
-            if (layer.getParent() != root) {
-                root.removeCallbacks(countdownTicker[0]);
-                settingsPopupLayers.remove(layer);
-                OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup view was not attached to the overlay root");
-                return false;
-            }
-            OverlayRuntimeLogger.log("INFO", "InApp", "Purchase popup attached: product=" + productId +
-                    ", activity=" + activity.getClass().getName());
-            root.post(() -> {
-                if (layer.getParent() == root) {
-                    prepareOpeningAnimation(card);
-                    animatePopupOpening(layer, card);
-                }
-            });
-            return true;
-        }
-
-        private boolean canShowInAppPurchaseConfirmation() {
-            return !detached && !paused && root != null && !activity.isFinishing()
-                    && (android.os.Build.VERSION.SDK_INT < 17 || !activity.isDestroyed());
-        }
-
         private void dismissModuleSettingsPopup(FrameLayout layer, View card) {
             if (layer.getParent() == null) return;
             settingsPopupLayers.remove(layer);
@@ -1948,8 +1766,6 @@ public final class OverlayRuntime {
                     String section;
                     if (AdsControlRuntimeProvider.PROFILE_ID.equals(profileId) && AdsRuntimePolicy.hasAnyModule()) {
                         section = "Ad control hook modules";
-                    } else if (InAppEmulationRuntimeProvider.PROFILE_ID.equals(profileId) && InAppRuntimePolicy.isConfigured()) {
-                        section = "InApp Emulation";
                     } else {
                         continue;
                     }

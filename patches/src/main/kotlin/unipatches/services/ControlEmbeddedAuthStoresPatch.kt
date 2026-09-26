@@ -18,8 +18,7 @@ val controlEmbeddedAuthStoresPatch = rawResourcePatch(
 
         All controls are optional and apply only to matching methods or manifest components.
 
-        Compatibility: use InApp Emulation Patch for purchase-flow and catalog behavior. This patch
-        only controls embedded services, licensing, and store checks. Its optional GmsCore startup
+        This patch only controls embedded services, licensing, and store checks. Its optional GmsCore startup
         Activity override should not target a third-party sign-in or billing Activity. When combined
         with Universal Overlay, use the overlay's Activity override only when automatic launcher
         resolution cannot identify the app's real entry Activity.
