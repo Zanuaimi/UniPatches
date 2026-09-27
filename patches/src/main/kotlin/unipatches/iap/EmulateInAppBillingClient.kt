@@ -19,6 +19,9 @@ internal fun applyBillingClientCorePatches(
 
     patchAll(Fingerprint(name = "launchBillingFlow", custom = { method, clazz ->
         method.returnType.contains("BillingResult") &&
+            method.parameterTypes.size == 2 &&
+            method.parameterTypes[0] == "Landroid/app/Activity;" &&
+            method.parameterTypes[1] == "Lcom/android/billingclient/api/BillingFlowParams;" &&
             (context.billingAdapterKey == "unknown" || clazz.type.contains("BillingClient"))
     }), "BillingClient.${context.billingAdapterKey}.launchBillingFlow", 2) {
         val isStatic = try { com.android.tools.smali.dexlib2.AccessFlags.STATIC.isSet(it.accessFlags) } catch (_: Exception) { true }
