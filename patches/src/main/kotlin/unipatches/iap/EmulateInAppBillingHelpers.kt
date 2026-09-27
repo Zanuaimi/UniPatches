@@ -5,15 +5,13 @@ import app.morphe.patcher.patch.BytecodePatchContext
 internal fun BytecodePatchContext.resolveBillingListener(defClass: String): String? = try {
     val cls = mutableClassDefByOrNull(defClass) ?: return null
     val direct = cls.fields.firstOrNull { it.type == "Lcom/android/billingclient/api/PurchasesUpdatedListener;" }
-    if (direct != null) return "iget-object v0, v0, $defClass->${direct.name}:${direct.type}"
+    if (direct != null) return "invoke-static {v0}, Lunipatch/overlaycore/InAppRuntimePolicy;->purchaseListener(Ljava/lang/Object;)Ljava/lang/Object;\nmove-result-object v0"
     for (field in cls.fields) {
         val holder = field.type
         if (!holder.startsWith("Lcom/android/billingclient/api/") || holder.contains("Listener;")) continue
         val holderClass = mutableClassDefByOrNull(holder) ?: continue
         val inner = holderClass.fields.firstOrNull { it.type == "Lcom/android/billingclient/api/PurchasesUpdatedListener;" } ?: continue
-        return "iget-object v0, v0, $defClass->${field.name}:${field.type}\n" +
-            "if-eqz v0, :morphe_iap_no_listener\n" +
-            "iget-object v0, v0, $holder->${inner.name}:${inner.type}"
+        return "invoke-static {v0}, Lunipatch/overlaycore/InAppRuntimePolicy;->purchaseListener(Ljava/lang/Object;)Ljava/lang/Object;\nmove-result-object v0"
     }
     null
 } catch (_: Exception) { null }
