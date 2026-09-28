@@ -239,8 +239,8 @@ private fun BytecodePatchContext.applyAdsFreeRewardsV1190(logger: Logger, reward
     }
 
     if (useRustore && instantReward == true) {
-        applyMyTargetStrategy(logger)
-        applyYandexWrapperStrategy(logger)
+        applyOriginalMyTargetStrategy(logger)
+        applyOriginalYandexWrapperStrategy(logger)
     }
     if (applyMaxUnityStrategy(logger, useMax, instantReward)) return
     applyNativeMaxStrategy(logger, useMax, instantReward)
@@ -251,11 +251,11 @@ private fun BytecodePatchContext.applyAdsFreeRewardsV1190(logger: Logger, reward
     applyAdMobRewardedStrategy(logger, useMax, instantReward)
     applyLevelPlayStrategy(logger, useIronSource)
     if (applyIronSourceBridgeStrategy(logger, useIronSource, instantReward)) return
-    applyUnityAdsStrategy(logger, useUnityAds, instantReward)
-    applyUnityAdsV4Strategy(logger, useUnityAds, instantReward)
+    applyOriginalUnityAdsStrategy(logger, useUnityAds, instantReward)
+    applyOriginalUnityAdsV4Strategy(logger, useUnityAds, instantReward)
 }
 
-private fun BytecodePatchContext.applyMyTargetStrategy(logger: Logger) {
+private fun BytecodePatchContext.applyOriginalMyTargetStrategy(logger: Logger) {
     val myTargetShow = MyTargetBaseInterstitialShowFingerprint.methodOrNull ?: return
     val hasShow = myTargetShow.implementation?.registerCount ?: 0 >= 2
     if (!hasShow) {
@@ -283,7 +283,7 @@ private fun BytecodePatchContext.applyMyTargetStrategy(logger: Logger) {
     logger.info("Ads Free Rewards: RuStore / VK MyTarget rewarded patch succeeded")
 }
 
-private fun BytecodePatchContext.applyYandexWrapperStrategy(logger: Logger) {
+private fun BytecodePatchContext.applyOriginalYandexWrapperStrategy(logger: Logger) {
     val yandexRewardedShow = YandexUnityRewardedWrapperShowFingerprint.methodOrNull ?: return
     val yandexOnRewarded = YandexUnityRewardedListenerOnRewardedFingerprint.methodOrNull ?: return
     yandexOnRewarded.addInstructions(0, """
@@ -650,7 +650,7 @@ private fun BytecodePatchContext.applyIronSourceBridgeStrategy(logger: Logger, u
     return true
 }
 
-private fun BytecodePatchContext.applyUnityAdsStrategy(logger: Logger, useUnityAds: Boolean, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyOriginalUnityAdsStrategy(logger: Logger, useUnityAds: Boolean, instantReward: Boolean?) {
     val adsShow = UnityRewardedAdShowFingerprint.methodOrNull ?: return
     if (!useUnityAds || instantReward != true) return
     adsShow.addInstructions(0, """
@@ -663,7 +663,7 @@ private fun BytecodePatchContext.applyUnityAdsStrategy(logger: Logger, useUnityA
     logger.info("Ads Free Rewards: Unity Ads patch succeeded")
 }
 
-private fun BytecodePatchContext.applyUnityAdsV4Strategy(logger: Logger, useUnityAds: Boolean, instantReward: Boolean?) {
+private fun BytecodePatchContext.applyOriginalUnityAdsV4Strategy(logger: Logger, useUnityAds: Boolean, instantReward: Boolean?) {
     if (!useUnityAds || instantReward != true) return
     val v4Show3 = UnityAdsV4Show3ArgFingerprint.methodOrNull
     if (v4Show3 != null) {
