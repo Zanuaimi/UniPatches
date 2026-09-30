@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-09-25T13:03:49",
-  "description": "## [1.30.0-dev.23](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.22...v1.30.0-dev.23) (2026-09-25)\n\n### ✨ New Features\n\n* **compatibility:** add few options like hiddenapibypass from lsposed ([c957542](https://github.com/Zanuaimi/UniPatches/commit/c95754246904b5faecca7f76777b8addf8d73664))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.30.0-dev.23/patches-1.30.0-dev.23.mpp",
+  "created_at": "2026-09-30T18:28:12.769237+00:00",
+  "description": "Restored historical bundle: integrated reward adapters and overlay controls, InApp Emulation, standalone No Ads and historical Ads Free Rewards. Built and tested from this fork.",
+  "download_url": "https://github.com/newuser7171/UniPatches/releases/download/v1.30.0-dev.24-historical/patches-1.30.0-dev.24.mpp",
   "signature_download_url": "",
-  "version": "1.30.0-dev.23"
+  "version": "1.30.0-dev.24"
 }
