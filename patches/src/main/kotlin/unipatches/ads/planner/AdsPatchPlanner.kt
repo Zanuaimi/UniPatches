@@ -10,6 +10,7 @@ internal object AdsPatchPlanner {
         val requestedRuntime = selection.policyEnabled
         val runtimePolicy = requestedRuntime && (
             (settings.noAdsEnabled && selection.noAdsModuleSelected) ||
+                (settings.rewardsEnabled && selection.rewardsModuleSelected) ||
                 selection.hostsModuleSelected
             )
 
@@ -19,6 +20,14 @@ internal object AdsPatchPlanner {
             runtimeModuleSelected = selection.noAdsModuleSelected,
             initialEnabled = settings.noAdsEnabled && anyNoAdsFormatEnabled(settings),
         )
+        val rewards = resolvePath(
+            masterEnabled = settings.rewardsEnabled,
+            runtimePolicy = runtimePolicy,
+            runtimeModuleSelected = selection.rewardsModuleSelected,
+            initialEnabled = settings.rewardsEnabled && (
+                settings.skipRewardedAds || settings.instantReward || settings.fakeAdAvailability
+                ),
+        )
         val hosts = resolvePath(
             masterEnabled = settings.hostsEnabled,
             runtimePolicy = runtimePolicy,
@@ -26,17 +35,21 @@ internal object AdsPatchPlanner {
             initialEnabled = settings.hostsEnabled,
         )
 
+        val resolvedRewards = AdsPatchConflictResolver.resolveRewards(settings, noAds, rewards)
         val effectiveRuntimePolicy = runtimePolicy && (
             (noAds.mode == AdsPatchMode.RUNTIME && noAds.masterEnabled) ||
+                (resolvedRewards.mode == AdsPatchMode.RUNTIME && resolvedRewards.masterEnabled) ||
                 selection.hostsModuleSelected
             )
 
         return AdsPatchPlan(
             noAds = noAds,
+            rewards = resolvedRewards,
             hosts = hosts,
             sdkCoverage = sdkCoverage,
             runtimePolicyEnabled = effectiveRuntimePolicy,
             overlayNoAdsModuleSelected = selection.overlayNoAdsModuleSelected,
+            overlayRewardsModuleSelected = selection.overlayRewardsModuleSelected,
             overlayHostsModuleSelected = selection.overlayHostsModuleSelected,
         )
     }

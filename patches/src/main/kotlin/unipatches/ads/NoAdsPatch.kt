@@ -307,7 +307,7 @@ private fun runtimeGuard(
         "appOpen" -> guardVoid(method, "shouldBlockAppOpen", blockedInstructions)
         "mrec" -> guardVoid(method, "shouldBlockMrec", blockedInstructions)
         "rewarded" -> guardVoid(method, "shouldBlockRewarded", blockedInstructions)
-        "rewardedAvailability" -> guardBoolean(method, "shouldBlockRewarded", blockedInstructions)
+        "rewardedAvailability" -> guardBoolean(method, "shouldBlockRewardedFormat", blockedInstructions)
         "native" -> guardVoid(method, "shouldBlockNative", blockedInstructions)
         "shared" -> guardSharedVoid(method, blockedInstructions)
         else -> null
@@ -572,9 +572,10 @@ internal fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildc
 val adsBlockPatch = bytecodePatch(
     name = "Ads Block Patch ( Experimental, Enhanced, Overlay Support, UniManager Support )",
     description = """
-        A merged ad-control patch based on Nai64's No Ads patch, plus literal-host blocking
-        inspired by Entree and Adobo. Block common ad formats, choose the SDKs to target, and
-        redirect matching literal ad/tracker hosts embedded in the APK.
+        A merged ad-control patch based on Nai64's No Ads and Ads Free Rewards patches, plus
+        literal-host blocking inspired by Entree and Adobo. Block common ad formats, choose the
+        SDKs to target, optionally grant ad rewards without an ad, and redirect matching literal
+        ad/tracker hosts embedded in the APK.
 
         Host filters are small embedded subsets inspired by uBlock Origin, EasyList, AdGuard,
         OISD, HaGeZi Pro mini, Privacy Essentials, EasyPrivacy, and Peter Lowe's list; they are
@@ -588,8 +589,8 @@ val adsBlockPatch = bytecodePatch(
         sign-in, billing, and attribution flows, which this patch cannot restore.
 
         This patch includes an optional Universal Overlay addon. To use the addon, patch Ads Block Patch
-        together with Universal Overlay and select one or both of its overlay addon modules:
-        “Block Ads” and “Block Ads / Tracking Hosts”. Ad runtime policy is
+        together with Universal Overlay and select one or more of its three overlay addon modules:
+        “Block Ads”, “Ads Free Rewards”, and “Block Ads / Tracking Hosts”. Ad runtime policy is
         enabled automatically when at least one of these Ads runtime modules is enabled in patch
         settings. The selected modules
         appear under “Ad control hook modules” in Universal Overlay when selected. Host blocking
@@ -653,13 +654,37 @@ val adsBlockPatch = bytecodePatch(
         title = "Ad formats > Block rewarded ads",
         default = false,
         key = "blockRewarded",
-        description = "Rewarded video. Enable only if you want to remove rewarded ads entirely; leaving it disabled preserves the game's reward-ad flow.",
+        description = "Rewarded video. Disable if you use Ads Free Rewards, otherwise progress gates may break. Enable only to fully remove rewarded ads.",
     )
     val blockNative by booleanOption(
         title = "Ad formats > Block native ads",
         default = true,
         key = "blockNative",
         description = "Native ads blended into feeds/lists. Enable for cleaner feeds (may leave empty placeholders).",
+    )
+    val enableAdsFreeRewards by booleanOption(
+        title = "Enable Ads Free Rewards",
+        default = true,
+        key = "enableAdsFreeRewards",
+        description = "Enable permanent or runtime-controlled Ads Free Rewards behavior for the three settings below.",
+    )
+    val skipRewardedAds by booleanOption(
+        title = "Ads Free Rewards > Skip Rewarded Ads",
+        default = true,
+        key = "adsFreeRewardsSkip",
+        description = "Do not show a supported rewarded ad after the user clicks its button. In runtime mode, this becomes the initial value of the overlay control.",
+    )
+    val instantReward by booleanOption(
+        title = "Ads Free Rewards > Instant Rewards",
+        default = true,
+        key = "adsFreeRewardsInstant",
+        description = "Give the supported reward immediately after the rewarded-ad button is clicked. If Skip Rewarded Ads is disabled, the ad can still be shown while the reward is granted immediately.",
+    )
+    val fakeAdAvailability by booleanOption(
+        title = "Ads Free Rewards > Fake Ad Availability",
+        default = true,
+        key = "adsFreeRewardsAvailability",
+        description = "Make supported SDK availability checks report an ad as available so the game can display its rewarded-ad button.",
     )
     val sdkMax by booleanOption(title = "SDK coverage > AppLovin MAX", default = true, key = "adsSdkMax", description = "Allow patches for detected AppLovin MAX wrappers and native MAX ads.")
     val sdkAdMob by booleanOption(title = "SDK coverage > Google Mobile Ads (AdMob)", default = true, key = "adsSdkAdMob", description = "Allow patches for detected Google Mobile Ads and common native-ad loaders.")
@@ -674,7 +699,7 @@ val adsBlockPatch = bytecodePatch(
     val sdkStartApp by booleanOption(title = "SDK coverage > StartApp", default = true, key = "adsSdkStartApp", description = "Allow detected StartApp interstitial entry points to be patched.")
     val sdkMoPub by booleanOption(title = "SDK coverage > MoPub", default = true, key = "adsSdkMoPub", description = "Allow detected MoPub interstitial entry points to be patched.")
     val sdkChartboost by booleanOption(title = "SDK coverage > Chartboost", default = true, key = "adsSdkChartboost", description = "Allow detected Chartboost interstitial entry points to be patched.")
-    val sdkInMobi by booleanOption(title = "SDK coverage > InMobi", default = true, key = "adsSdkInMobi", description = "Allow detected InMobi interstitial entry points to be patched.")
+    val sdkInMobi by booleanOption(title = "SDK coverage > InMobi", default = true, key = "adsSdkInMobi", description = "Allow detected InMobi interstitial and rewarded entry points to be patched, including automatic reward availability checks.")
     val sdkMintegral by booleanOption(title = "SDK coverage > Mintegral", default = true, key = "adsSdkMintegral", description = "Allow detected Mintegral interstitial entry points to be patched.")
     val enableBlockHosts by booleanOption(title = "Enable Block Ads / Tracking Hosts", default = true, key = "enableBlockHosts", description = "Enable permanent or runtime-controlled blocking for the host filters below.")
     val uBlockFilter by booleanOption(title = "Host filters > uBlock Origin ads", default = true, key = "adsFilterUblock", description = "Enable a small embedded subset of uBlock Origin-style ad-network hosts. This is not the complete uBlock subscription and does not target sign-in or billing domains.")
@@ -687,6 +712,7 @@ val adsBlockPatch = bytecodePatch(
     val peterLoweFilter by booleanOption(title = "Host filters > Peter Lowe's ad and tracking list", default = true, key = "adsFilterPeterLowe", description = "Enable a small embedded subset of Peter Lowe's ad and tracking list. Disable it if a site or account flow behaves unexpectedly.")
     val wildcardHosts by booleanOption(title = "Host filters > Match subdomains", default = true, key = "adsFilterWildcardHosts", description = "When enabled, an entry such as example.com also redirects ads.example.com and other subdomains. Disable for exact-host matching only.")
     val customFilterHosts by stringsOption(title = "Host filters > Custom host entries", default = emptyList(), key = "adsCustomFilterHosts", description = "Optional domains, URLs, or hosts-file lines to redirect. Add one per row, for example ads.example.com or 0.0.0.0 tracker.example.com. Entries match subdomains while Match subdomains is enabled.")
+    val runtimeRewardsModule by booleanOption(title = "Overlay integration > Runtime controls > Ads Free Rewards", default = false, key = "adsRuntimeRewardsModule", description = "Add one Ads Free Rewards settings control to Universal Overlay. Runtime policy is enabled automatically when at least one Ads runtime control is selected. Its three controls mirror the Ads Free Rewards patch settings initially and affect only safely instrumented reward paths; unsupported reward paths remain unchanged. Supported native MAX paths use request-scoped callbacks.")
     val broadHeuristics by booleanOption(title = "Advanced > Heuristic matching > Enable broad audio-ad heuristics", default = false, key = "adsBroadAudioHeuristics", description = "Normal SDK coverage changes only exact, known ad-SDK methods. Enable this only when an audio or radio app still plays inserted ads after normal controls find nothing: it additionally looks for stream-like classes and ad-metadata methods such as adsIdentityToken, adsResponse, adsDuration, adsId, or cuepoints, then returns empty metadata so detected server-inserted audio ad breaks may be skipped. It does not block every audio ad, visual ad, network request, or unknown SDK. Because it matches names rather than an exact fingerprint, unrelated playback or stream code can match and break app features; disabled by default.")
 
     dependsOn(uniManagerMetadataPatch(
@@ -703,7 +729,7 @@ val adsBlockPatch = bytecodePatch(
                 add(JsonObject().apply {
                     addProperty("id", "control-app-ads")
                     addProperty("version", "1")
-                    add("configuration_prefixes", JsonArray().apply { add("block_") })
+                    add("configuration_prefixes", JsonArray().apply { add("block_"); add("skip_rewarded"); add("instant_reward"); add("fake_ad_availability") })
                 })
             })
             add("capabilities", JsonArray().apply {
@@ -711,9 +737,13 @@ val adsBlockPatch = bytecodePatch(
                 // addon switches were left at their defaults.
                 add("block_ads.v1")
                 add("block_ads_hosts.v1")
+                if (enableAdsFreeRewards == true) add("ads_free_rewards.v1")
             })
             add("configuration", JsonObject().apply {
                 addProperty("block_ads", enableNoAds == true)
+                addProperty("skip_rewarded", skipRewardedAds == true)
+                addProperty("instant_reward", instantReward == true)
+                addProperty("fake_ad_availability", fakeAdAvailability == true)
                 addProperty("block_hosts", enableBlockHosts == true)
                 addProperty("block_interstitials", blockInterstitials == true)
                 addProperty("block_banners", blockBanners == true)
@@ -756,6 +786,10 @@ val adsBlockPatch = bytecodePatch(
             blockMRec = blockMRec == true,
             blockRewarded = blockRewarded == true,
             blockNative = blockNative == true,
+            rewardsEnabled = enableAdsFreeRewards == true,
+            skipRewardedAds = skipRewardedAds == true,
+            instantReward = instantReward == true,
+            fakeAdAvailability = fakeAdAvailability == true,
             hostsEnabled = enableBlockHosts == true,
             wildcardHosts = wildcardHosts == true,
             uBlockFilter = uBlockFilter == true,
@@ -771,17 +805,24 @@ val adsBlockPatch = bytecodePatch(
         )
         val managerIntegration = enableUniManagerIntegration == true
         val selection = AdsRuntimeSelection(
-            policyEnabled = managerIntegration || runtimeBlockAdsModule == true || runtimeHostsModule == true,
+            policyEnabled = managerIntegration || runtimeBlockAdsModule == true || runtimeRewardsModule == true || runtimeHostsModule == true,
             noAdsModuleSelected = managerIntegration || runtimeBlockAdsModule == true,
+            rewardsModuleSelected = managerIntegration || runtimeRewardsModule == true,
             hostsModuleSelected = managerIntegration || runtimeHostsModule == true,
             overlayNoAdsModuleSelected = runtimeBlockAdsModule == true,
+            overlayRewardsModuleSelected = runtimeRewardsModule == true,
             overlayHostsModuleSelected = runtimeHostsModule == true,
         )
         val patchPlan = AdsPatchPlanner.resolve(settings, selection, sdkCoverage)
         runtimeHooksEnabled = patchPlan.runtimePolicyEnabled
         val runtimeBlockAdsEnabled = patchPlan.noAds.mode == AdsPatchMode.RUNTIME
         runtimeNoAdsEnabled = runtimeBlockAdsEnabled
+        val runtimeRewardsEnabled = patchPlan.rewards.mode == AdsPatchMode.RUNTIME
         runtimeHostsEnabled = patchPlan.hosts.mode == AdsPatchMode.RUNTIME
+        adsFreeRewardsRuntimeGuardEnabled = runtimeRewardsEnabled
+        if (settings.blockRewarded && patchPlan.rewards.mode == AdsPatchMode.DISABLED && settings.rewardsEnabled) {
+            detectionLogger.info("Control App Ads: disabled Ads Free Rewards because static rewarded blocking is authoritative.")
+        }
 
         // Each format has one source of truth. Runtime mode changes only the execution path;
         // its initial values remain the patch settings serialized below.
@@ -791,6 +832,12 @@ val adsBlockPatch = bytecodePatch(
         var effectiveBlockMRec = settings.noAdsEnabled && settings.blockMRec
         var effectiveBlockRewarded = settings.noAdsEnabled && settings.blockRewarded
         var effectiveBlockNative = settings.noAdsEnabled && settings.blockNative
+        val staticAdsFreeRewardsEnabled = patchPlan.rewards.mode == AdsPatchMode.STATIC &&
+            settings.rewardsEnabled && (settings.skipRewardedAds || settings.instantReward || settings.fakeAdAvailability)
+        if (staticAdsFreeRewardsEnabled && effectiveBlockRewarded) {
+            effectiveBlockRewarded = false
+            detectionLogger.info("Control App Ads: keeping rewarded flows enabled for Ads Free Rewards.")
+        }
         val configuredBlockedFormats = buildAdsBlockedFormatsMask(
             blockInterstitials = effectiveBlockInterstitials,
             blockBanners = effectiveBlockBanners,
@@ -817,12 +864,15 @@ val adsBlockPatch = bytecodePatch(
             RuntimeNoAdsCoordinator(
                 sdkCoverage = sdkCoverage,
                 blockAdsRuntime = runtimeBlockAdsEnabled,
+                rewardsRuntime = runtimeRewardsEnabled,
             ).fingerprintCategories()
         } else emptyMap()
 
         // Runtime block controls guard the formats selected for static patching. Do not
         // force every format on here: that would also activate preload and initialization
-        // paths that are unsafe to intercept during app startup.
+        // paths that are unsafe to intercept during app startup. Runtime Rewards uses its
+        // guarded reward hooks below and must not enable the broad static rewarded-blocking
+        // branches, which can prevent an app from completing startup.
 
         val hasMaxUnity = sdkCoverage.max && (ShowInterstitialFingerprint.methodOrNull != null ||
             ShowAppOpenAdFingerprint.methodOrNull != null ||
@@ -904,7 +954,7 @@ val adsBlockPatch = bytecodePatch(
                     "Meta, Pangle, VK MyTarget, Yandex or Huawei Ads Kit). No changes applied. " +
                     "If this app shows ads but wasn't detected, please report the APK  -  it may use StartApp/MoPub/Chartboost/InMobi or a custom wrapper.",
             )
-            detectionLogger.info("Ads Block Patch: no selected SDK fingerprint matched; host filters will still be evaluated.")
+            detectionLogger.info("Ads Block Patch: no selected SDK fingerprint matched; host filters and Ads Free Rewards will still be evaluated.")
         } else {
             val found = buildList {
                 if (hasMaxUnity) add("MAX Unity")
@@ -970,7 +1020,7 @@ val adsBlockPatch = bytecodePatch(
         }
 
         // Hide rewarded UI only when rewarded ads were explicitly blocked by the static policy
-        // Rewarded ads are only affected when explicitly selected in the No Ads settings.
+        // (inverse of Ads Free Rewards fake true).
         totalPatched += flushAdsFallbackOperations(detectionLogger)
 
         // Generic audio DAI ads (Klassik Radio, etc.)  -  adsIdentityToken, cuepoints.
@@ -1013,7 +1063,19 @@ val adsBlockPatch = bytecodePatch(
             } catch (_: Exception) {}
         }
 
+        if ((!runtimeRewardsEnabled && staticAdsFreeRewardsEnabled) || runtimeRewardsEnabled) {
+            applyAdsFreeRewards(detectionLogger, settings, patchPlan)
+        }
         logHeap(detectionLogger, "after-method-patches")
+        // Availability needs a guarded method even when the initial runtime value is false;
+        // otherwise the overlay checkbox could never enable it after patching.
+        if ((!runtimeRewardsEnabled && staticAdsFreeRewardsEnabled && settings.fakeAdAvailability) || runtimeRewardsEnabled) {
+            totalPatched += forceAdAvailability(
+                detectionLogger,
+                runtimeRewardsEnabled,
+                sdkCoverage,
+            )
+        }
 
         val filterHosts = buildSet {
             if (settings.uBlockFilter) addAll(uBlockHosts)
@@ -1032,6 +1094,9 @@ val adsBlockPatch = bytecodePatch(
             val policy = serializeAdsRuntimePolicy(
                 moduleMask = moduleMask,
                 blockedFormats = configuredBlockedFormats,
+                skipRewardedAdsEnabled = settings.skipRewardedAds,
+                instantRewardEnabled = settings.instantReward,
+                fakeAvailabilityEnabled = settings.fakeAdAvailability,
                 hostsEnabled = patchPlan.hosts.initialEnabled,
                 wildcardHostsEnabled = settings.wildcardHosts,
                 hosts = filterHosts.toList(),
