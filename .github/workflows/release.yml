@@ -83,3 +83,48 @@ jobs:
             patches-list.json
             README.md
           if-no-files-found: error
+
+      - name: Publish historical branch bundle
+        if: github.ref_name == 'historical-inapp' && steps.release.outputs.new_release_published != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bundle_version=$(sed -n 's/^version *= *//p' gradle.properties)
+          test -n "$bundle_version"
+          bundle_path="patches/build/libs/patches-$bundle_version.mpp"
+          test -f "$bundle_path"
+          bundle_tag="v$bundle_version-historical"
+          if ! gh release view "$bundle_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            cat > "$RUNNER_TEMP/historical-release-notes.md" <<'NOTES'
+          Restored integrated Ads Free Rewards adapters, overlay controls and regression coverage.
+          Includes InApp Emulation, standalone historical No Ads / Ads Free Rewards, Ads Block, Permission Guard and Universal Overlay.
+          Android bundle compilation, unit tests and generated patch catalog verification passed before publication.
+          NOTES
+            gh release create "$bundle_tag" "$bundle_path" \
+              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+              --title "UniPatches $bundle_version — restored historical bundle" \
+              --notes-file "$RUNNER_TEMP/historical-release-notes.md"
+          fi
+          export BUNDLE_VERSION="$bundle_version"
+          python3 - <<'PY'
+          import datetime, json, os
+          version = os.environ["BUNDLE_VERSION"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          metadata = {
+              "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "description": "Restored historical bundle: integrated reward adapters and overlay controls, InApp Emulation, standalone No Ads and historical Ads Free Rewards. Built and tested from this fork.",
+              "download_url": f"https://github.com/{repo}/releases/download/v{version}-historical/patches-{version}.mpp",
+              "signature_download_url": "",
+              "version": version,
+          }
+          with open("patches-bundle.json", "w") as stream:
+              json.dump(metadata, stream, indent=2)
+              stream.write("\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add patches-bundle.json patches-list.json README.md
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update restored bundle $bundle_version [skip ci]"
+            git push origin HEAD:historical-inapp
+          fi
