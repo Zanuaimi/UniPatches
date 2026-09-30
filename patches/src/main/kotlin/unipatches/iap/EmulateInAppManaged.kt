@@ -1,13 +1,24 @@
 package unipatches.iap
 
 import app.morphe.patcher.Fingerprint
+import app.morphe.patcher.checkCast
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import app.morphe.patcher.fieldAccess
+import app.morphe.patcher.methodCall
 import app.morphe.patcher.patch.bytecodePatch
+import com.android.tools.smali.dexlib2.AccessFlags
+import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.ClassDef
+import com.android.tools.smali.dexlib2.iface.Method
+import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
+import com.android.tools.smali.dexlib2.iface.reference.FieldReference
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
-import helpers.bytecode.cloneMutable
 import helpers.bytecode.cloneMutableAndAllocateScratchRegisters
+import helpers.bytecode.cloneMutableForInjectedBlock
+import helpers.bytecode.fitsBelowParameters
 import java.util.logging.Logger
 
 @Suppress("unused")
@@ -29,6 +40,10 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
 ) {
     // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.
     try { category("InApp Emulation") } catch (_: NoSuchMethodError) {}
+    // Every injected billing block resolves against unipatch.overlaycore.*. The extension DEX
+    // must merge into the target before this patch runs, or the first patched call throws
+    // NoClassDefFoundError and the host aborts on the pending exception.
+    extendWith("extensions/extension.mpe")
     execute {
         val logger = Logger.getLogger(this::class.java.name)
         val managedPhaseStart = System.nanoTime()
@@ -68,7 +83,10 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
             val parameterText = method.parameterTypes.joinToString(" ").lowercase()
             val indicators = listOf(
                 classText.contains("billing") || classText.contains("purchase") || classText.contains("receipt"),
-                methodName.contains("purchase") || methodName.contains("billing") || methodName.contains("receipt") || methodName.contains("price"),
+                methodName.contains("purchase") || methodName.contains("billing") || methodName.contains("receipt") || methodName.contains("price") ||
+                    // consumeAsync returns void, so its evidence has to come from the
+                    // name: the params type and the class alone never reach two.
+                    methodName.contains("consume"),
                 parameterText.contains("purchase") || parameterText.contains("receipt") || parameterText.contains("sku") || parameterText.contains("product"),
                 method.returnType.contains("BillingResult") || method.returnType.contains("Purchase") || method.returnType.contains("Sku"),
             ).count { it }
@@ -85,36 +103,81 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
             return reason
         }
 
-        // Minimum registers a frame provably holds: param slots (J/D count
-        // double) plus this for instance methods. Injected blocks use fixed
-        // low regs, and writing past the frame fails verification for the
+        // Registers the frame actually holds. Injected blocks write fixed low
+        // regs (v0..vN), and writing past the frame fails verification for the
         // whole class (frozen loading screens), so every injection below is
-        // gated on the frame holding it.
-        fun minRegs(m: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod): Int {
-            return try {
-                var slots = 0
-                if (!com.android.tools.smali.dexlib2.AccessFlags.STATIC.isSet(m.accessFlags)) slots += 1
-                for (p in m.parameterTypes) slots += if (p == "J" || p == "D") 2 else 1
-                slots
-            } catch (_: Exception) { 0 }
+        // gated on the frame really having that many. Parameter slots are only
+        // a LOWER bound on registerCount, so gating on them skipped frames that
+        // do hold the register - a static no-arg ()Z verifier used to be dropped
+        // here even though its v0 is perfectly valid.
+        fun frameRegisters(m: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod): Int {
+            return try { m.implementation?.registerCount ?: 0 } catch (_: Exception) { 0 }
         }
         // Frame expansion for injections needing more regs than the frame
-        // holds: clone with extra registers and swap the clone in. The
-        // prologue cloneMutable adds is harmless because expanded injections
-        // always return before the original body runs.
+        // holds: clone with a window sized for the block itself and swap the
+        // clone in. cloneMutableForInjectedBlock keeps the clone's parameter
+        // region strictly above every register the block writes, so the
+        // parameter-copy prologue it adds always runs against untouched pN
+        // values and the original body sees intact arguments on fall-through.
         fun expandSwap(m: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod, block: String): Boolean {
+            val owner = try {
+                mutableClassDefByOrNull(m.definingClass)
+            } catch (e: Exception) {
+                logger.warning("FreeIAP expand failed: cannot resolve owner ${m.definingClass} error=$e")
+                return false
+            }
+            if (owner == null) {
+                logger.warning("FreeIAP expand failed: owner missing ${m.definingClass}->${m.name}")
+                return false
+            }
+            val target = owner.methods.firstOrNull {
+                it.name == m.name && it.parameterTypes == m.parameterTypes && it.returnType == m.returnType
+            }
+            if (target == null) {
+                logger.warning("FreeIAP expand failed: target missing ${m.definingClass}->${m.name}(${m.parameterTypes.joinToString(",")})")
+                return false
+            }
             return try {
-                val owner = mutableClassDefByOrNull(m.definingClass) ?: return false
-                val target = owner.methods.firstOrNull {
-                    it.name == m.name && it.parameterTypes == m.parameterTypes && it.returnType == m.returnType
-                } ?: return false
-                val cloned = m.cloneMutable(additionalRegisters = 4)
-                owner.methods.remove(target)
+                val cloned = m.cloneMutableForInjectedBlock(block)
+                // Inject before the swap: a smali parse failure has to leave the
+                // original method in the class, not a class missing its target.
                 cloned.addInstructions(0, block)
+                owner.methods.remove(target)
                 owner.methods.add(cloned)
                 logger.info("FreeIAP expanded frame: ${m.definingClass}->${m.name}")
                 true
-            } catch (_: Exception) { false }
+            } catch (e: Exception) {
+                logger.warning("FreeIAP expand failed: clone/inject threw for ${m.definingClass}->${m.name} error=$e")
+                false
+            }
+        }
+
+        // expandSwap swaps a REPLACEMENT method into the class, so the object the
+        // fingerprint matched is stale afterwards. Re-resolve it to report what
+        // the class really holds, otherwise a failed injection is counted as a
+        // success and the strategy looks like it landed when it did not.
+        fun liveInstructionCount(m: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod): Int {
+            val owner = mutableClassDefByOrNull(m.definingClass) ?: return -1
+            val target = owner.methods.firstOrNull {
+                it.name == m.name && it.parameterTypes == m.parameterTypes && it.returnType == m.returnType
+            } ?: return -1
+            return try { target.implementation?.instructions?.count() ?: -1 } catch (_: Exception) { -1 }
+        }
+
+        // A clone helper can swap its replacement into the class before the
+        // injected block is parsed; when that parse then throws, the target is
+        // half-patched or gone outright (a missing launchBillingFlow is a
+        // NoSuchMethodError, not a fallback). Put the untouched original back.
+        fun restoreOriginalMethod(m: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) {
+            try {
+                val owner = mutableClassDefByOrNull(m.definingClass) ?: return
+                fun same(candidate: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) =
+                    candidate.name == m.name && candidate.parameterTypes == m.parameterTypes && candidate.returnType == m.returnType
+                owner.methods.filter(::same).forEach { candidate -> if (candidate !== m) owner.methods.remove(candidate) }
+                if (owner.methods.none(::same)) owner.methods.add(m)
+            } catch (error: Exception) {
+                logger.warning("FreeIAP could not restore ${m.definingClass}->${m.name}: ${error.message}")
+            }
         }
         fun patchAll(fp: Fingerprint, label: String, needRegs: Int = 1, injector: (app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) -> Unit) {
             if (!strategyEnabled(label)) {
@@ -149,14 +212,27 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
                                 }
                                 automaticClassCounts[method.definingClass] = count + 1
                             }
-                            if (minRegs(method) < needRegs) {
-                                logger.info("FreeIAP skipped tiny frame: ${method.definingClass}->${method.name} regs=${minRegs(method)} need=$needRegs label=$label")
+                            if (frameRegisters(method) < needRegs) {
+                                logger.info("FreeIAP skipped tiny frame: ${method.definingClass}->${method.name} regs=${frameRegisters(method)} need=$needRegs label=$label")
                                 continue
                             }
-                            injector(method)
+                            val beforeCount = try { method.implementation?.instructions?.count() ?: -1 } catch (_: Exception) { -1 }
+                            try {
+                                injector(method)
+                            } catch (e: Exception) {
+                                logger.warning("FreeIAP injector threw: ${method.definingClass}->${method.name} label=$label error=$e")
+                                continue
+                            }
+                            val afterCount = liveInstructionCount(method)
+                            if (afterCount == beforeCount) {
+                                logger.warning("FreeIAP injection left target unchanged: ${method.definingClass}->${method.name} label=$label before=$beforeCount after=$afterCount")
+                                continue
+                            }
                             patched++
                             patchedMethods.add(label)
-                        } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            logger.warning("FreeIAP target failed: label=$label error=$e")
+                        }
                     }
                     return
                 }
@@ -181,11 +257,24 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
                         }
                         automaticClassCounts[single.definingClass] = count + 1
                     }
-                    if (minRegs(single) < needRegs) return
-                    injector(single)
+                    if (frameRegisters(single) < needRegs) return
+                    val beforeCount = try { single.implementation?.instructions?.count() ?: -1 } catch (_: Exception) { -1 }
+                    try {
+                        injector(single)
+                    } catch (e: Exception) {
+                        logger.warning("FreeIAP injector threw: ${single.definingClass}->${single.name} label=$label error=$e")
+                        return
+                    }
+                    val afterCount = liveInstructionCount(single)
+                    if (afterCount == beforeCount) {
+                        logger.warning("FreeIAP injection left target unchanged: ${single.definingClass}->${single.name} label=$label before=$beforeCount after=$afterCount")
+                        return
+                    }
                     patched++
                     patchedMethods.add(label)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    logger.warning("FreeIAP target failed: label=$label error=$e")
+                }
             }
         }
 
@@ -204,6 +293,17 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
             else -> "const/4 v0, 0x0\nreturn-object v0"
         }
 
+        // Latches the emulated connection for overloads whose callback block
+        // could not be expanded. The block writes no registers, so it fits
+        // every frame; without it a failed expansion leaves isReady false.
+        fun latchConnectionReady(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) {
+            try {
+                method.addInstructions(0, "invoke-static {}, Lunipatch/overlaycore/InAppRuntimePolicy;->markConnectionReady()V")
+            } catch (error: Exception) {
+                logger.warning("FreeIAP skipped connection latch: ${method.definingClass}->${method.name} error=${error.message}")
+            }
+        }
+
         fun isBillingNamespace(type: String): Boolean {
             val lower = type.lowercase()
             return lower.contains("billing") ||
@@ -216,6 +316,121 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
             return type.startsWith("Landroid/") || type.startsWith("Ljava/") ||
                 type.startsWith("Lkotlin/") || type.startsWith("Lcom/google/") ||
                 type.startsWith("Lcom/unity3d/")
+        }
+
+        // Registers read by an invoke: short register-list form and /range form.
+        fun invokeRegisters(instruction: com.android.tools.smali.dexlib2.iface.instruction.Instruction): List<Int> = when (instruction) {
+            is FiveRegisterInstruction -> listOf(
+                instruction.registerC, instruction.registerD, instruction.registerE,
+                instruction.registerF, instruction.registerG,
+            ).take(instruction.registerCount)
+            is RegisterRangeInstruction ->
+                (instruction.startRegister until instruction.startRegister + instruction.registerCount).toList()
+            else -> emptyList()
+        }
+
+        /**
+         * Resolves the Map field a managed wrapper's catalog gate reads: the
+         * IGET_OBJECT of type Ljava/util/Map; whose register is an argument of
+         * the Ljava/util/Map;.get that follows it. Read off the gate's own
+         * instructions so the injected iget writes a field the method really
+         * owns instead of a name guessed from one obfuscated build.
+         */
+        fun managedCatalogField(method: Method): FieldReference? {
+            val instructions = method.implementation?.instructions?.toList() ?: return null
+            val mapOwners = HashMap<Int, FieldReference>()
+            for (instruction in instructions) {
+                if (instruction.opcode == Opcode.IGET_OBJECT && instruction is ReferenceInstruction) {
+                    val reference = instruction.reference as? FieldReference ?: continue
+                    if (reference.type != "Ljava/util/Map;") continue
+                    val register = (instruction as? OneRegisterInstruction)?.registerA ?: continue
+                    mapOwners[register] = reference
+                    continue
+                }
+                if (instruction.opcode == Opcode.INVOKE_INTERFACE && instruction is ReferenceInstruction) {
+                    val reference = instruction.reference as? MethodReference ?: continue
+                    if (reference.definingClass != "Ljava/util/Map;" || reference.name != "get") continue
+                    val owner = invokeRegisters(instruction).firstOrNull { mapOwners.containsKey(it) } ?: continue
+                    return mapOwners.getValue(owner)
+                }
+            }
+            return null
+        }
+
+        /**
+         * Accepts only the catalog gate itself: an instance method taking the
+         * SKU as its FIRST argument, reading a Map field, casting the lookup to
+         * a billing product type and branching on the result, on a class that
+         * owns a billing client.
+         *
+         * Trailing parameters must not disqualify the method. One wrapper
+         * carries two gates over the same product map: the product gate takes
+         * the SKU alone, while the subscription gate additionally takes a log
+         * StringBuilder and a failure callback, and reads the map with the SKU
+         * register. Requiring exact arity left that gate unseeded and every
+         * subscription purchase still died at "<sku>: not available". The map
+         * read, the cast and the branch keep the match tight enough that a
+         * logging helper cannot qualify.
+         */
+        fun isManagedCatalogGate(method: Method, clazz: ClassDef): Boolean {
+            if (AccessFlags.STATIC.isSet(method.accessFlags)) return false
+            if (method.returnType != "V") return false
+            if (method.parameterTypes.firstOrNull() != "Ljava/lang/String;") return false
+            if (managedCatalogField(method) == null) return false
+            val billingShaped = clazz.fields.any { it.type.contains("billingclient") } ||
+                clazz.interfaces.any { it.contains("billingclient") } ||
+                clazz.methods.any { owned -> owned.returnType.contains("BillingResult") }
+            if (!billingShaped) return false
+            val instructions = method.implementation?.instructions?.toList() ?: return false
+            for ((index, instruction) in instructions.withIndex()) {
+                if (instruction.opcode != Opcode.CHECK_CAST) continue
+                val castRegister = (instruction as? OneRegisterInstruction)?.registerA ?: continue
+                for (offset in (index + 1) until minOf(index + 4, instructions.size)) {
+                    val branch = instructions[offset]
+                    if (branch.opcode != Opcode.IF_NEZ && branch.opcode != Opcode.IF_EQZ) continue
+                    if ((branch as? OneRegisterInstruction)?.registerA == castRegister) return true
+                }
+            }
+            return false
+        }
+
+        /**
+         * Recognises the wrapper's purchase signature gate: a private
+         * (Purchase)Z that reads the purchase JSON and signature and delegates
+         * to a static verifier, on a class that owns a billing client.
+         *
+         * The static delegation is the part that makes this safe. The same
+         * class also holds a purchase-state check that decides whether the
+         * purchase is complete, and that one must keep running: forcing it true
+         * would grant items for a purchase that never finished. Requiring a
+         * static call out of a method that only reads those two getters cannot
+         * match it.
+         */
+        fun isPurchaseSignatureGate(method: Method, clazz: ClassDef): Boolean {
+            if (method.returnType != "Z") return false
+            if (method.parameterTypes != listOf("Lcom/android/billingclient/api/Purchase;")) return false
+            val billingShaped = clazz.fields.any { it.type.contains("billingclient") } ||
+                clazz.interfaces.any { it.contains("billingclient") } ||
+                clazz.methods.any { owned -> owned.returnType.contains("BillingResult") }
+            if (!billingShaped) return false
+            val instructions = method.implementation?.instructions?.toList() ?: return false
+            var readsJson = false
+            var readsSignature = false
+            var delegatesToStatic = false
+            for (instruction in instructions) {
+                if (instruction is ReferenceInstruction && instruction.reference is MethodReference) {
+                    val reference = instruction.reference as MethodReference
+                    when (reference.name) {
+                        "getOriginalJson" -> readsJson = true
+                        "getSignature" -> readsSignature = true
+                    }
+                    if (instruction.opcode == Opcode.INVOKE_STATIC &&
+                        (reference.returnType == "Z" || reference.returnType == "Ljava/lang/Boolean;")) {
+                        delegatesToStatic = true
+                    }
+                }
+            }
+            return readsJson && readsSignature && delegatesToStatic
         }
 
         val okBillingResult = """
@@ -236,8 +451,13 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
             move-result-object v0
             invoke-virtual {v0}, Lcom/android/billingclient/api/BillingResult${'$'}Builder;->build()Lcom/android/billingclient/api/BillingResult;
             move-result-object v0
+            invoke-static {v0, v1}, Lunipatch/overlaycore/InAppRuntimePolicy;->stampResponseCode(Ljava/lang/Object;I)V
             return-object v0
         """.trimIndent()
+        // v1 still holds 1 above, so the stamp records the cancel code. Without
+        // it the patched getResponseCode would report this cancel as OK and the
+        // game would wait on a callback that never arrives. Keep comments out of
+        // the smali strings: addInstructions rejects them and drops the method.
 
         // ──────────────────────────────────────────────
         // GOOGLE PLAY BILLING
@@ -253,7 +473,6 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
             okBillingResult = okBillingResult,
             nonOverlayTimeout = nonOverlayTimeout,
             overlayTimeout = overlayTimeout,
-            minRegs = ::minRegs,
             expandSwap = ::expandSwap,
             parameterRegister = ::parameterRegister,
             listenerIget = { className -> this@execute.resolveBillingListener(className) },
@@ -276,7 +495,6 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
             okBillingResult = okBillingResult,
             nonOverlayTimeout = nonOverlayTimeout,
             overlayTimeout = overlayTimeout,
-            minRegs = ::minRegs,
             expandSwap = ::expandSwap,
             parameterRegister = ::parameterRegister,
         ))
@@ -286,11 +504,13 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
         // the real body (no return): the real connection still runs, so the
         // untouched product catalog below keeps working on devices with
         // Play, while no-Play devices boot on the early OK instead of
-        // waiting for setup forever. Any other overload (e.g. the native
-        // (J) bridge used by Unity IL2CPP games) is left completely
-        // untouched: voiding it strands native setup with no callback and
-        // freezes the app on its loading screen.
-        patchAll(Fingerprint(name = "startConnection", custom = { m, c -> m.returnType == "V" && c.type.contains("BillingClient")         }), "BillingClient.startConnection", 2) {
+        // waiting for setup forever. Every overload also latches the emulated
+        // connection first (markConnectionReady), because isReady and
+        // getConnectionState report DISCONNECTED until startConnection runs.
+        // A non-listener overload (e.g. the native (J) bridge used by Unity
+        // IL2CPP games) only gets that latch: voiding it would strand native
+        // setup with no callback and freeze the app on its loading screen.
+        patchAll(Fingerprint(name = "startConnection", custom = { m, c -> m.returnType == "V" && isBillingNamespace(c.type) }), "BillingClient.startConnection", 2) {
             if (it.parameterTypes == listOf("Lcom/android/billingclient/api/BillingClientStateListener;") && it.returnType == "V") {
                 // The callback is followed by the stock connection body, so
                 // use cloned scratch registers instead of clobbering v0/v1.
@@ -300,7 +520,12 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
                     val cloned = allocation.method
                     val scratch = allocation.firstScratchRegister
                     val listenerReg = parameterRegister(it, 0)
+                    // markConnectionReady leads so a game reading isReady from
+                    // inside the setup callback this block fires sees the
+                    // connection as up. Keep comments out of the smali: the
+                    // parser rejects them and the whole block is dropped.
                     val block = """
+                    invoke-static {}, Lunipatch/overlaycore/InAppRuntimePolicy;->markConnectionReady()V
                     invoke-static {}, Lcom/android/billingclient/api/BillingResult;->newBuilder()Lcom/android/billingclient/api/BillingResult${'$'}Builder;
                     move-result-object v$scratch
                     const/4 v${scratch + 1}, 0x0
@@ -318,14 +543,137 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
                     logger.info("FreeIAP startConnection expanded frame: ${it.definingClass}->${it.name} regs=${cloned.implementation?.registerCount}")
                 } catch (error: Exception) {
                     logger.warning("FreeIAP skipped startConnection: register-safe allocation failed (${error.message})")
+                    // The scratch-clone helper already swapped its prologue-only
+                    // clone in; restore the original, then latch, so the game
+                    // gets a usable (if callback-less) startConnection instead of
+                    // a half-patched one and isReady is not stuck false.
+                    restoreOriginalMethod(it)
+                    latchConnectionReady(it)
+                }
+            } else {
+                // Overloads without a Java listener (Unity IL2CPP's native (J)
+                // bridge) still connect, so they must latch too. The block
+                // writes no registers, which is why it is safe to prepend here.
+                latchConnectionReady(it)
+            }
+        }
+
+        // ──────────────────────────────────────────────
+        // MANAGED WRAPPER PRODUCT CATALOG
+        // ──────────────────────────────────────────────
+
+        // An obfuscated IAP wrapper (GoogleIapManager and its forks) keeps a
+        // private product map that only a native-driven requestProductsData
+        // ever fills, and that call only runs after the engine's own
+        // onSetupFinished. On most cold runs the engine never gets there, so
+        // purchase() dies at the map lookup with "<sku>: not available" before
+        // the wrapper's connection check even runs. Seed the map the gate
+        // reads and latch the emulated connection ahead of the lookup. Both
+        // calls stay on the Java side on purpose: forcing Java init() walks
+        // startConnection -> onBillingSetupFinished -> Q0 into the engine's
+        // unguarded [this+0x18] listener dereference and takes the process
+        // down with it.
+        for ((productType, seedMethod) in listOf(
+            "Lcom/android/billingclient/api/ProductDetails;" to "seedManagedProduct",
+            "Lcom/android/billingclient/api/SkuDetails;" to "seedManagedSku",
+        )) {
+            patchAll(
+                Fingerprint(
+                    // No name: Fingerprint.name is the method name to match,
+                    // not a label. The label lives on patchAll below.
+                    // No parameters either: morphe's parametersMatch rejects any
+                    // arity mismatch outright, so declaring the SKU here would
+                    // exclude gates that take extra context after it. Arity and
+                    // the leading String are enforced in isManagedCatalogGate.
+                    returnType = "V",
+                    filters = listOf(
+                        fieldAccess(type = "Ljava/util/Map;", opcode = Opcode.IGET_OBJECT),
+                        methodCall(
+                            definingClass = "Ljava/util/Map;",
+                            name = "get",
+                            parameters = listOf("Ljava/lang/Object;"),
+                            returnType = "Ljava/lang/Object;",
+                            opcode = Opcode.INVOKE_INTERFACE,
+                        ),
+                        checkCast(type = productType),
+                    ),
+                    custom = { method, clazz -> isManagedCatalogGate(method, clazz) },
+                ),
+                "BillingClient.$seedMethod",
+                1,
+            ) {
+                val catalog = managedCatalogField(it) ?: return@patchAll
+                val product = parameterRegister(it, 0)
+                // The latch leads so a wrapper reading isReady from inside the
+                // call path this gate feeds still sees the connection up.
+                // FieldReference descriptors already carry their ';', so the
+                // iget below is class + "->" + name + ":" + type. Keep every
+                // comment outside the string: the smali parser rejects them.
+                val block = """
+                    invoke-static {}, Lunipatch/overlaycore/InAppRuntimePolicy;->markConnectionReady()V
+                    iget-object v0, p0, ${catalog.definingClass}->${catalog.name}:${catalog.type}
+                    invoke-static {v0, $product}, Lunipatch/overlaycore/InAppRuntimePolicy;->${seedMethod}(Ljava/lang/Object;Ljava/lang/String;)V
+                """.trimIndent()
+                var seeded = false
+                if (it.fitsBelowParameters(block)) {
+                    try {
+                        it.addInstructions(0, block)
+                        seeded = true
+                    } catch (e: Exception) {
+                        logger.warning("FreeIAP seed block rejected: ${it.definingClass}->${it.name} error=$e block=${block.replace('\n', '|')}")
+                    }
+                }
+                if (!seeded) seeded = expandSwap(it, block)
+                if (!seeded) {
+                    logger.warning("FreeIAP seed block dropped: ${it.definingClass}->${it.name} block=${block.replace('\n', '|')}")
+                    latchConnectionReady(it)
                 }
             }
-            // else: leave the overload alone (see comment above)
         }
 
         // onPurchasesUpdated is fired by the buy-time grant in
         // launchBillingFlow above and intentionally left intact elsewhere:
         // the game grants items in its own listener.
+
+        // ──────────────────────────────────────────────
+        // PURCHASE SIGNATURE GATE
+        // ──────────────────────────────────────────────
+
+        // Having produced a well-formed Purchase, the wrapper still runs it
+        // through its own verifier before granting: it reads getOriginalJson
+        // plus getSignature and hands both to a static check, and a false
+        // result becomes "<sku>: invalid signature" with nothing granted. The
+        // emulated purchase carries a synthetic token that no store ever
+        // signed, so the real check can only ever say no.
+        //
+        // The signature is matched structurally rather than by name, because
+        // the method is obfuscated per build: a private (Purchase)Z on a
+        // billing-shaped class whose body reads exactly those two getters and
+        // delegates to a static verifier. Anything looser would also match the
+        // purchase-state check that guards the same grant.
+        patchAll(
+            Fingerprint(
+                returnType = "Z",
+                parameters = listOf("Lcom/android/billingclient/api/Purchase;"),
+                filters = listOf(
+                    methodCall(
+                        name = "getOriginalJson",
+                        returnType = "Ljava/lang/String;",
+                        opcode = Opcode.INVOKE_VIRTUAL,
+                    ),
+                    methodCall(
+                        name = "getSignature",
+                        returnType = "Ljava/lang/String;",
+                        opcode = Opcode.INVOKE_VIRTUAL,
+                    ),
+                ),
+                custom = { method, clazz -> isPurchaseSignatureGate(method, clazz) },
+            ),
+            "BillingClient.verifyEmulatedPurchase",
+            1,
+        ) {
+            it.addInstructions(0, "const/4 v0, 0x1\nreturn v0")
+        }
 
         // Build a small candidate index once. The broad compatibility phases
         // otherwise enumerate and inspect every class independently.
@@ -369,7 +717,7 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
         // through obfuscated zz* bridge classes. Require the native methods
         // and exact callback signatures before touching a bridge.
         if (strategyEnabled("Unity IL2CPP billing bridge")) {
-            val bridgeLabels = this@execute.applyIl2CppBillingPatches(nativeBridgeCandidates, ::parameterRegister, ::minRegs, ::expandSwap, logger)
+            val bridgeLabels = this@execute.applyIl2CppBillingPatches(nativeBridgeCandidates, ::parameterRegister, ::expandSwap, logger)
             patched += bridgeLabels.size
             patchedMethods.addAll(bridgeLabels)
         }
@@ -379,11 +727,28 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
                 patchAll = { fingerprint, label, needRegs, injector -> patchAll(fingerprint, label, needRegs, injector) },
                 safeReturn = ::safeReturn,
                 okBillingResult = okBillingResult,
+                // Not optional: without it every tight-frame inventory/consume
+                // injection silently falls back to a no-op lambda and the target
+                // is left stock while the patch reports success.
+                expandSwap = ::expandSwap,
                 parameterRegister = ::parameterRegister,
             ),
             fakeStartupPurchases = options.fakeStartupPurchases,
             legacyInventoryMode = options.legacyInventoryMode,
             isBillingNamespace = ::isBillingNamespace,
+            // Patch-time gate for the query*Async listener wrap: only a
+            // declared interface can be a java.lang.reflect.Proxy at runtime,
+            // so a class-typed listener (Unity proxy bridges) keeps the stock
+            // path instead of receiving a check-cast that can never verify.
+            isInterfaceType = { type ->
+                try {
+                    classDefByOrNull(type)?.let { definition ->
+                        com.android.tools.smali.dexlib2.AccessFlags.INTERFACE.isSet(definition.accessFlags)
+                    } == true
+                } catch (_: Exception) {
+                    false
+                }
+            },
         )
 
 
@@ -409,7 +774,7 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
         // with no billing-related name. Scan only non-framework, non-billing
         // classes and require the exact boolean verifyPurchase signature.
         if (strategyEnabled("GameMaker")) {
-            val gameMakerLabels = applyGameMakerPatches(gameMakerCandidates, ::minRegs, logger)
+            val gameMakerLabels = applyGameMakerPatches(gameMakerCandidates, logger)
             patched += gameMakerLabels.size
             patchedMethods.addAll(gameMakerLabels)
         }

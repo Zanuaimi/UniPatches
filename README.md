@@ -172,10 +172,44 @@ and has its own detailed guide in [tools/icon-builder/README.md](tools/icon-buil
 
 ### 🛠️ Building locally
 
-- Run `./gradlew buildAndroid`
-- The built patches .mpp file is found in `patches/build/libs/patches-*.mpp`
+Prerequisites:
+
+- JDK 21 (`java -version`).
+- An Android SDK with platform `android-36`. Point the build at it with either the
+  `ANDROID_HOME` environment variable or a git-ignored `local.properties`:
+
+  ```properties
+  sdk.dir=C\:\\path\\to\\Android\\Sdk
+  ```
+
+- Credentials for GitHub Packages. The Morphe Gradle plugin (`app.morphe.patches`) and the
+  patcher (`app.morphe:morphe-patcher`) are only published to
+  `maven.pkg.github.com/MorpheApp/registry`, which rejects anonymous downloads with `401`
+  and surfaces as `Plugin [id: 'app.morphe.patches'] was not found`. Put them in
+  `~/.gradle/gradle.properties` — **not** in this repository's `gradle.properties`, which is
+  tracked:
+
+  ```properties
+  gpr.user=<your GitHub username>
+  gpr.key=<a PAT with read:packages>
+  ```
+
+  `GITHUB_ACTOR` and `GITHUB_TOKEN` are read as a fallback, which is what CI uses.
+
+Commands:
+
+- `./gradlew buildAndroid` — build the patches `.mpp` file.
+- `./gradlew test` — run the patch and extension test suites.
+- The built patches `.mpp` file is found in `patches/build/libs/patches-*.mpp`.
 - Patch the mpp file using [Morphe-Desktop](https://github.com/MorpheApp/morphe-desktop)
   like any other patch bundle.
+- `python3 -m unittest discover -s .github/scripts -p "test_*.py"` — run the release-script
+  tests. They must pass before a release, because `semantic-release` runs the README
+  generator after it has already bumped `CHANGELOG.md` and `gradle.properties`.
+
+Building without GitHub Packages credentials is possible by publishing the toolchain from
+source into `mavenLocal()` (`morphe-patches-gradle-plugin` and `morphe-patcher`, both
+`publishToMavenLocal`); `settings.gradle.kts` resolves plugins from `mavenLocal()` first.
 
 See the [Morphe documentation](https://github.com/MorpheApp/morphe-documentation) for more information.
 

@@ -144,3 +144,7 @@ testing/
 
 # Generated patch build output
 patches/bin/
+
+# Python bytecode from the release scripts and their tests
+__pycache__/
+*.py[cod]

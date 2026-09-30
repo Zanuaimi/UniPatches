@@ -9,7 +9,7 @@ internal fun applyAlternativeStorePatches(context: InAppManagedAdapterContext) {
     val safeReturn = context.safeReturn
     val okBillingResult = context.okBillingResult
 
-    patchAll(Fingerprint(name = "launchBillingFlow", custom = { _, c -> c.type.lowercase().contains("xsolla") }), "Xsolla.launchBillingFlow", 1) {
+    patchAll(Fingerprint(name = "launchBillingFlow", custom = { _, c -> c.type.lowercase().contains("xsolla") }), "Xsolla.launchBillingFlow", 2) {
         val block = when {
             it.returnType.contains("BillingResult") -> okBillingResult
             it.returnType == "Z" -> "const/4 v0, 0x1\nreturn v0"

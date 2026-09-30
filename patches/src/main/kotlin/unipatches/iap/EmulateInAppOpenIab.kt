@@ -2,11 +2,11 @@ package unipatches.iap
 
 import app.morphe.patcher.Fingerprint
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import helpers.bytecode.fitsBelowParameters
 
 /** OpenIAB and UnityPlugin adapter for legacy Unity billing flows. */
 internal fun applyOpenIabPatches(context: InAppManagedAdapterContext) {
     val patchAll = context.patchAll
-    val minRegs = context.minRegs
     val expandSwap = context.expandSwap
     val parameterRegister = context.parameterRegister
     val nonOverlayTimeout = context.nonOverlayTimeout
@@ -88,7 +88,7 @@ internal fun applyOpenIabPatches(context: InAppManagedAdapterContext) {
                     return-void
                     :morphe_openiab_original_purchase_flow
                 """.trimIndent()
-                if (minRegs(method) >= 7) {
+                if (method.fitsBelowParameters(block)) {
                     try { method.addInstructions(0, block) } catch (_: Exception) { expandSwap(method, block) }
                 } else expandSwap(method, block)
             }

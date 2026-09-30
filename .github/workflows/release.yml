@@ -32,7 +32,13 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      # The generator runs inside semantic-release's prepareCmd, after CHANGELOG
+      # and gradle.properties have already been bumped. A broken generator would
+      # abort the release half-way through, so exercise it before releasing.
+      - name: Verify release scripts
+        run: python3 -m unittest discover -s .github/scripts -p "test_*.py" -v
 
       # Semantic release runs its own Gradle build command.
       # Only dev and main branch will generate a release as specified by .releaserc
@@ -49,13 +55,14 @@ jobs:
           subject-name: 'Morphe Patches ${{ steps.release.outputs.new_release_git_tag }}'
           subject-path: patches/build/libs/patches-*.mpp
 
-      # Always verify compilation when semantic-release did not publish a release.
-      # This covers non-main/dev branches, chore commits, docs commits, etc.
-      - name: Verify project compiles
+      # Always verify compilation and the test suites when semantic-release did
+      # not publish a release. This covers non-main/dev branches, chore commits,
+      # docs commits, etc. Release builds run the tests through `gradle build`.
+      - name: Verify project compiles and tests pass
         if: steps.release.outputs.new_release_published != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew clean :patches:buildAndroid --no-daemon
+        run: ./gradlew clean :patches:buildAndroid test --no-daemon
 
       - name: Upload compiled patches
         if: steps.release.outputs.new_release_published != 'true'

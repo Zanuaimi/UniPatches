@@ -3,14 +3,14 @@ package unipatches.iap
 import app.morphe.patcher.patch.BytecodePatchContext
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import com.android.tools.smali.dexlib2.iface.ClassDef
-import helpers.bytecode.cloneMutable
+import helpers.bytecode.cloneMutableForInjectedBlock
+import helpers.bytecode.fitsBelowParameters
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import java.util.logging.Logger
 
 internal fun BytecodePatchContext.applyIl2CppBillingPatches(
     candidates: List<ClassDef>,
     parameterRegister: (MutableMethod, Int) -> String,
-    minRegs: (MutableMethod) -> Int,
     expandSwap: (MutableMethod, String) -> Boolean,
     logger: Logger,
 ): List<String> {
@@ -38,7 +38,7 @@ internal fun BytecodePatchContext.applyIl2CppBillingPatches(
                 invoke-static {v2, v3, v0, v1}, $className->nativeOnBillingSetupFinished($signature)V
                 return-void
             """.trimIndent()
-            val applied = try { if (minRegs(setup) >= 4) { setup.addInstructions(0, block); true } else expandSwap(setup, block) } catch (_: Exception) { false }
+            val applied = try { if (setup.fitsBelowParameters(block)) { setup.addInstructions(0, block); true } else expandSwap(setup, block) } catch (_: Exception) { false }
             if (applied) {
                 labels += "$className.onBillingSetupFinished"
                 logger.info("Emulate InApp: patched $className.onBillingSetupFinished bridge")
@@ -63,7 +63,12 @@ internal fun BytecodePatchContext.applyIl2CppBillingPatches(
         """.trimIndent()
         try {
             val target = mutableClass.methods.firstOrNull { it.name == purchases.name && it.parameterTypes == purchases.parameterTypes && it.returnType == purchases.returnType } ?: continue
-            val cloned = purchases.cloneMutable(additionalRegisters = 2)
+            // A fixed +2 window puts the parameter region at origCount - paramRegs + 2,
+            // which sits INSIDE the guard's scratch registers for the 3-slot
+            // (BillingResult, List) frame this bridge always matches. The guard then
+            // overwrites the List parameter with the response-code int and the original
+            // onPurchasesUpdated body runs on it. Size the window from the block instead.
+            val cloned = purchases.cloneMutableForInjectedBlock(guard)
             mutableClass.methods.remove(target)
             cloned.addInstructions(0, guard)
             mutableClass.methods.add(cloned)

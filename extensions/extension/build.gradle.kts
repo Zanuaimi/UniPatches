@@ -4,6 +4,12 @@ extension {
 
 android {
     namespace = "unipatch.extension"
+    // InAppRuntimePolicy builds a Handler on the main looper in its static
+    // initializer; without stubbed defaults the mockable android.jar throws
+    // "Stub!" and every test touching that class dies in class loading.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {

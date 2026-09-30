@@ -4,17 +4,24 @@ import android.app.Activity;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Toast;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import unipatch.overlaycore.modules.OverlaySessionState;
 import unipatch.overlaycore.modules.advanced.OverlayRuntimeLogger;
 
@@ -39,6 +46,26 @@ public final class InAppRuntimePolicy {
     private static long nonOverlayTimeoutMs = DEFAULT_NON_OVERLAY_TIMEOUT_SECONDS * 1000L;
     private static long overlayTimeoutMs = DEFAULT_OVERLAY_TIMEOUT_SECONDS * 1000L;
     private static String lastEvent = "No purchase request this session";
+    /**
+     * Response codes this module assigned to results it built. The patched
+     * BillingResult.getResponseCode keeps a stamped code and reports 0 for
+     * every other result, so a stock SERVICE_UNAVAILABLE / NETWORK_ERROR
+     * failure cannot flip a game's own billing gate to "unavailable" while
+     * every emulated call succeeds. Weak keys: results die with their game.
+     */
+    private static final Map<Object, Integer> STAMPED_CODES =
+            Collections.synchronizedMap(new WeakHashMap<Object, Integer>());
+    /**
+     * Latched the first time a patched BillingClient.startConnection runs.
+     * isReady/getConnectionState must report DISCONNECTED before that point:
+     * always-on readiness short-circuits connection-gated games (the
+     * b0()-style ready checks) before they ever call startConnection, so
+     * their setup listener never fires and their own billing gate stays shut
+     * forever. Process-lifetime on purpose: endConnection is a no-op, so the
+     * emulated connection never drops and must not be revoked mid-session.
+     */
+    private static boolean connectionReady;
+
 
     private InAppRuntimePolicy() { }
 
@@ -103,6 +130,9 @@ public final class InAppRuntimePolicy {
         return "unipatches-inventory-token-" + Integer.toHexString(id.hashCode());
     }
 
+    /** Product of the last successful emulated delivery, or null. */
+    private static volatile String LAST_DELIVERED_PRODUCT;
+
     /** Builds an inventory object only when a single catalog product was observed. */
     public static Object emulatedInventoryPurchase(Class<?> purchaseClass) {
         String id = catalogProductId();
@@ -112,6 +142,35 @@ public final class InAppRuntimePolicy {
             String token = emulatedPurchaseToken(id);
             return constructor.newInstance(emulatedPurchaseJson(id), token);
         } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * The purchase most recently delivered to the game, as an inventory object.
+     *
+     * A wrapper that grants a purchase re-reads its own inventory to resolve
+     * that purchase; an empty query answer makes it report "purchase not
+     * found" and the grant is dropped even though the callback arrived. This
+     * answers the query with the purchase that was just delivered, and stays
+     * silent when no purchase has happened, so a cold start still reports an
+     * empty inventory instead of a fabricated one.
+     */
+    public static Object deliveredPurchase(Class<?> purchaseClass) {
+        PurchaseRequest request = pending;
+        if (purchaseClass == null) return null;
+        String id = LAST_DELIVERED_PRODUCT;
+        Log.i("UnipatchSeed", "deliveredPurchase: product=" + id +
+                " class=" + purchaseClass.getName());
+        if (!valid(id)) return null;
+        try {
+            Constructor<?> constructor = purchaseClass.getConstructor(String.class, String.class);
+            String token = emulatedPurchaseToken(id);
+            Object purchase = constructor.newInstance(emulatedPurchaseJson(id), token);
+            Log.i("UnipatchSeed", "deliveredPurchase built: product=" + id);
+            return purchase;
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            Log.w("UnipatchSeed", "delivered purchase not representable: " + error);
             return null;
         }
     }
@@ -128,6 +187,7 @@ public final class InAppRuntimePolicy {
         redirect = null;
         SAVED.clear();
         CATALOG_PRODUCTS.clear();
+        LAST_DELIVERED_PRODUCT = null;
         activity.clear();
         lastEvent = "No purchase request this session";
     }
@@ -156,6 +216,10 @@ public final class InAppRuntimePolicy {
     }
 
     public static boolean dispatch(Object listener, Object purchaseActivity, Object flowParams) {
+        Log.i("UnipatchSeed", "dispatch enter: listener=" +
+                (listener == null ? "null" : listener.getClass().getName()) +
+                " isPurchasesUpdatedListener=" + isPurchasesUpdatedListener(listener) +
+                " stack=" + dispatchCaller());
         if (listener == null) return false;
         Activity target = purchaseActivity instanceof Activity ? (Activity) purchaseActivity : null;
         String product = productId(flowParams, null);
@@ -186,6 +250,8 @@ public final class InAppRuntimePolicy {
             }
         }
         if (reject) {
+            Log.w("UnipatchSeed", "dispatch rejected overlapping request: product=" + product +
+                    " pending=" + describePending());
             boolean delivered = deliver(listener, product, 1, false, backend);
             OverlayRuntimeLogger.log(delivered ? "INFO" : "WARN", "InApp",
                     "Modern cancellation result " + (delivered ? "returned" : "failed") + ": product=" + product);
@@ -194,10 +260,16 @@ public final class InAppRuntimePolicy {
         if (immediate != null) {
             final PurchaseRequest immediateRequest = immediate;
             scheduleTimeout(immediateRequest);
-            boolean delivered = immediateRequest.claimCallback() &&
-                    deliver(listener, product, 0, true, backend, target);
+            boolean claimed = immediateRequest.claimCallback();
+            boolean delivered = claimed && deliver(listener, product, 0, true, backend, target);
             finishImmediate(immediateRequest, delivered);
-            if (!delivered) OverlayRuntimeLogger.log("WARN", "InApp", "Modern purchase callback failed: product=" + product);
+            Log.i("UnipatchSeed", "immediate dispatch: product=" + product +
+                    " claimed=" + claimed + " delivered=" + delivered + " backend=" + backend);
+            if (!delivered) {
+                Log.w("UnipatchSeed", "immediate delivery failed: product=" + product +
+                        " claimed=" + claimed + " listener=" + listener.getClass().getName());
+                OverlayRuntimeLogger.log("WARN", "InApp", "Modern purchase callback failed: product=" + product);
+            }
             return delivered;
         }
         final PurchaseRequest request;
@@ -212,8 +284,34 @@ public final class InAppRuntimePolicy {
         return true;
     }
 
-    private static PurchaseBackend modernBackend(Object flowParams) {
-        if (flowParams != null) {
+    /** Whether the object really is a billing purchase listener. */
+    private static boolean isPurchasesUpdatedListener(Object listener) {
+        if (listener == null) return false;
+        for (Class<?> type = listener.getClass(); type != null; type = type.getSuperclass()) {
+            for (Class<?> face : type.getInterfaces()) {
+                if (face.getName().contains("PurchasesUpdatedListener")) return true;
+            }
+        }
+        return false;
+    }
+
+    /** First patched frame above this one, so the log names the call site. */
+    private static String dispatchCaller() {
+        for (StackTraceElement frame : new Throwable().getStackTrace()) {
+            if (InAppRuntimePolicy.class.getName().equals(frame.getClassName())) continue;
+            return frame.getClassName() + "." + frame.getMethodName();
+        }
+        return "unknown";
+    }
+
+    /** What the in-flight request looks like when a second purchase is refused. */
+    private static String describePending() {        PurchaseRequest request = pending;
+        if (request == null) return "null";
+        return request.state() + " product=" + request.productId + " backend=" + request.backend +
+                " finished=" + request.isFinished();
+    }
+
+    private static PurchaseBackend modernBackend(Object flowParams) {        if (flowParams != null) {
             try {
                 Object list = flowParams.getClass().getMethod("getProductDetailsParamsList").invoke(flowParams);
                 if (list instanceof Iterable<?>) {
@@ -246,20 +344,34 @@ public final class InAppRuntimePolicy {
         return "inapp";
     }
 
-    /** Returns a BillingClient-compatible response code and completes rejected callbacks. */
+    /**
+     * Returns a BillingClient-compatible response code and completes rejected callbacks.
+     * {@code purchaseActivity} is carried only to keep the injected call shape stable;
+     * validation does not require it to be an Activity.
+     */
     public static int validateModernPurchase(Object billingClient, Object listener,
                                              Object purchaseActivity, Object flowParams) {
         String product = productId(flowParams, null);
         int responseCode;
-        if (billingClient == null || listener == null || !(purchaseActivity instanceof Activity) || flowParams == null) {
+        if (billingClient == null || listener == null || flowParams == null) {
             responseCode = 5;
         } else if (!valid(product)) {
+            // Named because the id is the only thing standing between a rejected
+            // purchase and a granted one, and reflection on billing internals
+            // fails silently everywhere else in this class.
+            Log.w("UnipatchSeed", "validate rejected: no product id from " +
+                    (flowParams == null ? "null" : flowParams.getClass().getName()));
             responseCode = 4;
         } else if (!listenerHolderMatches(billingClient, listener)) {
             responseCode = 5;
         } else {
-            Integer state = connectionState(billingClient);
-            responseCode = state != null && state != 2 ? 2 : validateFlowParams(flowParams);
+            // purchaseActivity is advisory: backends that pass only flow parameters
+            // fall through to the registered overlay activity in dispatch(), so a
+            // non-Activity (or absent) target must not veto a valid purchase. The
+            // private connection-state field is also not consulted -- the patched
+            // client reports ready regardless of Play Services availability, and
+            // gating on that field rejected purchases the patch had already accepted.
+            responseCode = validateFlowParams(flowParams);
         }
         if (responseCode != 0) {
             OverlayRuntimeLogger.log("WARN", "InApp", "Modern purchase validation failed: product=" + productId(flowParams, null) +
@@ -269,34 +381,42 @@ public final class InAppRuntimePolicy {
         return responseCode;
     }
 
+    /** Latches the emulated connection; called by the patched startConnection. */
+    public static synchronized void markConnectionReady() { connectionReady = true; }
+
+    public static synchronized boolean isConnectionReady() { return connectionReady; }
+
+    /** DISCONNECTED (0) until startConnection runs, then CONNECTED (2). */
+    public static synchronized int connectionState() { return connectionReady ? 2 : 0; }
+
+    /**
+     * Response code a patched BillingResult reports. Stamped results keep
+     * their real code, because cancel and validation failures must still
+     * read as failures; any unstamped result came from the stock store and
+     * reads as OK while billing is emulated.
+     */
+    public static int billingResponseCode(Object result) {
+        Integer stamped = result == null ? null : STAMPED_CODES.get(result);
+        return stamped == null ? 0 : stamped;
+    }
+
+    /** Records the real response code of a result this module built. */
+    public static void stampResponseCode(Object result, int responseCode) {
+        if (result != null) STAMPED_CODES.put(result, responseCode);
+    }
+
     /** Builds BillingResult without linking the extension against a BillingClient version. */
     public static Object billingResult(int responseCode) {
         try {
             Class<?> resultClass = Class.forName("com.android.billingclient.api.BillingResult");
             Object builder = resultClass.getMethod("newBuilder").invoke(null);
             builder = builder.getClass().getMethod("setResponseCode", int.class).invoke(builder, responseCode);
-            return builder.getClass().getMethod("build").invoke(builder);
+            Object result = builder.getClass().getMethod("build").invoke(builder);
+            stampResponseCode(result, responseCode);
+            return result;
         } catch (ReflectiveOperationException | RuntimeException error) {
             return null;
         }
-    }
-
-    private static Integer connectionState(Object billingClient) {
-        // BillingClientImpl uses an obfuscated volatile int for its connection state. Restrict
-        // reflection to conventional names and the known zzb slot; unknown versions are treated
-        // as indeterminate so emulation remains compatible with future BillingClient releases.
-        for (Class<?> type = billingClient.getClass(); type != null && type != Object.class; type = type.getSuperclass()) {
-            for (Field field : type.getDeclaredFields()) {
-                if (field.getType() != int.class) continue;
-                String name = field.getName().toLowerCase(Locale.ROOT);
-                if (!(name.equals("zzb") || name.contains("connectionstate") || name.contains("billingstate"))) continue;
-                try {
-                    field.setAccessible(true);
-                    return field.getInt(billingClient);
-                } catch (ReflectiveOperationException | RuntimeException ignored) { }
-            }
-        }
-        return null;
     }
 
     private static boolean listenerHolderMatches(Object billingClient, Object listener) {
@@ -756,8 +876,52 @@ public final class InAppRuntimePolicy {
         for (Object value : new Object[] {first, second}) {
             String found = inspect(value, 0);
             if (valid(found)) return normalize(found);
+            // Getters alone are not enough. BillingFlowParams keeps the product
+            // details in a private field and exposes no accessor for it, so a
+            // params object offered nothing but getClass/hashCode/newBuilder and
+            // every purchase came back ITEM_UNAVAILABLE. Fields are read by
+            // declared type, which survives the obfuscation.
+            found = inspectFields(value, 0);
+            if (valid(found)) return normalize(found);
         }
         return "";
+    }
+
+    /** Product/sku bearing fields, private or not, one or two levels deep. */
+    private static String inspectFields(Object value, int depth) {
+        if (value == null || depth > 2) return null;
+        for (Class<?> type = value.getClass(); type != null && type != Object.class; type = type.getSuperclass()) {
+            for (Field field : type.getDeclaredFields()) {
+                if (field.isSynthetic() || java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
+                Class<?> shape = field.getType();
+                if (shape.isPrimitive() && shape != long.class && shape != double.class) continue;
+                Object held;
+                try {
+                    field.setAccessible(true);
+                    held = field.get(value);
+                } catch (ReflectiveOperationException | RuntimeException unreachable) {
+                    continue;
+                }
+                if (held == null) continue;
+                if (held instanceof String && valid((String) held)) return (String) held;
+                if (held instanceof Iterable<?>) {
+                    for (Object item : (Iterable<?>) held) {
+                        String found = inspect(item, depth + 1);
+                        if (valid(found)) return found;
+                        found = inspectFields(item, depth + 1);
+                        if (valid(found)) return found;
+                    }
+                    continue;
+                }
+                if (shape.getName().startsWith("com.android.billingclient.")) {
+                    String found = inspect(held, depth + 1);
+                    if (valid(found)) return found;
+                    found = inspectFields(held, depth + 1);
+                    if (valid(found)) return found;
+                }
+            }
+        }
+        return null;
     }
 
     private static String inspect(Object value, int depth) {
@@ -813,6 +977,9 @@ public final class InAppRuntimePolicy {
             Object builder = resultClass.getMethod("newBuilder").invoke(null);
             builder = builder.getClass().getMethod("setResponseCode", int.class).invoke(builder, responseCode);
             Object result = builder.getClass().getMethod("build").invoke(builder);
+            // Cancel (code 1) must keep reading as cancel once getResponseCode
+            // coerces unstamped stock results to OK.
+            stampResponseCode(result, responseCode);
             ArrayList<Object> purchases = new ArrayList<>();
             if (includePurchase) {
                 Activity target = sourceActivity != null ? sourceActivity : activity.get();
@@ -833,10 +1000,25 @@ public final class InAppRuntimePolicy {
             OverlayRuntimeLogger.log("INFO", "InApp", "Purchase callback located: " + callback.getDeclaringClass().getName() +
                     "->" + callback.getName() + ", product=" + product);
             OverlayRuntimeLogger.log("INFO", "InApp", "Purchase callback invocation started: product=" + product);
+            // Recorded before the callback runs, not after: a wrapper grants
+            // inside onPurchasesUpdated and re-reads its own inventory from
+            // there, so the query that resolves this purchase happens while the
+            // callback is still on the stack. Recording afterwards left that
+            // query empty and the grant was dropped as "purchase not found".
+            if (responseCode == 0 && includePurchase && valid(product)) {
+                LAST_DELIVERED_PRODUCT = normalize(product);
+            }
             CallbackDeliveryResult outcome = CallbackInvoker.invoke(true, () -> callback.invoke(listener, result, purchases));
             LAST_DELIVERY.set(outcome);
             if (!outcome.succeeded()) {
+                // The callback is the game's own code; a throw here is the usual
+                // cause and it is otherwise invisible on a release build.
+                Log.w("UnipatchSeed", "callback threw: product=" + product +
+                        " callback=" + callback.getDeclaringClass().getName() + "->" + callback.getName() +
+                        " located=" + outcome.located + " started=" + outcome.started +
+                        " returned=" + outcome.returned + " threw=" + outcome.threw);
                 OverlayRuntimeLogger.log("WARN", "InApp", "Purchase callback did not return successfully: product=" + product);
+                LAST_DELIVERED_PRODUCT = null;
                 return false;
             }
             OverlayRuntimeLogger.log("INFO", "InApp", "Purchase callback delivered: listener=" + listener.getClass().getName() +
@@ -940,6 +1122,618 @@ public final class InAppRuntimePolicy {
             if (parameters[1].isAssignableFrom(ArrayList.class) || parameters[1].isAssignableFrom(List.class)) return method;
         }
         return null;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Empty-catalog synthesis for queryProductDetailsAsync /
+    // querySkuDetailsAsync. A device without a Play connection answers
+    // those queries with OK and zero products; the game caches an empty
+    // map and then refuses every purchase ("not available"). The injected
+    // wrap*Listener entry points swap the game's listener for a proxy that
+    // forwards a populated stock catalog untouched and fabricates entries
+    // for the exact IDs the game requested when the callback comes back
+    // empty. The extension compiles against android.jar only, so every
+    // billing type resolves lazily through Class.forName. Nothing here may
+    // throw: a wrap failure returns the original listener, a synthesis
+    // failure forwards the original callback arguments.
+    // ─────────────────────────────────────────────────────────────────────
+
+    /** Entry point injected at the head of queryProductDetailsAsync; never throws. */
+    public static Object wrapProductDetailsListener(Object params, Object listener) {
+        return wrapCatalogListener(params, listener, false);
+    }
+
+    /** Entry point injected at the head of querySkuDetailsAsync; never throws. */
+    public static Object wrapSkuDetailsListener(Object params, Object listener) {
+        return wrapCatalogListener(params, listener, true);
+    }
+
+    private static Object wrapCatalogListener(Object params, Object listener, boolean skus) {
+        if (listener == null) return null;
+        try {
+            List<String[]> wanted = requestedProducts(params);
+            if (wanted.isEmpty()) return listener;
+            Class<?>[] interfaces = listenerInterfaces(listener.getClass());
+            if (interfaces.length == 0) return listener;
+            ClassLoader loader = listener.getClass().getClassLoader();
+            if (loader == null) loader = InAppRuntimePolicy.class.getClassLoader();
+            InvocationHandler handler = skus
+                    ? new SkuDetailsHandler(listener, wanted)
+                    : new ProductDetailsHandler(listener, wanted);
+            return Proxy.newProxyInstance(loader, interfaces, handler);
+        } catch (Throwable error) {
+            OverlayRuntimeLogger.log("WARN", "InApp", "Catalog listener wrap failed: " +
+                    error.getClass().getSimpleName());
+            return listener;
+        }
+    }
+
+    private static final class ProductDetailsHandler implements InvocationHandler {
+        private final Object listener;
+        private final List<String[]> wanted;
+
+        ProductDetailsHandler(Object listener, List<String[]> wanted) {
+            this.listener = listener;
+            this.wanted = wanted;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            if (method.getDeclaringClass() == Object.class) {
+                if ("equals".equals(method.getName())) return proxy == args[0];
+                if ("hashCode".equals(method.getName())) return System.identityHashCode(proxy);
+                return listener.toString();
+            }
+            if ("onProductDetailsResponse".equals(method.getName()) && args != null && args.length == 2
+                    && isEmptyProductCallback(args[1], method.getParameterTypes()[1])) {
+                ArrayList<Object> built = new ArrayList<>();
+                for (String[] product : wanted) {
+                    Object details = newProductDetails(product[0], product[1]);
+                    if (details != null) built.add(details);
+                }
+                Object okResult = args[0] != null ? args[0] : billingResult(0);
+                Object replacement = built.isEmpty()
+                        ? null : synthesizedProductResult(built, method.getParameterTypes()[1]);
+                if (replacement != null && okResult != null) {
+                    OverlayRuntimeLogger.log("INFO", "InApp",
+                            "Empty ProductDetails response synthesized: products=" + built.size());
+                    return invokeOriginal(listener, method, new Object[] { okResult, replacement });
+                }
+            }
+            return invokeOriginal(listener, method, args);
+        }
+    }
+
+    private static final class SkuDetailsHandler implements InvocationHandler {
+        private final Object listener;
+        private final List<String[]> wanted;
+
+        SkuDetailsHandler(Object listener, List<String[]> wanted) {
+            this.listener = listener;
+            this.wanted = wanted;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            if (method.getDeclaringClass() == Object.class) {
+                if ("equals".equals(method.getName())) return proxy == args[0];
+                if ("hashCode".equals(method.getName())) return System.identityHashCode(proxy);
+                return listener.toString();
+            }
+            if ("onSkuDetailsResponse".equals(method.getName()) && args != null && args.length == 2
+                    && (args[1] == null || (args[1] instanceof List && ((List<?>) args[1]).isEmpty()))) {
+                ArrayList<Object> built = new ArrayList<>();
+                for (String[] product : wanted) {
+                    Object sku = newSkuDetails(product[0], product[1]);
+                    if (sku != null) built.add(sku);
+                }
+                Object okResult = args[0] != null ? args[0] : billingResult(0);
+                if (!built.isEmpty() && okResult != null) {
+                    OverlayRuntimeLogger.log("INFO", "InApp",
+                            "Empty SkuDetails response synthesized: skus=" + built.size());
+                    return invokeOriginal(listener, method, new Object[] { okResult, built });
+                }
+            }
+            return invokeOriginal(listener, method, args);
+        }
+    }
+
+    /** True when the stock callback carried no catalog entries for this shape. */
+    private static boolean isEmptyProductCallback(Object result, Class<?> expected) {
+        if (expected != null && List.class.isAssignableFrom(expected)) {
+            return !(result instanceof List) || ((List<?>) result).isEmpty();
+        }
+        if (result == null) return true;
+        Method listGetter = productDetailsListGetter(result.getClass());
+        if (listGetter == null) return false;
+        Object value = invokeQuietly(listGetter, result);
+        return !(value instanceof List) || ((List<?>) value).isEmpty();
+    }
+
+    /**
+     * Resolves the stock result's product list getter: readable builds expose
+     * getProductDetailsList, obfuscated builds fall back to the first non-
+     * unfetched zero-arg List getter in declaration order.
+     */
+    private static Method productDetailsListGetter(Class<?> type) {
+        Method firstCandidate = null;
+        for (Method method : zeroArgMethods(type)) {
+            if (!List.class.isAssignableFrom(method.getReturnType())) continue;
+            String name = method.getName().toLowerCase(Locale.ROOT);
+            if (name.contains("unfetched")) continue;
+            if (name.contains("productdetail")) return method;
+            if (firstCandidate == null) firstCandidate = method;
+        }
+        return firstCandidate;
+    }
+
+    /**
+     * Builds the callback's result argument: the List itself when the game
+     * declared a raw List callback, otherwise QueryProductDetailsResult.
+     * Constructors come before create(): obfuscation renames methods but
+     * never the (List, List) constructor shape.
+     */
+    private static Object synthesizedProductResult(List<Object> products, Class<?> expected) {
+        if (expected != null && List.class.isAssignableFrom(expected)) return new ArrayList<>(products);
+        try {
+            Class<?> resultClass = Class.forName("com.android.billingclient.api.QueryProductDetailsResult");
+            try {
+                Constructor<?> constructor = resultClass.getDeclaredConstructor(List.class, List.class);
+                constructor.setAccessible(true);
+                return constructor.newInstance(new ArrayList<>(products), new ArrayList<Object>());
+            } catch (NoSuchMethodException ignored) { }
+            try {
+                Constructor<?> constructor = resultClass.getDeclaredConstructor(List.class);
+                constructor.setAccessible(true);
+                return constructor.newInstance(new ArrayList<>(products));
+            } catch (NoSuchMethodException ignored) { }
+            for (Method method : resultClass.getDeclaredMethods()) {
+                if (!"create".equals(method.getName())) continue;
+                Class<?>[] signature = method.getParameterTypes();
+                if (signature.length == 2 && signature[0] == List.class && signature[1] == List.class) {
+                    method.setAccessible(true);
+                    return method.invoke(null, products, new ArrayList<Object>());
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            OverlayRuntimeLogger.log("WARN", "InApp", "QueryProductDetailsResult construction failed: " +
+                    error.getClass().getSimpleName());
+        }
+        return null;
+    }
+
+    /**
+     * ProductDetails via its JSON constructor, or null when billing is absent.
+     * Billing v6+ and every R8 pass keep that constructor package private, and
+     * getConstructor only reports public ones, so a wrapped build always came
+     * back null here. getDeclaredConstructor sees the real signature; setAccessible
+     * is the fallback for a hidden-API restriction.
+     */
+    private static Object newProductDetails(String productId, String productType) {
+        try {
+            Class<?> detailsClass = Class.forName("com.android.billingclient.api.ProductDetails");
+            java.lang.reflect.Constructor<?> constructor = declaredStringConstructor(detailsClass);
+            if (constructor == null) return null;
+            return constructor.newInstance(productDetailsJson(productId, productType));
+        } catch (ClassNotFoundException error) {
+            Log.w("UnipatchSeed", "ProductDetails class absent: " + error);
+            return null;
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            Throwable cause = error instanceof InvocationTargetException && error.getCause() != null
+                    ? error.getCause() : error;
+            Log.w("UnipatchSeed", "ProductDetails ctor threw for " + productId + ": " + cause);
+            return null;
+        }
+    }
+
+    /** The (String) constructor whether or not billing published it. */
+    private static java.lang.reflect.Constructor<?> declaredStringConstructor(Class<?> owner) {
+        java.lang.reflect.Constructor<?> constructor;
+        try {
+            constructor = owner.getDeclaredConstructor(String.class);
+        } catch (NoSuchMethodException absent) {
+            Log.w("UnipatchSeed", owner.getName() + " has no (String) constructor");
+            return null;
+        }
+        // Billing v6+ keeps it package private, so an accessible flag is the
+        // difference between a synthetic catalog and a silent null.
+        try {
+            constructor.setAccessible(true);
+        } catch (RuntimeException restricted) {
+            // Hidden-API enforcement: the call still works when the platform
+            // only warns, and the failure surfaces below if it truly cannot.
+            Log.w("UnipatchSeed", "setAccessible refused on " + owner.getName() + ": " + restricted);
+        }
+        return constructor;
+    }
+
+    /** SkuDetails via its JSON constructor, or null when billing is absent. */
+    private static Object newSkuDetails(String productId, String productType) {
+        try {
+            Class<?> skuClass = Class.forName("com.android.billingclient.api.SkuDetails");
+            java.lang.reflect.Constructor<?> constructor = declaredStringConstructor(skuClass);
+            if (constructor == null) return null;
+            return constructor.newInstance(skuDetailsJson(productId, productType));
+        } catch (ClassNotFoundException error) {
+            Log.w("UnipatchSeed", "SkuDetails class absent: " + error);
+            return null;
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            Throwable cause = error instanceof InvocationTargetException && error.getCause() != null
+                    ? error.getCause() : error;
+            Log.w("UnipatchSeed", "SkuDetails ctor threw for " + productId + ": " + cause);
+            return null;
+        }
+    }
+
+    /**
+     * Head-of-gate product seed for managed IAP wrappers. The obfuscated
+     * GoogleIapManager shape keeps a private product map that only a
+     * native-driven requestProductsData ever fills, and that call only happens
+     * after the engine's own onSetupFinished runs. On most cold runs the engine
+     * never makes it, so purchase dies at the map lookup with
+     * "&lt;sku&gt;: not available" before the wrapper's connection check runs.
+     * Injected ahead of that lookup with the gate's map in the receiver and the
+     * requested SKU as the argument. Never touches the pending-request map the
+     * same wrapper guards with isEmpty(), and never reaches native: Java-forced
+     * setup ends in the engine's unguarded [this+0x18] listener dereference.
+     */
+    public static void seedManagedProduct(Object catalog, String productId) {
+        seedManagedEntry(catalog, productId, managedProductType(productId), false);
+    }
+
+    /** Same gate on legacy wrappers whose lookup casts the result to SkuDetails. */
+    public static void seedManagedSku(Object catalog, String productId) {
+        seedManagedEntry(catalog, productId, managedProductType(productId), true);
+    }
+
+    /**
+     * The gate hands over a bare SKU, so the type has to come from the id.
+     * Building a subscription as an inapp product leaves it with no offer at
+     * all and the purchase comes back ITEM_UNAVAILABLE, which is exactly what
+     * a hardcoded "inapp" default produced. Ids that say nothing are treated as
+     * one-off purchases, the common case.
+     */
+    private static String managedProductType(String productId) {
+        if (productId == null) return "inapp";
+        String lower = productId.toLowerCase(Locale.ROOT);
+        if (lower.contains("subscription") || lower.contains("_subs") ||
+                lower.startsWith("subs_") || lower.endsWith("_sub") || lower.contains(".sub.")) {
+            return "subs";
+        }
+        return "inapp";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void seedManagedEntry(Object catalog, String productId, String productType, boolean legacy) {
+        // The extension's own log file is unreadable on a release-signed build,
+        // and a silent no-op here looks identical to a gate that never ran, so
+        // the injected call traces to logcat where the game's failure does too.
+        try {
+            Log.i("UnipatchSeed", "seed id=" + productId + " catalog=" +
+                    (catalog == null ? "null" : catalog.getClass().getName()) +
+                    " type=" + productType);
+        } catch (Throwable ignored) {
+        }
+        if (productId == null || !(catalog instanceof Map)) {
+            Log.w("UnipatchSeed", "rejected: catalog is not a Map for id=" + productId);
+            return;
+        }
+        String id = productId.trim();
+        if (id.isEmpty() || id.length() > 256) {
+            Log.w("UnipatchSeed", "rejected: unusable id=" + productId);
+            return;
+        }
+        try {
+            Map<Object, Object> map = (Map<Object, Object>) catalog;
+            if (map.containsKey(id)) {
+                Log.i("UnipatchSeed", "already present: id=" + id);
+                return;
+            }
+            Object details = legacy ? newSkuDetails(id, productType) : newProductDetails(id, productType);
+            if (details == null) {
+                Log.w("UnipatchSeed", "no factory result: id=" + id);
+                OverlayRuntimeLogger.log("WARN", "InApp",
+                        "Product catalog seed unavailable: id=" + id);
+                return;
+            }
+            map.put(id, details);
+            Log.i("UnipatchSeed", "seeded: id=" + id + " type=" + productType + " size=" + map.size());
+            OverlayRuntimeLogger.log("INFO", "InApp",
+                    "Product catalog seeded: id=" + id + " type=" + productType);
+        } catch (Throwable error) {
+            Log.w("UnipatchSeed", "failed: id=" + productId + " error=" + error);
+            OverlayRuntimeLogger.log("WARN", "InApp",
+                    "Product catalog seed failed: id=" + id +
+                            " error=" + error.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Pulls the requested product IDs out of QueryProductDetailsParams or
+     * SkuDetailsParams: every zero-arg String getter contributes a possible
+     * params-level type token, every Iterable getter contributes elements.
+     * Returns deduped {id, type} pairs in request order.
+     */
+    private static List<String[]> requestedProducts(Object params) {
+        ArrayList<String[]> wanted = new ArrayList<>();
+        if (params == null) return wanted;
+        String declaredType = null;
+        ArrayList<Object> elements = new ArrayList<>();
+        for (Method getter : zeroArgMethods(params.getClass())) {
+            Object value = invokeQuietly(getter, params);
+            if (value instanceof String) {
+                String token = productTypeToken((String) value);
+                if (token != null) declaredType = token;
+            } else {
+                collectElements(value, elements);
+            }
+        }
+        if (elements.isEmpty()) {
+            // R8 can rename the list accessor away entirely; the holder field
+            // (billing's internal zzbt List, or a plain array) still has it.
+            for (Field field : instanceFields(params.getClass())) {
+                Object value = readField(field, params);
+                if (value instanceof String) {
+                    String token = productTypeToken((String) value);
+                    if (token != null && declaredType == null) declaredType = token;
+                    continue;
+                }
+                collectElements(value, elements);
+                if (!elements.isEmpty()) break;
+            }
+        }
+        for (Object element : elements) {
+            String[] pair = classifyRequestElement(element, declaredType);
+            if (pair == null) continue;
+            boolean duplicate = false;
+            for (String[] seen : wanted) {
+                if (seen[0].equals(pair[0])) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) wanted.add(pair);
+        }
+        return wanted;
+    }
+
+    /** Collects non-null elements of an Iterable or array holder; anything else is ignored. */
+    private static void collectElements(Object value, List<Object> sink) {
+        if (value instanceof Iterable<?>) {
+            for (Object element : (Iterable<?>) value) {
+                if (element != null) sink.add(element);
+            }
+        } else if (value != null && value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            for (int i = 0; i < length; i++) {
+                Object element = java.lang.reflect.Array.get(value, i);
+                if (element != null) sink.add(element);
+            }
+        }
+    }
+
+    /** Declared non-static fields along the class chain, dex declaration order, accessible. */
+    private static List<Field> instanceFields(Class<?> type) {
+        ArrayList<Field> found = new ArrayList<>();
+        for (Class<?> current = type; current != null && current != Object.class; current = current.getSuperclass()) {
+            Field[] declared;
+            try {
+                declared = current.getDeclaredFields();
+            } catch (Throwable ignored) {
+                continue;
+            }
+            for (Field field : declared) {
+                if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) continue;
+                try {
+                    field.setAccessible(true);
+                } catch (Throwable ignored) {
+                    // still worth attempting the read; failure returns null
+                }
+                found.add(field);
+            }
+        }
+        return found;
+    }
+
+    private static Object readField(Field field, Object target) {
+        try {
+            return field.get(target);
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            return null;
+        }
+    }
+
+    /**
+     * Classifies one requested element (String id or Product/SkuDetails
+     * object) into {id, type}. Named getters win over positional ones so
+     * obfuscated zz* fields only matter when no readable name exists.
+     */
+    private static String[] classifyRequestElement(Object element, String fallbackType) {
+        if (element instanceof String) {
+            String id = normalize((String) element);
+            if (fallbackType == null || !valid(id) || id.indexOf(' ') >= 0) return null;
+            return new String[] { id, fallbackType };
+        }
+        if (element == null) return null;
+        String type = null;
+        String namedId = null;
+        String plainId = null;
+        for (Method getter : zeroArgMethods(element.getClass())) {
+            if (getter.getReturnType() != String.class) continue;
+            String name = getter.getName().toLowerCase(Locale.ROOT);
+            if (name.equals("tostring")) continue;
+            Object value = invokeQuietly(getter, element);
+            if (!(value instanceof String)) continue;
+            String text = ((String) value).trim();
+            if (text.isEmpty()) continue;
+            String token = productTypeToken(text);
+            if (token != null) {
+                type = token;
+                continue;
+            }
+            if (!valid(text) || text.indexOf(' ') >= 0) continue;
+            if (name.contains("productid") || name.contains("sku")) {
+                if (namedId == null) namedId = text;
+            } else if (plainId == null) {
+                plainId = text;
+            }
+        }
+        if ((namedId == null && plainId == null) || type == null) {
+            // Production R8 strips QueryProductDetailsParams$Product down to
+            // two private String fields (productId, productType) with no
+            // accessors at all; classify the field values the same way, so
+            // the request IDs are still reachable. Values decide, names only
+            // disambiguate: the type token identifies itself.
+            for (Field field : instanceFields(element.getClass())) {
+                if (field.getType() != String.class) continue;
+                Object value = readField(field, element);
+                if (!(value instanceof String)) continue;
+                String text = ((String) value).trim();
+                if (text.isEmpty()) continue;
+                String token = productTypeToken(text);
+                if (token != null) {
+                    type = token;
+                    continue;
+                }
+                if (!valid(text) || text.indexOf(' ') >= 0) continue;
+                String name = field.getName().toLowerCase(Locale.ROOT);
+                if (name.contains("productid") || name.contains("sku")) {
+                    if (namedId == null) namedId = text;
+                } else if (plainId == null) {
+                    plainId = text;
+                }
+            }
+        }
+        String id = namedId != null ? namedId : plainId;
+        if (id == null) return null;
+        if (type == null) type = fallbackType;
+        if (type == null) return null;
+        return new String[] { id, type };
+    }
+
+    /** Interface closure of the listener, breadth-first, capped for safety. */
+    private static Class<?>[] listenerInterfaces(Class<?> listenerType) {
+        ArrayList<Class<?>> found = new ArrayList<>();
+        collectInterfaces(listenerType, found, 0);
+        return found.toArray(new Class<?>[0]);
+    }
+
+    private static void collectInterfaces(Class<?> type, List<Class<?>> found, int depth) {
+        if (type == null || type == Object.class || depth > 8 || found.size() >= 16) return;
+        for (Class<?> candidate : type.getInterfaces()) {
+            if (found.contains(candidate)) continue;
+            found.add(candidate);
+            collectInterfaces(candidate, found, depth + 1);
+        }
+        collectInterfaces(type.getSuperclass(), found, depth + 1);
+    }
+
+    /** Forwards to the game's listener; a proxy-side failure must not crash the callback. */
+    private static Object invokeOriginal(Object listener, Method method, Object[] args) throws Throwable {
+        try {
+            return method.invoke(listener, args);
+        } catch (InvocationTargetException error) {
+            Throwable cause = error.getCause();
+            throw cause != null ? cause : error;
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            OverlayRuntimeLogger.log("WARN", "InApp", "Proxy could not reach original listener: " +
+                    error.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    private static Object invokeQuietly(Method getter, Object target) {
+        try {
+            return getter.invoke(target);
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            return null;
+        }
+    }
+
+    /** Declared zero-arg instance getters along the class chain, Object excluded. */
+    private static List<Method> zeroArgMethods(Class<?> type) {
+        ArrayList<Method> found = new ArrayList<>();
+        for (Class<?> current = type; current != null && current != Object.class; current = current.getSuperclass()) {
+            Method[] declared;
+            try {
+                declared = current.getDeclaredMethods();
+            } catch (Throwable ignored) {
+                continue;
+            }
+            for (Method method : declared) {
+                if (method.getParameterTypes().length != 0) continue;
+                if (Modifier.isStatic(method.getModifiers())) continue;
+                if (method.isSynthetic() || method.isBridge()) continue;
+                if (method.getReturnType() == void.class) continue;
+                try { method.setAccessible(true); } catch (Throwable ignored) { }
+                found.add(method);
+            }
+        }
+        return found;
+    }
+
+    /** Normalizes a product type token; play pass subs map onto subs. */
+    private static String productTypeToken(String raw) {
+        if (raw == null) return null;
+        String token = raw.trim().toLowerCase(Locale.ROOT);
+        if ("inapp".equals(token) || "subs".equals(token)) return token;
+        if ("play_pass_subs".equals(token)) return "subs";
+        return null;
+    }
+
+    /**
+     * ProductDetails JSON for the ProductDetails(String) constructor.
+     * Subs carry a full pricing phase so getBaseOffer sees a buyable offer;
+     * inapp entries expose both the object and the list form modern builds
+     * read. Prices read 0.00 because the grant is emulated at buy time.
+     */
+    public static String productDetailsJson(String productId, String productType) {
+        String rawId = productId == null ? "" : productId.trim();
+        if (rawId.length() > 256) rawId = rawId.substring(0, 256);
+        String type = productTypeToken(productType);
+        if (type == null) type = "inapp";
+        String id = PurchaseJson.escape(rawId);
+        StringBuilder json = new StringBuilder(rawId.length() + 384);
+        json.append("{\"productId\":\"").append(id)
+            .append("\",\"type\":\"").append(type)
+            .append("\",\"title\":\"").append(id)
+            .append("\",\"name\":\"").append(id)
+            .append("\",\"description\":\"\",")
+            .append("\"packageDisplayName\":\"").append(id).append('"');
+        if ("subs".equals(type)) {
+            String token = PurchaseJson.escape(
+                    ("unipatch." + rawId).substring(0, Math.min(("unipatch." + rawId).length(), 256)));
+            json.append(",\"subscriptionOfferDetails\":[{\"basePlanId\":\"base\",\"offerId\":\"\",\"offerIdToken\":\"")
+                .append(token)
+                .append("\",\"pricingPhases\":[{\"billingPeriod\":\"P1M\",\"priceCurrencyCode\":\"USD\",")
+                .append("\"formattedPrice\":\"0.00\",\"priceAmountMicros\":0,\"recurrenceMode\":1,\"billingCycleCount\":0}],")
+                .append("\"offerTags\":[]}]");
+        } else {
+            json.append(",\"oneTimePurchaseOfferDetails\":{\"formattedPrice\":\"0.00\",\"priceAmountMicros\":0,")
+                .append("\"priceCurrencyCode\":\"USD\"}")
+                .append(",\"oneTimePurchaseOfferDetailsList\":[{\"formattedPrice\":\"0.00\",\"priceAmountMicros\":0,")
+                .append("\"priceCurrencyCode\":\"USD\"}]");
+        }
+        return json.append('}').toString();
+    }
+
+    /** SkuDetails JSON for the SkuDetails(String) constructor, snake_case keys. */
+    public static String skuDetailsJson(String productId, String productType) {
+        String rawId = productId == null ? "" : productId.trim();
+        if (rawId.length() > 256) rawId = rawId.substring(0, 256);
+        String type = productTypeToken(productType);
+        if (type == null) type = "inapp";
+        String id = PurchaseJson.escape(rawId);
+        StringBuilder json = new StringBuilder(rawId.length() + 320);
+        json.append("{\"productId\":\"").append(id)
+            .append("\",\"type\":\"").append(type)
+            .append("\",\"title\":\"").append(id)
+            .append("\",\"description\":\"").append(id)
+            .append("\",\"price\":\"0.00\",\"price_amount_micros\":0")
+            .append(",\"price_currency_code\":\"USD\",\"original_price\":\"0.00\"")
+            .append(",\"original_price_amount_micros\":0,\"skuDetailsToken\":\"\"");
+        if ("subs".equals(type)) json.append(",\"subscriptionPeriod\":\"P1M\"");
+        return json.append('}').toString();
     }
 
     private static final class Redirect {

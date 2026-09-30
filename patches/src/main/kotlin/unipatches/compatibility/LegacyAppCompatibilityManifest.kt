@@ -76,17 +76,28 @@ internal fun addLegacyReviver(document: Document, apache: Boolean, foreground: B
     return changed
 }
 
-internal fun updateTargetSdk(document: Document, target: Int): Boolean {
+internal fun updateTargetSdk(document: Document, target: Int): Boolean =
+    updateSdkVersion(document, "targetSdkVersion", target)
+
+/**
+ * Writes android:minSdkVersion. This is the attribute the package installer
+ * gates on: PackageManager rejects the APK with INSTALL_FAILED_OLDER_SDK when
+ * minSdkVersion is above the device's API level, regardless of targetSdkVersion.
+ */
+internal fun updateMinSdk(document: Document, min: Int): Boolean =
+    updateSdkVersion(document, "minSdkVersion", min)
+
+private fun updateSdkVersion(document: Document, attribute: String, value: Int): Boolean {
     val root = document.documentElement ?: return false
     if (root.tagName != "manifest") return false
     val usesSdk = root.getElementsByTagName("uses-sdk").item(0) as? Element
     if (usesSdk != null) {
-        if (usesSdk.getAttributeNS(NS_ANDROID, "targetSdkVersion") == target.toString()) return false
-        usesSdk.setAttributeNS(NS_ANDROID, "android:targetSdkVersion", target.toString())
+        if (usesSdk.getAttributeNS(NS_ANDROID, attribute) == value.toString()) return false
+        usesSdk.setAttributeNS(NS_ANDROID, "android:$attribute", value.toString())
         return true
     }
     val created = document.createElement("uses-sdk")
-    created.setAttributeNS(NS_ANDROID, "android:targetSdkVersion", target.toString())
+    created.setAttributeNS(NS_ANDROID, "android:$attribute", value.toString())
     root.insertBefore(created, root.applicationOrNull())
     return true
 }
@@ -245,6 +256,18 @@ val legacyAppCompatibilityPatch = resourcePatch(
         key = "legacyCompatibilityTargetSdk",
         description = "Target SDK to write when Spoof Target SDK is enabled. Values below 23 are rejected because modern Android can block them. Default: 34.",
     )
+    val spoofMinSdk by booleanOption(
+        title = "Legacy App Compatibility > Installation and manifest > Spoof Min SDK",
+        default = false,
+        key = "legacyCompatibilitySpoofMinSdk",
+        description = "Rewrite android:minSdkVersion. This is the attribute the package installer gates on, so it is what clears INSTALL_FAILED_OLDER_SDK on an older device. Lowering it does not repair code that calls newer platform APIs.",
+    )
+    val minSdk by intOption(
+        title = "Legacy App Compatibility > Installation and manifest > Min SDK version",
+        default = 28,
+        key = "legacyCompatibilityMinSdk",
+        description = "Min SDK to write when Spoof Min SDK is enabled. Set this to the API level of the device you are installing on (28 = Android 9). Default: 28.",
+    )
     val legacyReviver by booleanOption(
         title = "Legacy App Compatibility > Installation and manifest > Legacy App Reviver",
         default = true,
@@ -363,6 +386,15 @@ val legacyAppCompatibilityPatch = resourcePatch(
                 } else if (updateTargetSdk(manifest, target)) {
                     changed++
                     logger.info("Legacy compatibility: target SDK set to $target.")
+                }
+            }
+            if (spoofMinSdk == true) {
+                val min = minSdk ?: 28
+                if (min !in 1..40) {
+                    logger.warning("Legacy compatibility: min SDK $min is outside the supported range 1..40.")
+                } else if (updateMinSdk(manifest, min)) {
+                    changed++
+                    logger.info("Legacy compatibility: min SDK set to $min.")
                 }
             }
             if (legacyReviver == true) {

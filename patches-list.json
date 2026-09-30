@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.29.0-dev.34",
+  "version": "1.29.0-dev.38",
   "patches": [
     {
       "name": "Bypass Emulator Detection",
@@ -1091,6 +1091,24 @@
           "required": false,
           "type": "kotlin.Int",
           "default": 34,
+          "values": null
+        },
+        {
+          "key": "legacyCompatibilitySpoofMinSdk",
+          "title": "Legacy App Compatibility > Installation and manifest > Spoof Min SDK",
+          "description": "Rewrite android:minSdkVersion. This is the attribute the package installer gates on, so it is what clears INSTALL_FAILED_OLDER_SDK on an older device. Lowering it does not repair code that calls newer platform APIs.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "legacyCompatibilityMinSdk",
+          "title": "Legacy App Compatibility > Installation and manifest > Min SDK version",
+          "description": "Min SDK to write when Spoof Min SDK is enabled. Set this to the API level of the device you are installing on (28 = Android 9). Default: 28.",
+          "required": false,
+          "type": "kotlin.Int",
+          "default": 28,
           "values": null
         },
         {

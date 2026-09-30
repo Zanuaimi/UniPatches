@@ -2,6 +2,10 @@ rootProject.name = "UniPatches"
 
 pluginManagement {
     repositories {
+        // Local development builds of the Morphe Gradle plugin are published here
+        // with `publishToMavenLocal` (the plugin itself is only distributed through
+        // GitHub Packages, which requires authentication).
+        mavenLocal()
         gradlePluginPortal()
         google()
         maven {

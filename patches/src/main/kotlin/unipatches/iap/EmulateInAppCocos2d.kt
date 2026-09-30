@@ -5,7 +5,7 @@ import app.morphe.patcher.patch.BytecodePatchContext
 import com.android.tools.smali.dexlib2.iface.ClassDef
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
-import helpers.bytecode.cloneMutable
+import helpers.bytecode.cloneMutableForInjectedBlock
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import java.util.logging.Logger
 
@@ -48,7 +48,13 @@ internal fun BytecodePatchContext.applyCocos2dPatches(
             val receiver = if (com.android.tools.smali.dexlib2.AccessFlags.STATIC.isSet(success.accessFlags)) "" else "p0, "
             val bool = if (success.parameterTypes.size == 2) "const/4 v${scratch + 1}, 0x1\n" else ""
             val block = "move-object/from16 v$scratch, $product\n$bool$invoke {$receiver$args}, $className->${success.name}($signature)V"
-            val cloned = mutableWrapper.cloneMutable(additionalRegisters = 2)
+            // The scratch registers sit at [registerCount, registerCount + 1], i.e. ABOVE
+            // the frame's original locals. A fixed +2 window only moves the clone's
+            // parameter region to registerCount - parameterRegisters + 2, which overlaps
+            // that scratch range for every wrapper with two or more parameter slots, so
+            // the success callback and the wrapper's own arguments were fed clobbered
+            // values. Size the window from the block instead.
+            val cloned = mutableWrapper.cloneMutableForInjectedBlock(block)
             mutableClass.methods.remove(mutableWrapper)
             cloned.addInstructions(0, block)
             mutableClass.methods.add(cloned)

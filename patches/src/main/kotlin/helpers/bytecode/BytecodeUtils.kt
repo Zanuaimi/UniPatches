@@ -181,6 +181,52 @@ fun Method.cloneMutableAndPreserveParameters(mutableClass: MutableClass): Mutabl
     return clonedMethod
 }
 
+private val injectedRegisterPattern = Regex("(?<![A-Za-z0-9_])v(\\d+)")
+
+/**
+ * @return the highest `vN` register referenced by a block of smali text, or -1 when the
+ * block touches no registers at all. Used to size clone windows so injected writes can
+ * never land in the parameter region above them.
+ */
+fun maxRegisterUsedIn(smali: String): Int =
+    injectedRegisterPattern.findAll(smali).maxOfOrNull { it.groupValues[1].toInt() } ?: -1
+
+/**
+ * @return true when [smali] can be prepended to this method without touching a parameter
+ * register.
+ *
+ * A dex frame is laid out `[locals | parameters]`, so `p0` is the first register above the
+ * locals. Every local below [p0Register] is dead on entry, which makes writing `v0..vN`
+ * harmless only while `N < p0Register`. Above that boundary the injected block overwrites
+ * live parameters: a later read in the same block gets the clobbered value, and a block that
+ * falls through to the original body hands it corrupted arguments. [cloneMutable] never has
+ * this problem because its prologue copies the parameters into the low window afterwards.
+ */
+fun Method.fitsBelowParameters(smali: String): Boolean {
+    val highest = maxRegisterUsedIn(smali)
+    if (highest < 0) return true
+    return try {
+        p0Register > highest
+    } catch (_: Exception) {
+        false
+    }
+}
+
+/**
+ * Clone this method with a register window large enough that the parameter region of the
+ * clone starts above every register [smali] writes, so the block can read `pN` freely and
+ * either return or fall through to the untouched original body.
+ */
+fun Method.cloneMutableForInjectedBlock(smali: String, minimumExtraRegisters: Int = 4): MutableMethod {
+    val highest = maxRegisterUsedIn(smali)
+    val extraRegisters = if (highest < 0) {
+        minimumExtraRegisters
+    } else {
+        maxOf(minimumExtraRegisters, highest + 1 - p0Register)
+    }
+    return cloneMutable(additionalRegisters = extraRegisters)
+}
+
 /** A cloned method plus registers that are guaranteed not to overlap its parameters. */
 data class MutableMethodScratchAllocation(
     val method: MutableMethod,
