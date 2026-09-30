@@ -26,15 +26,15 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
     name = null,
     description = """
         Get paid items free: buying grants items without charging. Best for offline games.
-        
+
         InApp Emulation Overlay Module : This patch as an overlay addon involves an InApp Emulation hook module being added to overlay menu, that has a settings button, which shows a popup showing a checkbox whether to enable InApp Emulation popup or not at buy time, and then if it's enabled, it list of saved purchases, that are saved at buy time if user chooses to save the purchase. Saved purchases are so popup windows don't appear again on buy time. The settings popup list of item of saved purchases also allows for management of them, by deleting saved purchases items.
-        
+
         Experimental : This patch may not work on all apps, as it modifies internal app / game behavior.
-        
-        Credits to Nai64Patches from Nai64 for original IAP patch functionality, and enhancement process of this patch is inspired by MiguelNinja19's billing patches. 
+
+        Credits to Nai64Patches from Nai64 for original IAP patch functionality, and enhancement process of this patch is inspired by MiguelNinja19's billing patches.
         UniPatches enhances this patch by improving compatibility, stability, and adding an optional overlay addon.
-        
-        
+
+
     """.trimIndent(),
     default = false,
 ) {

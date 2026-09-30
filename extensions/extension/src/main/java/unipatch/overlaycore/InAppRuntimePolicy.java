@@ -419,6 +419,51 @@ public final class InAppRuntimePolicy {
         }
     }
 
+    private static Integer connectionState(Object billingClient) {
+        // BillingClientImpl uses an obfuscated volatile int for its connection state. Restrict
+        // reflection to conventional names and the known zzb slot; unknown versions are treated
+        // as indeterminate so emulation remains compatible with future BillingClient releases.
+        for (Class<?> type = billingClient.getClass(); type != null && type != Object.class; type = type.getSuperclass()) {
+            for (Field field : type.getDeclaredFields()) {
+                if (field.getType() != int.class) continue;
+                String name = field.getName().toLowerCase(Locale.ROOT);
+                if (!(name.equals("zzb") || name.contains("connectionstate") || name.contains("billingstate"))) continue;
+                try {
+                    field.setAccessible(true);
+                    return field.getInt(billingClient);
+                } catch (ReflectiveOperationException | RuntimeException ignored) { }
+            }
+        }
+        return null;
+    }
+
+    /** Resolve private BillingClient listener holders without injecting illegal field access. */
+    public static Object purchaseListener(Object billingClient) {
+        if (billingClient == null) return null;
+        final String listenerType = "com.android.billingclient.api.PurchasesUpdatedListener";
+        for (Class<?> type = billingClient.getClass(); type != null && type != Object.class; type = type.getSuperclass()) {
+            for (Field field : type.getDeclaredFields()) {
+                String fieldType = field.getType().getName();
+                if (!listenerType.equals(fieldType) && !fieldType.startsWith("com.android.billingclient.api.")) continue;
+                try {
+                    field.setAccessible(true);
+                    Object holder = field.get(billingClient);
+                    if (holder == null) continue;
+                    if (listenerType.equals(fieldType)) return holder;
+                    for (Class<?> holderType = holder.getClass(); holderType != null && holderType != Object.class; holderType = holderType.getSuperclass()) {
+                        for (Field inner : holderType.getDeclaredFields()) {
+                            if (!listenerType.equals(inner.getType().getName())) continue;
+                            inner.setAccessible(true);
+                            Object listener = inner.get(holder);
+                            if (listener != null) return listener;
+                        }
+                    }
+                } catch (ReflectiveOperationException | RuntimeException ignored) { }
+            }
+        }
+        return null;
+    }
+
     private static boolean listenerHolderMatches(Object billingClient, Object listener) {
         for (Class<?> type = billingClient.getClass(); type != null && type != Object.class; type = type.getSuperclass()) {
             for (Field field : type.getDeclaredFields()) {

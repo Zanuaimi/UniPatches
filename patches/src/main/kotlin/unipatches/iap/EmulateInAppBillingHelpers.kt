@@ -13,17 +13,22 @@ import com.android.tools.smali.dexlib2.AccessFlags
  *    code reads it from inside the holder class, which is legal; an injected
  *    snippet in the BillingClient class reading the same field throws
  *    IllegalAccessError at runtime, after patching and installing cleanly.
- *    So a holder is entered through a public accessor when the class has one,
- *    and a direct field read is only emitted for a field the reading class can
- *    actually reach.
+ *    So a holder is entered through a reachable accessor when the class has
+ *    one, and a direct field read is only emitted for a field the reading
+ *    class can actually reach.
  *
  * 2. Access flags decide that, not the descriptor alone. A field of the right
  *    type with the wrong access is worse than no match: it produces bytecode
  *    that installs and then dies on the first purchase.
+ *
+ * A holder that offers neither is handed to InAppRuntimePolicy.purchaseListener,
+ * which reflects over it at runtime. That costs a reflective walk per purchase,
+ * so it is the last resort rather than the default.
  */
 internal fun BytecodePatchContext.resolveBillingListener(defClass: String): String? = try {
     val cls = mutableClassDefByOrNull(defClass) ?: return null
     val listenerType = "Lcom/android/billingclient/api/PurchasesUpdatedListener;"
+    val reflective = REFLECTIVE_LISTENER
 
     // A field declared on the client itself that this class can read.
     val direct = cls.fields.firstOrNull {
@@ -61,13 +66,27 @@ internal fun BytecodePatchContext.resolveBillingListener(defClass: String): Stri
 
         val inner = holderClass.fields.firstOrNull {
             it.type == listenerType && cls.type.readsField(holder, it.accessFlags)
-        } ?: continue
-        return "iget-object v0, v0, $defClass->${field.name}:${field.type}\n" +
-            "if-eqz v0, :morphe_iap_no_listener\n" +
-            "iget-object v0, v0, $holder->${inner.name}:${inner.type}"
+        }
+        if (inner != null) {
+            return "iget-object v0, v0, $defClass->${field.name}:${field.type}\n" +
+                "if-eqz v0, :morphe_iap_no_listener\n" +
+                "iget-object v0, v0, $holder->${inner.name}:${inner.type}"
+        }
+
+        // A holder with neither a reachable field nor an accessor: hand the
+        // whole client to the runtime resolver, which reflects over the holder
+        // instead of the patcher guessing an obfuscated name. Slower than the
+        // two paths above, but it keeps a purchase working on a build whose
+        // listener is only reachable through setAccessible.
+        return reflective
     }
     null
 } catch (_: Exception) { null }
+
+/** Runtime listener resolution, for holders the patcher cannot read directly. */
+private val REFLECTIVE_LISTENER =
+    "invoke-static {v0}, Lunipatch/overlaycore/InAppRuntimePolicy;->purchaseListener(Ljava/lang/Object;)Ljava/lang/Object;\n" +
+        "move-result-object v0"
 
 /**
  * Whether a class may read a field declared on [owner]. Same class, same

@@ -11,15 +11,15 @@ val emulateInAppPatch = rawResourcePatch(
     name = "InApp Emulation Patch ( Experimental, Enhanced, Has Overlay Addon )",
     description = """
         InApp emulation Patch does a local modification of in-app buying behavior via DEX modification to make pressing buy grant items without charging! Best for offline and legacy apps and games.
-        
+
         Warning : This DOES NOT solve server-side purchase verification, which is used by many modern apps and games!
-        
+
         InApp Emulation Overlay Module : This patch as an overlay addon involves an InApp Emulation hook module being added to overlay menu, that has a settings button, which shows a popup showing a checkbox whether to enable InApp Emulation popup or not at buy time, and then if it's enabled, it list of saved purchases, that are saved at buy time if user chooses to save the purchase. Saved purchases are so popup windows don't appear again on buy time. The settings popup list of item of saved purchases also allows for management of them, by deleting saved purchases items.
-        
+
         Experimental : This patch may not work on all apps, as it modifies internal app / game behavior. It's billing libraries support may extend with updates, and it's functionality is not guaranteed.
-        
+
         Credits : Credits to Nai64Patches from Nai64 for original IAP patch core functionality, and credits to MiguelNinja19's billing patches, as it was used to enhance original IAP patch with Cocos2D and GameMaker and Native ILL2CPP Hex Patch.
-        
+
         Enhancement : UniPatches enhances this patch by improving compatibility, stability, and adding Automatic Mode (enabled by default) with optional per-backend Patch Coverage controls. UniPatches also adds an optional overlay addon for use with Universal Overlay Patch.
 
         Compatibility: the overlay addon requires Universal Overlay in the same patch operation. If using

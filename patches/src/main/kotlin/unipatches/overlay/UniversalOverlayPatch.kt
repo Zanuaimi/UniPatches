@@ -542,8 +542,8 @@ val universalOverlayPatch = bytecodePatch(
         UI presets can save and reuse supported appearance and advanced icon
         settings. The title, description, repository button text, and repository button URL remain
         controlled by the visible Morphe settings. Module selections and module behavior are excluded
-        because hook and module combinations can be app-specific. 
-        
+        because hook and module combinations can be app-specific.
+
         Experimental : This patch may not work on all apps.
 
         Compatibility: this patch owns one shared startup bridge for its runtime and integrated
@@ -552,7 +552,7 @@ val universalOverlayPatch = bytecodePatch(
         Activity override rather than selecting a library or SDK Activity. Custom App Display,
         Control App Ads, and InApp Emulation attach to this bridge when their runtime addons are
         enabled; they should not create a second overlay runtime.
-        
+
         InApp Emulation has an optional overlay addon that adds an InApp Emulation module to this menu.
         The module can show a themed confirmation popup before emulated purchases, let you save product
         identifiers to skip later popups during the current app session, and manage those saved products
