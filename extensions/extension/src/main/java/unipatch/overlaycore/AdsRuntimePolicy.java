@@ -1,21 +1,25 @@
 package unipatch.overlaycore;
 
+import android.content.Context;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
+import org.json.JSONObject;
 import java.util.regex.Pattern;
 import unipatch.overlaycore.modules.OverlaySessionState;
 
-/** Session-local policy shared by Control App Ads and overlay runtime modules. */
+/** Session-local policy shared by Ads Block Patch and overlay runtime modules. */
 public final class AdsRuntimePolicy {
     public static final int MODULE_BLOCK_ADS = 1;
     public static final int MODULE_REWARDS = 2;
     public static final int MODULE_HOSTS = 4;
+    private static final int ALL_BLOCKED_FORMATS = 63;
 
     private static boolean integrated;
     private static int modules;
+    private static int overlayModules;
     private static int blockedFormats;
     private static boolean skipRewarded;
     private static boolean grantReward;
@@ -26,10 +30,13 @@ public final class AdsRuntimePolicy {
     private static final Set<String> hosts = new HashSet<>();
     private static final Map<String, Integer> instantRewardRequests = new HashMap<>();
     private static final Map<String, Integer> armedInstantRewards = new HashMap<>();
+    private static Context managerContext;
+    private static boolean managerPersistence;
+    private static boolean managerPending;
 
     private AdsRuntimePolicy() { }
 
-    /** Config format: version|moduleMask|blockedFormats|skip|grant|fake|hostsEnabled|wildcard|hosts[|hostsAllowed]. */
+    /** Config format: version|modules|formats|skip|grant|fake|hostsEnabled|wildcard|hosts|hostsAllowed[|overlayModules]. */
     public static synchronized void configure(String encoded) {
         // The bridge can be reused by recreated Activities. Clear only Ads Control's saved
         // overlay values so a new patch policy cannot inherit checkbox state from an older app
@@ -37,7 +44,9 @@ public final class AdsRuntimePolicy {
         OverlaySessionState.clearModule("adsRuntimeBlockAds");
         OverlaySessionState.clearModule("adsRuntimeRewards");
         integrated = false;
+        managerPending = false;
         modules = 0;
+        overlayModules = 0;
         blockedFormats = 0;
         skipRewarded = false;
         grantReward = false;
@@ -50,7 +59,19 @@ public final class AdsRuntimePolicy {
         armedInstantRewards.clear();
         if (encoded == null) return;
         String[] values = encoded.split("\\|", -1);
-        if (values.length < 9 || !"1".equals(values[0])) return;
+        // Version 2 had no reward fields and used bit 2 for hosts. Normalize it
+        // without turning that bit into the restored rewards module.
+        if (values.length >= 7 && "2".equals(values[0])) {
+            try {
+                int oldModules = Integer.parseInt(values[1]);
+                int oldOverlay = values.length >= 8 ? Integer.parseInt(values[7]) : oldModules;
+                if (oldModules < 0 || (oldModules & ~3) != 0 || oldOverlay < 0 || (oldOverlay & ~3) != 0) return;
+                values = new String[] {"3", String.valueOf((oldModules & 1) | ((oldModules & 2) << 1)),
+                        values[2], "0", "0", "0", values[3], values[4], values[5], values[6],
+                        String.valueOf((oldOverlay & 1) | ((oldOverlay & 2) << 1))};
+            } catch (RuntimeException ignored) { return; }
+        }
+        if (values.length < 9 || !("1".equals(values[0]) || "3".equals(values[0]))) return;
         try {
             int parsedModules = Integer.parseInt(values[1]);
             int parsedBlockedFormats = Integer.parseInt(values[2]);
@@ -70,6 +91,12 @@ public final class AdsRuntimePolicy {
             hostsEnabled = "1".equals(values[6]);
             hostsAllowed = values.length >= 10 ? "1".equals(values[9]) : hostsEnabled;
             wildcardHosts = "1".equals(values[7]);
+            overlayModules = modules;
+            if (values.length >= 11) {
+                int visible = Integer.parseInt(values[10]);
+                if (visible < 0 || (visible & ~7) != 0) return;
+                overlayModules = visible;
+            }
             for (String host : values[8].split(",")) {
                 String normalized = normalizeHost(host);
                 if (!normalized.isEmpty()) hosts.add(normalized);
@@ -85,8 +112,10 @@ public final class AdsRuntimePolicy {
     }
 
     public static synchronized boolean isIntegrated() { return integrated; }
-    public static synchronized boolean hasModule(int module) { return integrated && (modules & module) != 0; }
-    public static synchronized boolean hasAnyModule() { return integrated && modules != 0; }
+    public static synchronized boolean hasModule(int module) { return !managerPending && integrated && (modules & module) != 0; }
+    public static synchronized boolean hasAnyModule() { return !managerPending && integrated && modules != 0; }
+    public static synchronized boolean hasOverlayModule(int module) { return !managerPending && integrated && (overlayModules & module) != 0; }
+    public static synchronized boolean hasAnyOverlayModule() { return !managerPending && integrated && overlayModules != 0; }
     public static synchronized boolean shouldBlockInterstitials() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 1) != 0; }
     public static synchronized boolean shouldBlockBanners() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 2) != 0; }
     public static synchronized boolean shouldBlockAppOpen() { return hasModule(MODULE_BLOCK_ADS) && (blockedFormats & 4) != 0; }
@@ -102,6 +131,38 @@ public final class AdsRuntimePolicy {
     public static synchronized boolean shouldSkipRewarded() { return hasModule(MODULE_REWARDS) && skipRewarded; }
     public static synchronized boolean shouldGrantReward() { return hasModule(MODULE_REWARDS) && grantReward; }
     public static synchronized boolean shouldFakeRewardAvailability() { return hasModule(MODULE_REWARDS) && fakeAvailability; }
+
+    public static synchronized void configureManager(Context context, boolean persistChanges) {
+        managerContext = context == null ? null : context.getApplicationContext();
+        managerPersistence = persistChanges;
+    }
+
+    public static synchronized void beginManagerResolution() { managerPending = true; }
+
+    /** Applies only values explicitly supplied by UniManager; malformed or missing values are ignored. */
+    public static synchronized void applyManagedConfiguration(String encoded) {
+        managerPending = false;
+        if (encoded == null || encoded.isEmpty()) return;
+        try {
+            JSONObject values = new JSONObject(encoded);
+            boolean hasFormatValues = values.has("block_interstitials") || values.has("block_banners") ||
+                    values.has("block_app_open") || values.has("block_mrec") ||
+                    values.has("block_rewarded") || values.has("block_native");
+            if (values.has("block_ads") && !values.optBoolean("block_ads")) {
+                blockedFormats = 0;
+            } else if (hasFormatValues) {
+                blockedFormats = applyFormatValues(values, blockedFormats);
+            } else if (values.has("block_ads")) {
+                blockedFormats = values.optBoolean("block_ads") ? ALL_BLOCKED_FORMATS : 0;
+            }
+            if (values.has("skip_rewarded")) skipRewarded = values.optBoolean("skip_rewarded");
+            if (values.has("instant_reward")) grantReward = values.optBoolean("instant_reward");
+            if (values.has("fake_ad_availability")) fakeAvailability = values.optBoolean("fake_ad_availability");
+            if (values.has("block_hosts")) hostsEnabled = values.optBoolean("block_hosts");
+        } catch (org.json.JSONException ignored) {
+            // Manager data is an optional override. The embedded patch-time values remain active.
+        }
+    }
 
     /** Starts a one-shot native or Unity request that received an immediate reward. */
     public static synchronized void beginInstantReward(String requestId) {
@@ -157,13 +218,66 @@ public final class AdsRuntimePolicy {
         return true;
     }
 
-    public static synchronized void setBlockedFormats(int value) { blockedFormats = value; }
+    public static synchronized void setBlockedFormats(int value) { blockedFormats = value; persistIfEnabled(); }
     public static synchronized int blockedFormats() { return blockedFormats; }
     public static synchronized void setRewardPolicy(boolean skip, boolean grant, boolean fake) {
-        skipRewarded = skip; grantReward = grant; fakeAvailability = fake;
+        skipRewarded = skip; grantReward = grant; fakeAvailability = fake; persistIfEnabled();
     }
-    public static synchronized void setHostsEnabled(boolean enabled) { hostsEnabled = enabled; }
+    public static synchronized void setHostsEnabled(boolean enabled) { hostsEnabled = enabled; persistIfEnabled(); }
     public static synchronized boolean hostsEnabled() { return hostsEnabled; }
+
+    public static synchronized String managerConfigurationJson() {
+        try {
+            JSONObject values = new JSONObject();
+            values.put("block_ads", blockedFormats != 0);
+            values.put("skip_rewarded", skipRewarded);
+            values.put("instant_reward", grantReward);
+            values.put("fake_ad_availability", fakeAvailability);
+            values.put("block_hosts", hostsEnabled);
+            putFormatValues(values, blockedFormats);
+            return values.toString();
+        } catch (org.json.JSONException ignored) {
+            return "{}";
+        }
+    }
+
+    private static void persistIfEnabled() {
+        if (!managerPersistence || managerContext == null) return;
+        try {
+            JSONObject values = new JSONObject();
+            values.put("block_ads", blockedFormats != 0);
+            values.put("skip_rewarded", skipRewarded);
+            values.put("instant_reward", grantReward);
+            values.put("fake_ad_availability", fakeAvailability);
+            values.put("block_hosts", hostsEnabled);
+            putFormatValues(values, blockedFormats);
+            UniManagerBridge.update(managerContext, managerContext.getPackageName(), values.toString());
+        } catch (org.json.JSONException ignored) { }
+    }
+
+    private static int applyFormatValues(JSONObject values, int current) {
+        int next = current;
+        next = setBit(next, values, "block_interstitials", 1);
+        next = setBit(next, values, "block_banners", 2);
+        next = setBit(next, values, "block_app_open", 4);
+        next = setBit(next, values, "block_mrec", 8);
+        next = setBit(next, values, "block_rewarded", 16);
+        return setBit(next, values, "block_native", 32);
+    }
+
+    private static int setBit(int current, JSONObject values, String key, int bit) {
+        if (!values.has(key)) return current;
+        return values.optBoolean(key) ? current | bit : current & ~bit;
+    }
+
+    private static void putFormatValues(JSONObject values, int formats) throws org.json.JSONException {
+        values.put("block_interstitials", (formats & 1) != 0);
+        values.put("block_banners", (formats & 2) != 0);
+        values.put("block_app_open", (formats & 4) != 0);
+        values.put("block_mrec", (formats & 8) != 0);
+        values.put("block_rewarded", (formats & 16) != 0);
+        values.put("block_native", (formats & 32) != 0);
+    }
 
     /** Returns the original URL or the loopback replacement according to the current policy. */
     public static synchronized String rewriteHost(String value) {

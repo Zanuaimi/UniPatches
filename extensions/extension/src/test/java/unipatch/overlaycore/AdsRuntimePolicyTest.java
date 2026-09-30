@@ -104,4 +104,24 @@ public class AdsRuntimePolicyTest {
         org.junit.Assert.assertEquals("https://0.0.0.0/path",
                 AdsRuntimePolicy.rewriteHost("https://ads.example/path"));
     }
+
+    @Test public void restoredRewardsRespectOverlayVisibility() {
+        AdsRuntimePolicy.configure("3|7|0|1|1|1|1|1|ads.example|1|0");
+        assertTrue(AdsRuntimePolicy.shouldGrantReward());
+        assertTrue(AdsRuntimePolicy.hasAnyModule());
+        assertFalse(AdsRuntimePolicy.hasAnyOverlayModule());
+        AdsRuntimePolicy.configure("3|7|0|1|1|1|1|1|ads.example|1|2");
+        assertTrue(AdsRuntimePolicy.hasOverlayModule(AdsRuntimePolicy.MODULE_REWARDS));
+        assertFalse(AdsRuntimePolicy.hasOverlayModule(AdsRuntimePolicy.MODULE_HOSTS));
+    }
+
+    @Test public void versionTwoHostBitDoesNotActivateRewards() {
+        AdsRuntimePolicy.configure("2|3|1|1|1|ads.example|1|2");
+        assertTrue(AdsRuntimePolicy.shouldBlockInterstitials());
+        assertTrue(AdsRuntimePolicy.hasModule(AdsRuntimePolicy.MODULE_HOSTS));
+        assertFalse(AdsRuntimePolicy.hasModule(AdsRuntimePolicy.MODULE_REWARDS));
+        assertTrue(AdsRuntimePolicy.hasOverlayModule(AdsRuntimePolicy.MODULE_HOSTS));
+        assertFalse(AdsRuntimePolicy.hasOverlayModule(AdsRuntimePolicy.MODULE_BLOCK_ADS));
+        org.junit.Assert.assertEquals("https://0.0.0.0/path", AdsRuntimePolicy.rewriteHost("https://ads.example/path"));
+    }
 }

@@ -2,6 +2,7 @@ package unipatches.ads
 
 import helpers.ads.*
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AdsRuntimePolicyPayloadTest {
@@ -408,19 +409,101 @@ class AdsRuntimePolicyPayloadTest {
 
     @Test
     fun rewardsAddonSerializesModuleBitTwo() {
-        assertEquals("1|2|0|0|1|1|0|0||0", serializeAdsRuntimePolicy(2, 0, false, true, true, false, false, emptyList()))
+        assertEquals("3|2|0|0|1|1|0|0||0", serializeAdsRuntimePolicy(2, 0, false, true, true, false, false, emptyList()))
     }
 
     @Test
     fun hostListSerializationIsStableAndSorted() {
-        assertEquals("1|7|16|1|1|1|1|1|a.example,z.example|1", serializeAdsRuntimePolicy(7, 16, true, true, true, true, true, listOf("z.example", "a.example")))
+        assertEquals("3|7|16|1|1|1|1|1|a.example,z.example|1", serializeAdsRuntimePolicy(7, 16, true, true, true, true, true, listOf("z.example", "a.example")))
     }
 
     @Test
     fun hostCapabilityIsSerializedSeparatelyFromInitialState() {
         assertEquals(
-            "1|4|0|0|0|0|0|1||0",
+            "3|4|0|0|0|0|0|1||0",
             serializeAdsRuntimePolicy(4, 0, false, false, false, false, true, emptyList(), hostsAllowedEnabled = false),
         )
+    }
+    @Test
+    fun managedStartupKeepsPolicyButHidesOverlayModules() {
+        val settings = AdsPatchSettings(
+            noAdsEnabled = true,
+            blockInterstitials = true,
+            blockBanners = false,
+            blockAppOpen = false,
+            blockMRec = false,
+            blockRewarded = false,
+            blockNative = false,
+            rewardsEnabled = false,
+            skipRewardedAds = false,
+            instantReward = false,
+            fakeAdAvailability = false,
+            hostsEnabled = true,
+            wildcardHosts = false,
+        )
+        val plan = AdsPatchPlanner.resolve(
+            settings = settings,
+            selection = AdsRuntimeSelection(
+                policyEnabled = true,
+                noAdsModuleSelected = true,
+                rewardsModuleSelected = false,
+                hostsModuleSelected = true,
+                overlayNoAdsModuleSelected = false,
+                overlayHostsModuleSelected = false,
+            ),
+            sdkCoverage = AdsSdkCoverage(),
+        )
+
+        assertEquals(5, plan.runtimeModuleMask)
+        assertEquals(0, plan.overlayRuntimeModuleMask)
+    }
+
+    @Test
+    fun runtimeOnlyModeExposesOnlySelectedOverlayModule() {
+        val settings = AdsPatchSettings(
+            noAdsEnabled = true,
+            blockInterstitials = true,
+            blockBanners = false,
+            blockAppOpen = false,
+            blockMRec = false,
+            blockRewarded = false,
+            blockNative = false,
+            rewardsEnabled = false,
+            skipRewardedAds = false,
+            instantReward = false,
+            fakeAdAvailability = false,
+            hostsEnabled = true,
+            wildcardHosts = false,
+        )
+        val plan = AdsPatchPlanner.resolve(
+            settings = settings,
+            selection = AdsRuntimeSelection(
+                policyEnabled = true,
+                noAdsModuleSelected = true,
+                rewardsModuleSelected = false,
+                hostsModuleSelected = false,
+                overlayNoAdsModuleSelected = true,
+                overlayHostsModuleSelected = false,
+            ),
+            sdkCoverage = AdsSdkCoverage(),
+        )
+
+        assertEquals(AdsRuntimeModule.BLOCK_ADS, plan.runtimeModuleMask)
+        assertEquals(AdsRuntimeModule.BLOCK_ADS, plan.overlayRuntimeModuleMask)
+    }
+
+
+    @Test
+    fun rewardRuntimeCanBeManagedWithoutVisibleOverlayControls() {
+        val plan = AdsPatchPlanner.resolve(settings(), AdsRuntimeSelection(
+            policyEnabled = true, noAdsModuleSelected = true, rewardsModuleSelected = true,
+            hostsModuleSelected = true, overlayNoAdsModuleSelected = false,
+            overlayRewardsModuleSelected = false, overlayHostsModuleSelected = false,
+        ), AdsSdkCoverage())
+        assertEquals(7, plan.runtimeModuleMask)
+        assertEquals(0, plan.overlayRuntimeModuleMask)
+        assertEquals("3|7|0|1|1|1|0|0||0|0", serializeAdsRuntimePolicy(
+            7, 0, true, true, true, false, false, emptyList(), overlayModuleMask = 0,
+        ))
     }
 }

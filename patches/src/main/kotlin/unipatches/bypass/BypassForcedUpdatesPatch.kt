@@ -7,6 +7,7 @@ import app.morphe.patcher.patch.bytecodePatch
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction35c
 import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction3rc
+import com.android.tools.smali.dexlib2.iface.Method
 import com.android.tools.smali.dexlib2.iface.instruction.NarrowLiteralInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
@@ -58,7 +59,7 @@ private fun String.normalized() = lowercase(Locale.ROOT)
 private fun MethodReference.isVoidCall(name: String): Boolean =
     this.name == name && returnType == "V"
 
-private fun methodEvidence(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod): Evidence {
+private fun methodEvidence(method: Method): Evidence {
     val implementation = method.implementation ?: return Evidence()
     val strings = implementation.instructions.mapNotNull { instruction ->
         ((instruction as? ReferenceInstruction)?.reference as? StringReference)?.string
@@ -164,6 +165,11 @@ val bypassForcedUpdatesPatch = bytecodePatch(
         var exits = 0
 
         classDefForEach { classDef ->
+            val hasCandidate = classDef.methods.any { method ->
+                val evidence = methodEvidence(method)
+                evidence.score >= 6 && (evidence.hasUpdateString || evidence.hasUpdateUrl)
+            }
+            if (!hasCandidate) return@classDefForEach
             val mutableClass = mutableClassDefBy(classDef)
             for (method in mutableClass.methods) {
                 val implementation = method.implementation ?: continue

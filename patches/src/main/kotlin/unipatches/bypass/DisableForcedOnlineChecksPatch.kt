@@ -80,7 +80,7 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
         Try to bypass high-confidence client-side “internet required” gates. Start with Auto mode.
         This cannot bypass server-side login, entitlement, multiplayer, or game-state checks.
 
-        Compatibility: Control App Ads can intentionally block ad hosts. Keep “Exclude ad SDK and
+        Compatibility: Ads Block Patch can intentionally block ad hosts. Keep “Exclude ad SDK and
         networking code” enabled when both patches are selected so blocked ads are not falsely told
         the device is online and repeatedly retried. This does not bypass server-enforced online play.
     """.trimIndent(),
@@ -166,6 +166,20 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
         if (useGeneric || enabledEngineStrategies.isNotEmpty()) {
             classDefForEach { classDef ->
                 if (excludeAdAndNetworkCode == true && isKnownAdOrNetworkClass(classDef.type)) return@classDefForEach
+                val hasCandidate = classDef.methods.any { method ->
+                    if (method.returnType != "Z") return@any false
+                    val methodName = method.name.normalized()
+                    val positive = methodName in positiveGateNames
+                    val negative = methodName in negativeGateNames
+                    if (!positive && !negative) return@any false
+                    val strings = method.implementation?.instructions?.mapNotNull { instruction ->
+                        ((instruction as? ReferenceInstruction)?.reference as? StringReference)?.string
+                    }?.map(String::normalized).orEmpty()
+                    (strings.any { value -> onlineTerms.any(value::contains) } ||
+                        methodName.contains("online") || methodName.contains("connect")) &&
+                        (method.implementation?.registerCount ?: 0) >= 1
+                }
+                if (!hasCandidate) return@classDefForEach
                 val mutableClass = mutableClassDefBy(classDef)
                 for (method in mutableClass.methods) {
                     if (method.returnType != "Z") continue

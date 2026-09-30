@@ -19,3 +19,13 @@ provided that such references:
 - Are accurate, factual, and non-misleading;
 - Do not suggest authorship by the Morphe project; and
 - Appear only in a secondary or descriptive context, not as part of the product or project name.
+
+Third-Party Notices
+-------------------
+
+AndroidHiddenApiBypass
+Copyright (C) 2021-2025 LSPosed
+Licensed under the Apache License, Version 2.0.
+Source: https://github.com/LSPosed/AndroidHiddenApiBypass
+Included in extensions/extension/src/main/java/org/lsposed/hiddenapibypass/
+

@@ -48,6 +48,9 @@ internal object AdsPatchPlanner {
             hosts = hosts,
             sdkCoverage = sdkCoverage,
             runtimePolicyEnabled = effectiveRuntimePolicy,
+            overlayNoAdsModuleSelected = selection.overlayNoAdsModuleSelected,
+            overlayRewardsModuleSelected = selection.overlayRewardsModuleSelected,
+            overlayHostsModuleSelected = selection.overlayHostsModuleSelected,
         )
     }
 

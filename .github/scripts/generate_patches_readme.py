@@ -13,12 +13,31 @@ python3 generate_patches_readme.py <owner/repo> <branch> [patches-list.json] [RE
 import json
 import re
 import sys
-import os
 from pathlib import Path
 
 
+# The whole script emits emoji. On Windows the process starts with the ANSI code
+# page (cp1252), so the first print() raises UnicodeEncodeError and exits 1
+# *after* README.md has already been rewritten — which leaves a half-applied
+# release step. Force UTF-8 for both streams before anything is written.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        # python < 3.7 or a stream that does not support reconfigure()
+        pass
+
+USAGE = "Usage: generate_patches_readme.py <owner/repo> <branch> [patches-list.json] [README.md]"
+
+
+def fail(message: str, code: int = 1) -> None:
+    """Report an error without a traceback, then exit with a non-zero status."""
+    print(f"error: {message}", file=sys.stderr)
+    sys.exit(code)
+
+
 if len(sys.argv) < 3:
-    print("Usage: generate_patches_readme.py <owner/repo> <branch> [json] [readme]")
+    print(USAGE, file=sys.stderr)
     sys.exit(1)
 
 repo_full   = sys.argv[1]
@@ -27,14 +46,29 @@ json_path   = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("patches-list.jso
 readme_path = Path(sys.argv[4]) if len(sys.argv) > 4 else Path("README.md")
 
 
-if "/" not in repo_full:
-    raise ValueError(f"Invalid repo format: {repo_full} (expected owner/repo)")
+if repo_full.count("/") != 1 or not all(repo_full.split("/")):
+    fail(f"invalid repo format: {repo_full!r} (expected owner/repo)")
+
+if not json_path.is_file():
+    fail(f"patches list not found: {json_path}")
+
+if not readme_path.is_file():
+    fail(f"README not found: {readme_path}")
 
 owner, repo = repo_full.split("/", 1)
 
 
-with open(json_path, encoding="utf-8") as f:
-    data = json.load(f)
+try:
+    with open(json_path, encoding="utf-8") as f:
+        data = json.load(f)
+except json.JSONDecodeError as exc:
+    fail(f"{json_path} is not valid JSON: {exc}")
+
+if "patches" not in data or not isinstance(data["patches"], list):
+    fail(f'{json_path} is missing the top-level "patches" array')
+
+if "version" not in data:
+    fail(f'{json_path} is missing the top-level "version" field')
 
 
 def pkg_emoji(pkg):
@@ -98,27 +132,30 @@ def versions_table(targets):
     """Render a markdown table of supported versions.
     Experimental versions get a 🧪 prefix.
     Versions with a description get it shown in a second row below.
+
+    Cells and descriptions are built from the *same* filtered target list so the
+    description row can never contain more columns than the header row (a target
+    without a version string used to produce a misaligned table).
     """
-    if not targets:
+    rendered = [
+        t for t in (targets or [])
+        if t.get("version") is not None
+    ]
+
+    if not rendered:
         return ""
 
-    cells = []
-    for t in targets:
-        ver   = t["version"]
-        if ver is None:
-            continue
-        label = f"🧪&nbsp;{ver}" if t.get("isExperimental") else ver
-        cells.append(label)
-
-    if not cells:
-        return ""
+    cells = [
+        f"🧪&nbsp;{t['version']}" if t.get("isExperimental") else t["version"]
+        for t in rendered
+    ]
 
     header = "| " + " | ".join(cells) + " |"
     sep = "| " + " | ".join(":---:" for _ in cells) + " |"
     rows = [header, sep]
 
     # Optional description row — only rendered if at least one target has one
-    descs = [(t.get("description") or "").replace("\n", "<br>") for t in targets]
+    descs = [(t.get("description") or "").replace("\n", "<br>") for t in rendered]
     if any(descs):
         rows.append("| " + " | ".join(descs) + " |")
 
@@ -175,9 +212,10 @@ def build_content(expanded=False):
 
 
 # Build and inject
-raw_ver = data["version"]
-# Strip leading "v" if present
-ver   = raw_ver.lstrip("v")
+raw_ver = str(data["version"])
+# Strip exactly one leading "v" if present. lstrip("v") was removed because it
+# strips *characters*, so "vv1.2" would silently become "1.2".
+ver   = raw_ver[1:] if raw_ver.startswith("v") else raw_ver
 total = sum(len(e["patches"]) for e in by_pkg.values()) + len(universal)
 
 readme = readme_path.read_text(encoding="utf-8")
@@ -192,12 +230,15 @@ if not marker_match or END_MARKER not in readme:
     # Fallback: print to stdout so CI can catch the issue
     print(build_content(expanded=False))
     sys.stderr.write(
-        f"⚠️  Markers <!-- PATCHES_START [EXPANDED] --> / {END_MARKER} not found in {readme_path}. "
-        "Printed to stdout instead.\n"
+        f"error: markers <!-- PATCHES_START [EXPANDED] --> / {END_MARKER} "
+        f"not found in {readme_path}; generated section printed to stdout instead.\n"
     )
     sys.exit(1)
 
 actual_start = marker_match.group(0)
+
+if readme.index(END_MARKER) < marker_match.start():
+    fail(f"{END_MARKER} appears before the start marker; refusing to write {readme_path}")
 
 # Auto-expand threshold
 AUTO_EXPAND_THRESHOLD = 20
@@ -217,11 +258,19 @@ generated  = build_content(expanded=expanded)
 readme = readme.replace("https://morphe.software/add-source?github=xyz-user/xyz-patches", f"https://morphe.software/add-source?github={repo_full}")
 readme = readme.replace("https://github.com/xyz-user/xyz-patches", f"https://github.com/{repo_full}")
 
-new_readme = re.sub(
+# A callable replacement is used so that backslashes and \1-style sequences that
+# appear in patch descriptions or option titles are inserted verbatim. Passing a
+# plain string makes re.sub() interpret them as group references.
+replacement = f"{actual_start}\n{generated}\n{END_MARKER}"
+new_readme, substitutions = re.subn(
     rf"{START_PATTERN}.*?{re.escape(END_MARKER)}",
-    f"{actual_start}\n{generated}\n{END_MARKER}",
+    lambda _match: replacement,
     readme,
     flags=re.DOTALL,
 )
+
+if substitutions != 1:
+    fail(f"expected exactly one patches block in {readme_path}, found {substitutions}")
+
 readme_path.write_text(new_readme, encoding="utf-8")
 print(f"✅ Injected patches section into {readme_path} (v{ver}, branch={branch}, {total} patches, expanded={expanded})")

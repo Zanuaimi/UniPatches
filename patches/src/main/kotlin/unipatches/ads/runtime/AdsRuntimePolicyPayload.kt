@@ -1,6 +1,6 @@
 package unipatches.ads
 
-/** Pure helpers for the Control App Ads to Overlay runtime-policy exchange. */
+/** Pure helpers for the Ads Block Patch to Overlay runtime-policy exchange. */
 internal fun isAdsRuntimePolicyActive(
     runtimeControlsRequested: Boolean,
     blockAdsModule: Boolean,
@@ -56,8 +56,10 @@ internal fun serializeAdsRuntimePolicy(
     wildcardHostsEnabled: Boolean,
     hosts: List<String>,
     hostsAllowedEnabled: Boolean = hostsEnabled,
-): String = listOf(
-    "1",
+    overlayModuleMask: Int = moduleMask,
+): String {
+    val fields = mutableListOf(
+    "3",
     moduleMask.toString(),
     blockedFormats.toString(),
     if (skipRewardedAdsEnabled) "1" else "0",
@@ -67,4 +69,10 @@ internal fun serializeAdsRuntimePolicy(
     if (wildcardHostsEnabled) "1" else "0",
     hosts.sorted().joinToString(","),
     if (hostsAllowedEnabled) "1" else "0",
-).joinToString("|")
+    )
+    // Omit the visibility field when it matches the active policy mask so older
+    // payloads remain byte-for-byte compatible. Include it only when managed
+    // startup needs a policy without exposing overlay controls.
+    if (overlayModuleMask != moduleMask) fields.add(overlayModuleMask.toString())
+    return fields.joinToString("|")
+}
