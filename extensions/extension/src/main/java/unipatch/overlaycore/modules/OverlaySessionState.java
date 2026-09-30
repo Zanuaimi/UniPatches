@@ -38,11 +38,9 @@ public final class OverlaySessionState {
         // minSdk 23 has no Collection#removeIf (API 24); an iterator stays portable
         // and the synchronized block already serializes the removal.
         String prefix = module + "\u0000";
-        Iterator<String> values = VALUES.keySet().iterator();
-        while (values.hasNext()) {
-            if (values.next().startsWith(prefix)) {
-                values.remove();
-            }
+        Iterator<String> keys = VALUES.keySet().iterator();
+        while (keys.hasNext()) {
+            if (keys.next().startsWith(prefix)) keys.remove();
         }
     }
 }

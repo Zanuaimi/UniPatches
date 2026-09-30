@@ -132,6 +132,13 @@ const state = {
   outline2: "#E651A0",
   outlineAngle: 0,
   highlight: false,
+  shadowEnabled: true,
+  shadowColor: "#000000",
+  shadowOpacity: 60,
+  shadowOffsetX: 0,
+  shadowOffsetY: 3,
+  shadowBlur: 4,
+  shadowSpread: 0,
   legacyText: "U",
   legacyTextSize: 18,
   legacyBold: true,
@@ -181,6 +188,13 @@ function normalizeHex(value, fallback = "#FFFFFF") {
   if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toUpperCase();
   if (/^[0-9a-f]{6}$/i.test(raw)) return `#${raw.toUpperCase()}`;
   return fallback.toUpperCase();
+}
+
+function colorWithAlpha(hex, opacity) {
+  const alpha = Math.round(clamp(opacity, 60, 0, 100) * 2.55)
+    .toString(16)
+    .padStart(2, "0");
+  return `${normalizeHex(hex)}${alpha}`;
 }
 
 function resetEditorState(overrides = {}) {
@@ -588,6 +602,12 @@ function drawPreview() {
   });
   if (state.iconMode === "text") {
     ctx.save();
+    if (state.shadowEnabled) {
+      ctx.shadowColor = colorWithAlpha(state.shadowColor, state.shadowOpacity);
+      ctx.shadowBlur = state.shadowBlur + state.shadowSpread;
+      ctx.shadowOffsetX = state.shadowOffsetX;
+      ctx.shadowOffsetY = state.shadowOffsetY;
+    }
     ctx.fillStyle = state.legacyTextColor;
     ctx.font = `${state.legacyBold ? "700" : "400"} ${Math.max(1, state.legacyTextSize)}px ${
       {
@@ -814,6 +834,14 @@ function syncInputs() {
   $("backgroundStyle").value = state.backgroundStyle;
   $("outlineGradient").checked = state.outlineGradient;
   $("highlight").checked = state.highlight;
+  $("shadowEnabled").checked = state.shadowEnabled;
+  $("shadowOpacity").value = state.shadowOpacity;
+  $("shadowOffsetX").value = state.shadowOffsetX;
+  $("shadowOffsetY").value = state.shadowOffsetY;
+  $("shadowBlur").value = state.shadowBlur;
+  $("shadowSpread").value = state.shadowSpread;
+  $("shadowColor").value = state.shadowColor;
+  $("shadowColorText").value = state.shadowColor;
   $("legacyText").value = state.legacyText;
   $("legacyTextSize").value = state.legacyTextSize;
   $("legacyBold").checked = state.legacyBold;
@@ -936,6 +964,11 @@ const importedRanges = {
   iconSize: [32, 128],
   iconOpacity: [10, 100],
   dragVisibility: [0, 60],
+  shadowOpacity: [0, 100],
+  shadowOffsetX: [-32, 32],
+  shadowOffsetY: [-32, 32],
+  shadowBlur: [0, 32],
+  shadowSpread: [0, 16],
 };
 const importedColors = new Set([
   "background",
@@ -947,6 +980,7 @@ const importedColors = new Set([
   "legacyTextColor",
   "legacyShapeColor1",
   "legacyShapeColor2",
+  "shadowColor",
 ]);
 
 function applyImportedSettings(settings) {
@@ -1055,6 +1089,13 @@ function legacyIconJson() {
       outlineGradient: state.outlineGradient,
       outlineAngle: normalizeAngle(state.outlineAngle),
       highlight: state.highlight,
+      shadowEnabled: state.shadowEnabled,
+      shadowColor: state.shadowColor,
+      shadowOpacity: state.shadowOpacity,
+      shadowOffsetX: state.shadowOffsetX,
+      shadowOffsetY: state.shadowOffsetY,
+      shadowBlur: state.shadowBlur,
+      shadowSpread: state.shadowSpread,
       legacyText: state.legacyText,
       legacyTextSize: state.legacyTextSize,
       legacyBold: state.legacyBold,
@@ -1182,6 +1223,13 @@ $("downloadJsonButton").addEventListener("click", () =>
           outlineGradient: state.outlineGradient,
           outlineAngle: normalizeAngle(state.outlineAngle),
           highlight: state.highlight,
+          shadowEnabled: state.shadowEnabled,
+          shadowColor: state.shadowColor,
+          shadowOpacity: state.shadowOpacity,
+          shadowOffsetX: state.shadowOffsetX,
+          shadowOffsetY: state.shadowOffsetY,
+          shadowBlur: state.shadowBlur,
+          shadowSpread: state.shadowSpread,
         },
         iconSettings: {
           iconMode: state.iconMode,
@@ -1243,6 +1291,7 @@ bindColorPair(
   "legacyShapeColor2Text",
   "legacyShapeColor2",
 );
+bindColorPair("shadowColor", "shadowColorText", "shadowColor");
 bindValue("backgroundAngle", "backgroundAngle", "number");
 bindValue("outlineAngle", "outlineAngle", "number");
 bindValue("outlineWidth", "outlineWidth", "number");
@@ -1266,6 +1315,12 @@ bindCheckbox("outlineGradient", "outlineGradient");
 bindCheckbox("highlight", "highlight");
 bindCheckbox("legacyBold", "legacyBold");
 bindCheckbox("legacyShapeGradient", "legacyShapeGradient");
+bindCheckbox("shadowEnabled", "shadowEnabled");
+bindValue("shadowOpacity", "shadowOpacity", "number");
+bindValue("shadowOffsetX", "shadowOffsetX", "number");
+bindValue("shadowOffsetY", "shadowOffsetY", "number");
+bindValue("shadowBlur", "shadowBlur", "number");
+bindValue("shadowSpread", "shadowSpread", "number");
 $("imageInput").addEventListener("change", () => {
   const file = $("imageInput").files[0];
   if (!file) return;

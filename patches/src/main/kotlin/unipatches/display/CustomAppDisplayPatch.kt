@@ -210,11 +210,17 @@ val customAppDisplayPatch = bytecodePatch(
                 classDefForEach { classDef ->
                     if (fpsScope == "launcher" && classDef.type != launcher) return@classDefForEach
                     if (!isActivity(classDef.type)) return@classDefForEach
-                    val mutableClass = mutableClassDefBy(classDef)
-                    mutableClass.methods.toList().filter {
+                    val matchingMethods = classDef.methods.filter {
                         it.name == "onCreate" && it.returnType == "V" &&
                             it.parameterTypes == listOf("Landroid/os/Bundle;") && it.implementation != null
-                    }.forEach { method ->
+                    }
+                    if (matchingMethods.isEmpty()) return@classDefForEach
+                    val mutableClass = mutableClassDefBy(classDef)
+                    matchingMethods.forEach { candidate ->
+                        val method = mutableClass.methods.firstOrNull {
+                            it.name == candidate.name && it.returnType == candidate.returnType &&
+                                it.parameterTypes == candidate.parameterTypes
+                        } ?: return@forEach
                         val allocation = method.cloneMutableAndAllocateScratchRegisters(mutableClass, 3)
                         val safeMethod = allocation.method
                         val r0 = allocation.firstScratchRegister
@@ -241,14 +247,13 @@ val customAppDisplayPatch = bytecodePatch(
         }
 
         val unityMethod = UnityPlayerActivityOnCreateFingerprint.methodOrNull
-        val unityClass = UnityPlayerActivityOnCreateFingerprint.classDefOrNull?.let(::mutableClassDefBy)
+        val unityClassDefinition = UnityPlayerActivityOnCreateFingerprint.classDefOrNull
         if (customResolutionEnabled == true || graphicsApi == "opengl" || graphicsApi == "vulkan") {
-            if (unityMethod == null || unityClass == null) {
+            if (unityMethod == null || unityClassDefinition == null) {
                 logger.warning("Custom App Display: no supported Unity activity found; selected resolution/renderer request was not applied.")
             } else {
-                val allocation = unityMethod.cloneMutableAndAllocateScratchRegisters(unityClass, 3)
-                val method = allocation.method
-                val r0 = allocation.firstScratchRegister
+                val scratchBase = unityMethod.implementation?.registerCount ?: 0
+                val r0 = scratchBase
                 val r1 = r0 + 1
                 val r2 = r0 + 2
                 val instructions = buildString {
@@ -282,6 +287,9 @@ val customAppDisplayPatch = bytecodePatch(
                     }
                 }
                 if (instructions.isNotBlank()) {
+                    val unityClass = mutableClassDefBy(unityClassDefinition)
+                    val allocation = unityMethod.cloneMutableAndAllocateScratchRegisters(unityClass, 3)
+                    val method = allocation.method
                     method.addInstructions(0, instructions)
                     applied++
                     logger.info("Custom App Display: applied Unity resolution/renderer request.")

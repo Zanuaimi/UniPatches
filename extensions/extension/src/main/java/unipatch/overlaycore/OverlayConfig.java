@@ -34,7 +34,8 @@ final class OverlayConfig {
     String appSpecificProfile, injectionMode, appSpecificModules;
     String activityInstallBanlist;
     int background, outline, overlayTextColor, buttonTextColor, buttonBackground, buttonSize, gravity;
-    int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle, iconOutlineWidth, iconTextSize;
+    int outlineWidth, iconOutlineColor, iconBackground2, iconGradientAngle, iconOutlineWidth, iconTextSize,
+            iconTextColor2, iconTextGradientAngle;
     int menuWidthLimitPercent, menuHeightLimitPercent;
     int backgroundTransparency;
     float opacity;
@@ -64,15 +65,18 @@ final class OverlayConfig {
             menuTextColor1, menuTextColor2, menuTextColor3, menuTextColor4, menuTextColor5, menuTextColor6,
             outlineAnimationSpeed, animationDuration, appendDescriptionColor, separatorBackgroundColor,
             iconShapeColor1, iconShapeColor2, iconShapeGradientAngle, iconShapeStrokeWidth, iconShapeScale,
-            iconOutlineColor2, iconOutlineGradientAngle, iconBackgroundColor3, iconBackgroundColor4;
+            iconOutlineColor2, iconOutlineGradientAngle, iconBackgroundColor3, iconBackgroundColor4,
+            iconShadowColor, iconShadowOpacity, iconShadowOffsetX, iconShadowOffsetY,
+            iconShadowBlur, iconShadowSpread;
     boolean bottomButtonPadding, titleSeparator, iconShapeGradient, iconHighlight, iconShadow, iconOutlineGradient;
+    boolean managerIntegration, managerPersistence, iconTextGradient;
 
     static OverlayConfig decode(String encoded) {
         OverlayConfig c = new OverlayConfig();
         String[] values = encoded == null ? new String[0] : encoded.split("\\|", -1);
         // Version 1 through 16 prepends a version field. Keep accepting the original 14-field format so an
         // older generated patch remains safe when paired with this newer extension.
-        String[] v = new String[100];
+        String[] v = new String[110];
         for (int i = 0; i < v.length; i++) v[i] = i < values.length ? decodePart(values[i]) : "";
         int offset = ("1".equals(v[0]) || "2".equals(v[0]) || "3".equals(v[0]) || "4".equals(v[0]) || "5".equals(v[0]) || "6".equals(v[0]) || "7".equals(v[0]) || "8".equals(v[0]) || "9".equals(v[0]) || "10".equals(v[0]) || "11".equals(v[0]) || "12".equals(v[0]) || "13".equals(v[0]) || "14".equals(v[0]) || "15".equals(v[0]) || "16".equals(v[0])) ? 1 : 0;
         c.title = limit(field(v, offset, 0), 80, "UniPatches Universal Overlay Patch");
@@ -159,7 +163,7 @@ final class OverlayConfig {
         c.bottomButtonStyle = choice(field(v, offset, 37), "text", "text", "solid", "gradient");
         c.bottomButtonShape = choice(field(v, offset, 38), "square", "square", "squircle");
         c.bottomButtonPadding = "1".equals(field(v, offset, 39));
-        c.bottomButtonTextColor = color(field(v, offset, 40), 0xFFFFFFFF);
+        c.bottomButtonTextColor = color(field(v, offset, 40), 0xFFFF5656);
         c.bottomButtonBackground1 = color(field(v, offset, 41), 0xFF500000);
         c.bottomButtonBackground2 = color(field(v, offset, 42), 0xFFAA0000);
         c.menuTextColor1 = color(field(v, offset, 43), c.overlayTextColor);
@@ -187,6 +191,12 @@ final class OverlayConfig {
         c.iconBackgroundStyle = choice(field(v, offset, 79), "flat", "flat", "faceted");
         c.iconBackgroundColor3 = color(field(v, offset, 80), c.iconBackground2);
         c.iconBackgroundColor4 = color(field(v, offset, 81), c.background);
+        c.iconShadowColor = 0xFF000000;
+        c.iconShadowOpacity = 60;
+        c.iconShadowOffsetX = 0;
+        c.iconShadowOffsetY = 3;
+        c.iconShadowBlur = 4;
+        c.iconShadowSpread = 0;
         c.iconParts = field(v, offset, 84).isEmpty()
                 ? new String[0]
                 : field(v, offset, 84).split("[\\r\\n]+", 13);
@@ -204,6 +214,11 @@ final class OverlayConfig {
         c.includeOverlayRuntimeLogs = "1".equals(field(v, offset, 91));
         c.enableOverlayRuntimeLogsOnLaunch = "1".equals(field(v, offset, 92));
         c.showExtraPopupHeaders = "1".equals(field(v, offset, 93));
+        c.managerIntegration = "1".equals(field(v, offset, 96));
+        c.managerPersistence = "1".equals(field(v, offset, 97));
+        c.iconTextGradient = "1".equals(field(v, offset, 98));
+        c.iconTextColor2 = color(field(v, offset, 99), c.buttonTextColor);
+        c.iconTextGradientAngle = integer(field(v, offset, 100), 90, 0, 360);
         applyLegacyIconJson(c);
         c.appendDescriptionColor = color(field(v, offset, 60), c.menuTextColor3);
         c.showNoModulesWarning = !"0".equals(field(v, offset, 61));
@@ -268,6 +283,13 @@ final class OverlayConfig {
             c.iconShapeGradientAngle = jsonInt(settings, "legacyShapeAngle", c.iconShapeGradientAngle, 0, 360);
             c.iconShapeStrokeWidth = jsonInt(settings, "legacyShapeStroke", c.iconShapeStrokeWidth, 1, 12);
             c.iconShapeScale = jsonInt(settings, "legacyShapeScale", c.iconShapeScale, 20, 100);
+            c.iconShadow = settings.optBoolean("shadowEnabled", c.iconShadow);
+            c.iconShadowColor = parseJsonColor(settings, "shadowColor", c.iconShadowColor);
+            c.iconShadowOpacity = jsonInt(settings, "shadowOpacity", c.iconShadowOpacity, 0, 100);
+            c.iconShadowOffsetX = jsonInt(settings, "shadowOffsetX", c.iconShadowOffsetX, -32, 32);
+            c.iconShadowOffsetY = jsonInt(settings, "shadowOffsetY", c.iconShadowOffsetY, -32, 32);
+            c.iconShadowBlur = jsonInt(settings, "shadowBlur", c.iconShadowBlur, 0, 32);
+            c.iconShadowSpread = jsonInt(settings, "shadowSpread", c.iconShadowSpread, 0, 16);
 
             JSONArray parts = settings.optJSONArray("iconParts");
             String iconMode = settings.optString("iconMode", "");
@@ -287,9 +309,176 @@ final class OverlayConfig {
         }
     }
 
+    /** Applies manager-owned startup overrides while retaining patch-time values as fallbacks. */
+    static void applyManagedConfiguration(OverlayConfig c, String encoded) {
+        if (c == null || encoded == null || encoded.trim().isEmpty()) return;
+        try {
+            JSONObject values = new JSONObject(encoded);
+            c.menuWidthLimitPercent = jsonInt(values, "runtimeOverlayMenuWidthLimit", c.menuWidthLimitPercent, 45, 90);
+            c.menuHeightLimitPercent = jsonInt(values, "runtimeOverlayMenuHeightLimit", c.menuHeightLimitPercent, 45, 90);
+            c.title = limit(values.optString("runtimeOverlayTitle", c.title), 80, c.title);
+            c.description = limit(values.optString("runtimeOverlayDescription", c.description), 500, c.description);
+            c.appendDescription = limit(values.optString("runtimeOverlayAppendDescription", c.appendDescription), 500, c.appendDescription);
+            c.descriptionAlignment = choice(values.optString("runtimeOverlayDescriptionAlignment", c.descriptionAlignment), c.descriptionAlignment, "left", "center", "right");
+            c.appendDescriptionColor = parseJsonColor(values, "runtimeOverlayAppendDescriptionColor", c.appendDescriptionColor);
+            c.background = colorWithManagedTransparency(values, "runtimeOverlayBackgroundColor", "runtimeOverlayBackgroundTransparency", c.background, c.backgroundTransparency);
+            c.backgroundTransparency = jsonInt(values, "runtimeOverlayBackgroundTransparency", c.backgroundTransparency, 0, 100);
+            c.outline = parseJsonColor(values, "runtimeOverlayOutlineColor", c.outline);
+            c.repositoryText = empty(values.optString("runtimeOverlayRepositoryText", c.repositoryText), c.repositoryText);
+            c.repositoryUrl = validUrl(values.optString("runtimeOverlayRepositoryUrl", c.repositoryUrl));
+            c.buttonText = limit(values.optString("runtimeOverlayButtonText", c.buttonText), 3, c.buttonText);
+            c.iconBold = values.has("runtimeOverlayIconBold") ? values.optBoolean("runtimeOverlayIconBold") : c.iconBold;
+            c.buttonTextColor = parseJsonColor(values, "runtimeOverlayButtonTextColor", c.buttonTextColor);
+            c.iconTextGradient = values.optBoolean("runtimeOverlayIconTextGradient", c.iconTextGradient);
+            c.iconTextColor2 = parseJsonColor(values, "runtimeOverlayIconTextColor2", c.iconTextColor2);
+            c.iconTextGradientAngle = jsonInt(values, "runtimeOverlayIconTextGradientAngle", c.iconTextGradientAngle, 0, 360);
+            c.iconTextSize = jsonInt(values, "runtimeOverlayIconTextSizeSp", c.iconTextSize, 8, 48);
+            c.iconTextFont = choice(values.optString("runtimeOverlayIconTextFont", c.iconTextFont), c.iconTextFont, "default", "roboto", "sansSerif", "serif", "monospace", "sansCondensed", "sansMedium", "sansBlack");
+            c.menuTextFont = choice(values.optString("runtimeOverlayMenuTextFont", c.menuTextFont), c.menuTextFont, "default", "roboto", "sansSerif", "serif", "monospace", "sansCondensed", "sansMedium", "sansBlack");
+            c.iconStyle = choice(values.optString("runtimeOverlayIconStyle", c.iconStyle), c.iconStyle, "text", "parts");
+            c.iconHighlight = values.optBoolean("runtimeOverlayIconHighlight", c.iconHighlight);
+            c.gradientBackground = values.optBoolean("runtimeOverlayIconGradientBackground", c.gradientBackground);
+            c.buttonBackground = parseJsonColor(values, "runtimeOverlayButtonBackgroundColor", c.buttonBackground);
+            c.iconBackground2 = parseJsonColor(values, "runtimeOverlayIconBackgroundColor2", c.iconBackground2);
+            c.iconGradientAngle = jsonInt(values, "runtimeOverlayIconGradientAngle", c.iconGradientAngle, 0, 360);
+            c.iconBackgroundStyle = choice(values.optString("runtimeOverlayIconBackgroundStyle", c.iconBackgroundStyle), c.iconBackgroundStyle, "flat", "faceted");
+            c.iconBackgroundColor3 = parseJsonColor(values, "runtimeOverlayIconBackgroundColor3", c.iconBackgroundColor3);
+            c.iconBackgroundColor4 = parseJsonColor(values, "runtimeOverlayIconBackgroundColor4", c.iconBackgroundColor4);
+            c.iconOutline = values.optBoolean("runtimeOverlayIconOutline", c.iconOutline);
+            c.iconOutlineWidth = jsonInt(values, "runtimeOverlayIconOutlineWidthDp", c.iconOutlineWidth, 1, 8);
+            c.iconOutlineColor = parseJsonColor(values, "runtimeOverlayIconOutlineColor", c.iconOutlineColor);
+            c.iconOutlineGradient = values.optBoolean("runtimeOverlayIconOutlineGradient", c.iconOutlineGradient);
+            c.iconOutlineColor2 = parseJsonColor(values, "runtimeOverlayIconOutlineColor2", c.iconOutlineColor2);
+            c.iconOutlineGradientAngle = jsonInt(values, "runtimeOverlayIconOutlineGradientAngle", c.iconOutlineGradientAngle, 0, 360);
+            c.iconShape = choice(values.optString("runtimeOverlayIconShape", c.iconShape), c.iconShape, "triangle", "triangle", "chevron", "smile", "circle", "z", "revanced");
+            c.iconShapeColor1 = parseJsonColor(values, "runtimeOverlayIconShapeColor1", c.iconShapeColor1);
+            c.iconShapeColor2 = parseJsonColor(values, "runtimeOverlayIconShapeColor2", c.iconShapeColor2);
+            c.iconShapeGradient = values.optBoolean("runtimeOverlayIconShapeGradient", c.iconShapeGradient);
+            c.iconShapeGradientAngle = jsonInt(values, "runtimeOverlayIconShapeGradientAngle", c.iconShapeGradientAngle, 0, 360);
+            c.iconShapeStrokeWidth = jsonInt(values, "runtimeOverlayIconShapeStrokeWidth", c.iconShapeStrokeWidth, 1, 12);
+            c.iconShapeScale = jsonInt(values, "runtimeOverlayIconShapeScale", c.iconShapeScale, 20, 100);
+            c.iconShadow = values.optBoolean("runtimeOverlayIconShadow", c.iconShadow);
+            c.iconShadowColor = parseJsonColor(values, "runtimeOverlayIconShadowColor", c.iconShadowColor);
+            c.iconShadowOpacity = jsonInt(values, "runtimeOverlayIconShadowOpacity", c.iconShadowOpacity, 0, 100);
+            c.iconShadowOffsetX = jsonInt(values, "runtimeOverlayIconShadowOffsetX", c.iconShadowOffsetX, -32, 32);
+            c.iconShadowOffsetY = jsonInt(values, "runtimeOverlayIconShadowOffsetY", c.iconShadowOffsetY, -32, 32);
+            c.iconShadowBlur = jsonInt(values, "runtimeOverlayIconShadowBlur", c.iconShadowBlur, 0, 32);
+            c.iconShadowSpread = jsonInt(values, "runtimeOverlayIconShadowSpread", c.iconShadowSpread, 0, 16);
+            c.controlTheme = choice(values.optString("runtimeOverlayControlTheme", c.controlTheme), c.controlTheme, "legacy", "modern", "monet");
+            c.controlBackground = parseJsonColor(values, "runtimeOverlayControlBackground", c.controlBackground);
+            c.controlForeground = parseJsonColor(values, "runtimeOverlayControlForeground", c.controlForeground);
+            c.controlOutlineColor = parseJsonColor(values, "runtimeOverlayMenuTextColor7", c.controlOutlineColor);
+            c.bottomButtonStyle = choice(values.optString("runtimeOverlayBottomButtonStyle", c.bottomButtonStyle), c.bottomButtonStyle, "text", "solid", "gradient");
+            c.bottomButtonShape = choice(values.optString("runtimeOverlayBottomButtonShape", c.bottomButtonShape), c.bottomButtonShape, "square", "squircle");
+            c.bottomButtonPadding = values.optBoolean("runtimeOverlayBottomButtonPadding", c.bottomButtonPadding);
+            c.bottomButtonTextColor = parseJsonColor(values, "runtimeOverlayBottomButtonTextColor", c.bottomButtonTextColor);
+            c.bottomButtonBackground1 = parseJsonColor(values, "runtimeOverlayBottomButtonBackground1", c.bottomButtonBackground1);
+            c.bottomButtonBackground2 = parseJsonColor(values, "runtimeOverlayBottomButtonBackground2", c.bottomButtonBackground2);
+            c.menuTextColor1 = parseJsonColor(values, "runtimeOverlayMenuTextColor1", c.menuTextColor1);
+            c.menuTextColor2 = parseJsonColor(values, "runtimeOverlayMenuTextColor2", c.menuTextColor2);
+            c.menuTextColor3 = parseJsonColor(values, "runtimeOverlayMenuTextColor3", c.menuTextColor3);
+            c.menuTextColor4 = parseJsonColor(values, "runtimeOverlayMenuTextColor4", c.menuTextColor4);
+            c.menuTextColor5 = parseJsonColor(values, "runtimeOverlayMenuTextColor5", c.menuTextColor5);
+            c.menuTextColor6 = parseJsonColor(values, "runtimeOverlayMenuTextColor6", c.menuTextColor6);
+            c.separatorBackgroundColor = parseJsonColor(values, "runtimeOverlaySeparatorBackgroundColor", c.separatorBackgroundColor);
+            c.separatorStyle = choice(values.optString("runtimeOverlaySeparatorStyle", c.separatorStyle), c.separatorStyle, "ascii", "doubleLine", "background", "singleLine", "inline");
+            c.titleIconPlacement = choice(values.optString("runtimeOverlayTitleIconPlacement", c.titleIconPlacement), c.titleIconPlacement, "none", "left", "right", "both");
+            c.titleAlignment = choice(values.optString("runtimeOverlayTitleAlignment", c.titleAlignment), c.titleAlignment, "left", "center", "right");
+            c.titleSeparator = values.optBoolean("runtimeOverlayTitleSeparator", c.titleSeparator);
+            c.menuCorners = choice(values.optString("runtimeOverlayMenuCorners", c.menuCorners), c.menuCorners, "rounded", "square");
+            c.menuOutlineAnimation = choice(values.optString("runtimeOverlayMenuOutlineAnimation", c.menuOutlineAnimation), c.menuOutlineAnimation, "static", "gradient", "vertical", "rainbow");
+            c.outlineAnimationSpeed = jsonInt(values, "runtimeOverlayOutlineAnimationSpeed", c.outlineAnimationSpeed, -10, 10);
+            c.openingAnimation = choice(values.optString("runtimeOverlayOpeningAnimation", c.openingAnimation), c.openingAnimation, "fade", "scale", "disabled", "appearRight", "appearTop", "appearBottom", "appearLeft");
+            c.closingAnimation = choice(values.optString("runtimeOverlayClosingAnimation", c.closingAnimation), c.closingAnimation, "fade", "scale", "disabled", "disappearUp", "disappearDown", "disappearLeft", "disappearRight");
+            c.animationDuration = jsonInt(values, "runtimeOverlayAnimationDuration", c.animationDuration, 0, 5000);
+            c.animationEasing = choice(values.optString("runtimeOverlayAnimationEasing", c.animationEasing), c.animationEasing, "linear", "logarithmic");
+            c.outlineWidth = jsonInt(values, "runtimeOverlayOutlineWidthDp", c.outlineWidth, 1, 8);
+            c.showExtraPopupHeaders = values.optBoolean("runtimeOverlayShowExtraPopupHeaders", c.showExtraPopupHeaders);
+            c.shape = shape(values.optString("runtimeOverlayButtonShape", ""), c.shape);
+            c.buttonSize = jsonInt(values, "runtimeOverlayButtonSizeDp", c.buttonSize, 32, 128);
+            c.opacity = jsonInt(values, "runtimeOverlayButtonIdleOpacityPercent", Math.round(c.opacity * 100f), 10, 100) / 100f;
+            c.dragVisibilityDurationSeconds = jsonInt(values, "runtimeOverlayButtonDragVisibilityDurationSeconds", c.dragVisibilityDurationSeconds, 1, 10);
+            c.gravity = gravity(values.optString("runtimeOverlayButtonPosition", ""));
+            c.showNoModulesWarning = values.optBoolean("runtimeOverlayShowNoModulesWarning", c.showNoModulesWarning);
+            c.activateStatisticsOnLaunch = values.optBoolean("runtimeOverlayActivateStatisticsOnLaunch", c.activateStatisticsOnLaunch);
+            c.enableMonitorsOnLaunch = values.optBoolean("runtimeOverlayEnableMonitorsOnLaunch", c.enableMonitorsOnLaunch);
+            c.statisticMonitorPosition = monitorPosition(values.optString("runtimeOverlayStatisticMonitorPosition", ""), c.statisticMonitorPosition);
+            c.monitorScale = floatValue(values.optString("runtimeOverlayMonitorScale", ""), c.monitorScale, .5f, 2f);
+            c.monitorColumns = jsonInt(values, "runtimeOverlayMonitorColumns", c.monitorColumns, 1, 3);
+            c.temperatureFormat = choice(values.optString("runtimeOverlayTemperatureFormat", c.temperatureFormat), c.temperatureFormat, "celsius", "fahrenheit", "kelvin");
+            c.timeFormat = choice(values.optString("runtimeOverlayTimeFormat", c.timeFormat), c.timeFormat, "12", "24");
+            applyManagedModules(c, values);
+            JSONArray parts = values.optJSONArray("runtimeOverlayIconParts");
+            if (parts != null) {
+                List<String> validParts = new ArrayList<>();
+                for (int i = 0; i < parts.length() && validParts.size() < 12; i++) {
+                    String part = parts.optString(i, "");
+                    if (validIconPart(part)) validParts.add(part);
+                }
+                c.iconParts = validParts.toArray(new String[0]);
+                // An explicit manager-selected icon type wins over the presence of a stored
+                // parts list. This lets users switch back to the text icon without deleting
+                // their saved multi-part strings.
+                if (!values.has("runtimeOverlayIconStyle")) {
+                    c.iconStyle = validParts.isEmpty() ? "text" : "parts";
+                }
+            }
+        } catch (Exception ignored) {
+            // Manager settings are optional overrides. Invalid values keep patch-time defaults.
+        }
+    }
+
     private static int parseJsonColor(JSONObject settings, String name, int fallback) {
         String value = settings.optString(name, "");
         return value.matches("#[0-9a-fA-F]{6}") ? color(value, fallback) : fallback;
+    }
+
+    private static int colorWithManagedTransparency(JSONObject values, String colorName, String transparencyName, int fallback, int fallbackTransparency) {
+        int color = parseJsonColor(values, colorName, fallback);
+        int transparency = jsonInt(values, transparencyName, fallbackTransparency, 0, 100);
+        return withAlpha(color, transparency);
+    }
+
+    private static int shape(String value, int fallback) {
+        if ("square".equals(value)) return 0;
+        if ("squircle".equals(value)) return 2;
+        if ("circle".equals(value)) return 1;
+        return fallback;
+    }
+
+    private static int monitorPosition(String value, int fallback) {
+        if ("top".equals(value)) return 1;
+        if ("bottom".equals(value)) return 2;
+        if ("none".equals(value)) return 0;
+        return fallback;
+    }
+
+    private static void applyManagedModules(OverlayConfig c, JSONObject values) {
+        c.keepAwake = managedModule(values, "runtimeOverlayIncludeKeepScreenAwake", c.keepAwake);
+        c.fullscreen = managedModule(values, "runtimeOverlayIncludeFullscreen", c.fullscreen);
+        c.screenshots = managedModule(values, "runtimeOverlayIncludeScreenshots", c.screenshots);
+        c.systemTime = managedModule(values, "runtimeOverlayIncludeSystemTime", c.systemTime);
+        c.fps = managedModule(values, "runtimeOverlayIncludeFps", c.fps);
+        c.sessionTime = managedModule(values, "runtimeOverlayIncludeSessionTime", c.sessionTime);
+        c.batteryStatus = managedModule(values, "runtimeOverlayIncludeBatteryStatus", c.batteryStatus);
+        c.appMemory = managedModule(values, "runtimeOverlayIncludeAppMemory", c.appMemory);
+        c.networkStatus = managedModule(values, "runtimeOverlayIncludeNetworkStatus", c.networkStatus);
+        c.deviceInformation = managedModule(values, "runtimeOverlayIncludeDeviceInformation", c.deviceInformation);
+        c.deviceTemperature = managedModule(values, "runtimeOverlayIncludeDeviceTemperature", c.deviceTemperature);
+        c.appBrightness = managedModule(values, "runtimeOverlayIncludeAppBrightness", c.appBrightness);
+        c.rotationMode = managedModule(values, "runtimeOverlayIncludeRotationMode", c.rotationMode);
+        c.appAudioMute = managedModule(values, "runtimeOverlayIncludeAppAudioMute", c.appAudioMute);
+        c.disableHaptics = managedModule(values, "runtimeOverlayIncludeDisableHaptics", c.disableHaptics);
+        c.disableAnimations = managedModule(values, "runtimeOverlayIncludeDisableAnimations", c.disableAnimations);
+        c.includeDoNotDisturb = managedModule(values, "runtimeOverlayIncludeDoNotDisturb", c.includeDoNotDisturb);
+        c.includeOverlayRuntimeLogs = managedModule(values, "runtimeOverlayIncludeOverlayRuntimeLogs", c.includeOverlayRuntimeLogs);
+        if (values.has("runtimeOverlayEnableOverlayRuntimeLogsOnLaunch")) c.enableOverlayRuntimeLogsOnLaunch = values.optBoolean("runtimeOverlayEnableOverlayRuntimeLogsOnLaunch");
+    }
+
+    private static boolean managedModule(JSONObject values, String key, boolean current) {
+        if (!values.has(key)) return current;
+        boolean enabled = values.optBoolean(key);
+        return enabled;
     }
 
         private static boolean validIconPart(String encoded) {
