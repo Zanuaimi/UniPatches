@@ -684,8 +684,14 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
         classDefForEach { classDef ->
             indexedClassCount++
             val methods = classDef.methods.toList()
+            // Presence of the name is the test, NOT a non-null implementation:
+            // nativeOnPurchasesUpdated is a native method, so implementation is
+            // always null and the extra check silently emptied this candidate
+            // list on every game. The IL2CPP bridge therefore never applied
+            // anywhere, and an engine waiting on the purchase callback just hung
+            // on its "processing" screen (Fruit Ninja 3.97.9).
             if (classDef.type.startsWith("Lcom/android/billingclient/api/zz") &&
-                methods.any { it.name == "nativeOnPurchasesUpdated" && it.implementation != null }) {
+                methods.any { it.name == "nativeOnPurchasesUpdated" }) {
                 nativeBridgeCandidates += classDef
             }
             if (!isFrameworkClass(classDef.type) && !isBillingNamespace(classDef.type) &&
