@@ -253,6 +253,12 @@ public final class OverlayRuntime {
 
     /** Shows the IAP confirmation popup on the Activity that initiated BillingClient. */
     public static synchronized boolean showInAppPurchaseConfirmation(Activity target, String productId) {
+        return showInAppPurchaseConfirmation(target, productId, InAppRuntimePolicy.pendingConfirmationId(productId));
+    }
+
+    /** Binds posted popup work and every button to one purchase request. */
+    public static synchronized boolean showInAppPurchaseConfirmation(Activity target, String productId, long requestId) {
+        if (!InAppRuntimePolicy.isPendingConfirmation(requestId)) return false;
         Controller selected = target == null ? null : CONTROLLERS.get(target);
         if (selected == null || !selected.canShowInAppPurchaseConfirmation()) {
             for (Controller controller : new ArrayList<>(CONTROLLERS.values())) {
@@ -270,28 +276,29 @@ public final class OverlayRuntime {
         final Controller controller = selected;
         if (Looper.myLooper() == Looper.getMainLooper()) {
             try {
-                return controller.showInAppPurchaseConfirmation(productId);
+                return controller.showInAppPurchaseConfirmation(productId, requestId);
             } catch (RuntimeException error) {
                 OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup creation failed: " + error.getClass().getSimpleName());
                 return false;
             }
         }
         boolean posted = MAIN.post(() -> {
+            if (!InAppRuntimePolicy.isPendingConfirmation(requestId)) return;
             boolean shown;
             try {
-                shown = controller.showInAppPurchaseConfirmation(productId);
+                shown = controller.showInAppPurchaseConfirmation(productId, requestId);
             } catch (RuntimeException error) {
                 shown = false;
                 OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup creation failed: " + error.getClass().getSimpleName());
             }
             if (!shown) {
                 OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup was not attached on the main thread");
-                InAppRuntimePolicy.cancelPending();
+                InAppRuntimePolicy.cancelPending(requestId);
             }
         });
         if (!posted) {
             OverlayRuntimeLogger.log("WARN", "InApp", "Could not post purchase popup creation to the main thread");
-            InAppRuntimePolicy.cancelPending();
+            InAppRuntimePolicy.cancelPending(requestId);
             return false;
         }
         return true;
@@ -1896,8 +1903,14 @@ public final class OverlayRuntime {
             });
         }
 
-        private boolean showInAppPurchaseConfirmation(String productId) {
-            if (!canShowInAppPurchaseConfirmation()) return false;
+        private FrameLayout inAppConfirmationLayer;
+        private long inAppConfirmationRequestId;
+
+        private boolean showInAppPurchaseConfirmation(String productId, long requestId) {
+            if (!InAppRuntimePolicy.isPendingConfirmation(requestId) || !canShowInAppPurchaseConfirmation()) return false;
+            // Activity resume/retry must reuse the existing confirmation rather than stack popups.
+            if (inAppConfirmationRequestId == requestId && inAppConfirmationLayer != null
+                    && inAppConfirmationLayer.getParent() == root) return true;
             final FrameLayout layer = new FrameLayout(overlayContext);
             layer.setBackgroundColor(0xB3000000);
             layer.setClickable(true);
@@ -1907,7 +1920,7 @@ public final class OverlayRuntime {
             layer.setOnClickListener(v -> {
                 Object ticker = layer.getTag();
                 if (ticker instanceof Runnable) root.removeCallbacks((Runnable) ticker);
-                InAppRuntimePolicy.cancelPending();
+                InAppRuntimePolicy.cancelPending(requestId);
                 dismissModuleSettingsPopup(layer, card);
             });
             TextView description = text("Do you want to try to emulate in-app purchase for this product?", 14, config.menuTextColor3);
@@ -1929,6 +1942,10 @@ public final class OverlayRuntime {
             final Runnable[] countdownTicker = new Runnable[1];
             countdownTicker[0] = () -> {
                 if (layer.getParent() != root) return;
+                if (!InAppRuntimePolicy.isPendingConfirmation(requestId)) {
+                    dismissModuleSettingsPopup(layer, card);
+                    return;
+                }
                 long remaining = Math.max(0L, expiresAt - SystemClock.elapsedRealtime());
                 long seconds = (remaining + 999L) / 1000L;
                 countdown.setText("Timeout Countdown : " + seconds);
@@ -1936,7 +1953,7 @@ public final class OverlayRuntime {
                 else countdown.setAlpha(1f);
                 if (remaining > 0L) root.postDelayed(countdownTicker[0], 1000L);
                 else {
-                    InAppRuntimePolicy.cancelPending();
+                    InAppRuntimePolicy.timeoutPending(requestId);
                     dismissModuleSettingsPopup(layer, card);
                 }
             };
@@ -1950,12 +1967,12 @@ public final class OverlayRuntime {
             card.addView(actions, actionParams);
             addAction(actions, "No", v -> {
                 root.removeCallbacks(countdownTicker[0]);
-                InAppRuntimePolicy.complete(false);
+                InAppRuntimePolicy.cancelPending(requestId);
                 dismissModuleSettingsPopup(layer, card);
             });
             addAction(actions, "Yes", v -> {
                 root.removeCallbacks(countdownTicker[0]);
-                InAppRuntimePolicy.complete(save.isChecked());
+                InAppRuntimePolicy.complete(requestId, save.isChecked());
                 dismissModuleSettingsPopup(layer, card);
             });
             FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(
@@ -1971,6 +1988,8 @@ public final class OverlayRuntime {
                 OverlayRuntimeLogger.log("WARN", "InApp", "Purchase popup view was not attached to the overlay root");
                 return false;
             }
+            inAppConfirmationLayer = layer;
+            inAppConfirmationRequestId = requestId;
             OverlayRuntimeLogger.log("INFO", "InApp", "Purchase popup attached: product=" + productId +
                     ", activity=" + activity.getClass().getName());
             root.post(() -> {

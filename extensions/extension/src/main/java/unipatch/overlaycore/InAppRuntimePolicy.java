@@ -203,7 +203,7 @@ public final class InAppRuntimePolicy {
             if (value == null || detachedRequest == null || detachedRequest.sourceActivity.get() != value) return;
             OverlayRuntimeLogger.log("WARN", "InApp", "Purchase Activity detached before confirmation: product=" + detachedRequest.productId);
         }
-        cancelPending();
+        cancelPending(detachedRequest.requestId);
     }
 
     public static synchronized String[] savedPurchases() { return SAVED.toArray(new String[0]); }
@@ -225,6 +225,7 @@ public final class InAppRuntimePolicy {
         String product = productId(flowParams, null);
         PurchaseBackend backend = modernBackend(flowParams);
         PurchaseRequest immediate = null;
+        PurchaseRequest confirmation = null;
         boolean reject = false;
         synchronized (InAppRuntimePolicy.class) {
             if (pending != null) {
@@ -243,6 +244,7 @@ public final class InAppRuntimePolicy {
                         backend, true, timeoutFor(true));
                 pending.transition(PurchaseRequest.State.RECEIVED, PurchaseRequest.State.VALIDATED);
                 pending.transition(PurchaseRequest.State.VALIDATED, PurchaseRequest.State.WAITING_FOR_POPUP);
+                confirmation = pending;
                 lastEvent = "Waiting for confirmation: " + product;
                 OverlayRuntimeLogger.log("INFO", "InApp", "Purchase request received: listener=" + listener.getClass().getName() +
                         ", activity=" + (target == null ? "null" : target.getClass().getName()) +
@@ -260,7 +262,8 @@ public final class InAppRuntimePolicy {
         if (immediate != null) {
             final PurchaseRequest immediateRequest = immediate;
             scheduleTimeout(immediateRequest);
-            boolean claimed = immediateRequest.claimCallback();
+            boolean enteredDelivery = immediateRequest.transition(PurchaseRequest.State.VALIDATED, PurchaseRequest.State.DELIVERING);
+            boolean claimed = enteredDelivery && immediateRequest.claimCallback();
             boolean delivered = claimed && deliver(listener, product, 0, true, backend, target);
             finishImmediate(immediateRequest, delivered);
             Log.i("UnipatchSeed", "immediate dispatch: product=" + product +
@@ -272,13 +275,12 @@ public final class InAppRuntimePolicy {
             }
             return delivered;
         }
-        final PurchaseRequest request;
-        synchronized (InAppRuntimePolicy.class) { request = pending; }
+        final PurchaseRequest request = confirmation;
         scheduleTimeout(request);
         if (target != null) OverlayRuntime.ensureActivity(target);
-        if (!OverlayRuntime.showInAppPurchaseConfirmation(target, product)) {
+        if (!OverlayRuntime.showInAppPurchaseConfirmation(target, product, request.requestId)) {
             OverlayRuntimeLogger.log("WARN", "InApp", "Purchase confirmation popup could not attach; cancelling purchase: product=" + product);
-            cancelPending();
+            cancelPending(request.requestId);
             return false;
         }
         return true;
@@ -561,6 +563,7 @@ public final class InAppRuntimePolicy {
             return;
         }
         PurchaseRequest immediate = null;
+        PurchaseRequest confirmation = null;
         boolean reject = false;
         synchronized (InAppRuntimePolicy.class) {
             if (pending != null) {
@@ -579,6 +582,7 @@ public final class InAppRuntimePolicy {
                         PurchaseBackend.OPEN_IAB, true, timeoutFor(true));
                 pending.transition(PurchaseRequest.State.RECEIVED, PurchaseRequest.State.VALIDATED);
                 pending.transition(PurchaseRequest.State.VALIDATED, PurchaseRequest.State.WAITING_FOR_POPUP);
+                confirmation = pending;
                 lastEvent = "Waiting for legacy confirmation: " + normalized;
                 OverlayRuntimeLogger.log("INFO", "InApp", "Intercepted legacy purchase: product=" + normalized +
                         ", mode=overlay-confirmation, inapp=" + inapp);
@@ -619,11 +623,10 @@ public final class InAppRuntimePolicy {
             finishLegacyProxy(target);
             return;
         }
-        final PurchaseRequest request;
-        synchronized (InAppRuntimePolicy.class) { request = pending; }
+        final PurchaseRequest request = confirmation;
         scheduleTimeout(request);
         if (target != null) OverlayRuntime.ensureActivity(target);
-        if (!OverlayRuntime.showInAppPurchaseConfirmation(target, normalized)) {
+        if (!OverlayRuntime.showInAppPurchaseConfirmation(target, normalized, request.requestId)) {
             OverlayRuntimeLogger.log("INFO", "InApp", "Legacy purchase confirmation popup queued until an active overlay Activity is available: product=" + normalized);
         }
     }
@@ -793,32 +796,37 @@ public final class InAppRuntimePolicy {
         deliverLegacy(listener, valid(product) ? normalize(product) : "", false);
     }
 
-    /** Retries a pending confirmation after the target Activity has resumed and its overlay attached. */
+    /** Identifies the current confirmation without binding stale popup work to a newer request. */
+    public static synchronized long pendingConfirmationId(String productId) {
+        return pending != null && pending.state() == PurchaseRequest.State.WAITING_FOR_POPUP
+                && pending.productId.equals(productId) ? pending.requestId : 0L;
+    }
+
+    public static synchronized boolean isPendingConfirmation(long requestId) {
+        return pending != null && pending.requestId == requestId
+                && pending.state() == PurchaseRequest.State.WAITING_FOR_POPUP && !pending.isFinished();
+    }
+
+    /** Retries only the request that was waiting when this Activity resumed. */
     public static void retryPendingConfirmation(Activity target) {
-        String product;
+        PurchaseRequest request;
         synchronized (InAppRuntimePolicy.class) {
-            if (pending == null) return;
-            product = pending.productId;
+            request = pending;
+            if (request == null || request.state() != PurchaseRequest.State.WAITING_FOR_POPUP) return;
         }
         if (target != null) OverlayRuntime.ensureActivity(target);
-        OverlayRuntime.showInAppPurchaseConfirmation(target, product);
+        OverlayRuntime.showInAppPurchaseConfirmation(target, request.productId, request.requestId);
     }
 
     private static void timeout(PurchaseRequest request) {
-        synchronized (InAppRuntimePolicy.class) {
-            if (pending != request) return;
-            if (request.state() == PurchaseRequest.State.DELIVERING) return;
-        }
-        OverlayRuntimeLogger.log("WARN", "InApp", "Purchase request timed out: id=" + request.requestId + ", product=" + request.productId);
-        if (cancelPending()) {
-            Activity target = request.sourceActivity.get();
-            if (target == null) target = activity.get();
-            if (target != null) {
-                try {
-                    Toast.makeText(target.getApplicationContext(), "Purchase timed out", Toast.LENGTH_SHORT).show();
-                } catch (RuntimeException error) {
-                    OverlayRuntimeLogger.log("WARN", "InApp", "Timeout toast failed: " + error.getClass().getSimpleName());
-                }
+        if (request == null || !timeoutPending(request.requestId)) return;
+        Activity target = request.sourceActivity.get();
+        if (target == null) target = activity.get();
+        if (target != null) {
+            try {
+                Toast.makeText(target.getApplicationContext(), "Purchase timed out", Toast.LENGTH_SHORT).show();
+            } catch (RuntimeException error) {
+                OverlayRuntimeLogger.log("WARN", "InApp", "Timeout toast failed: " + error.getClass().getSimpleName());
             }
         }
     }
@@ -826,6 +834,7 @@ public final class InAppRuntimePolicy {
     private static long timeoutMillis(PurchaseRequest request) { return request.timeoutMillis; }
 
     private static void scheduleTimeout(PurchaseRequest request) {
+        if (request == null) return;
         PurchaseTimeoutScheduler scheduler;
         synchronized (InAppRuntimePolicy.class) { scheduler = timeoutScheduler; }
         scheduler.schedule(() -> timeout(request), timeoutMillis(request));
@@ -854,13 +863,20 @@ public final class InAppRuntimePolicy {
         if (!delivered) OverlayRuntimeLogger.log("WARN", "InApp", "Immediate purchase callback failed; no second callback attempted: product=" + request.productId);
     }
 
+    /** Compatibility entry point for callers that explicitly mean the current request. */
     public static void complete(boolean save) {
+        long requestId;
+        synchronized (InAppRuntimePolicy.class) { requestId = pending == null ? 0L : pending.requestId; }
+        complete(requestId, save);
+    }
+
+    /** Completes only the confirmation that produced this UI action. */
+    public static void complete(long requestId, boolean save) {
         PurchaseRequest request;
         synchronized (InAppRuntimePolicy.class) {
             request = pending;
-            if (request == null || !request.transition(PurchaseRequest.State.WAITING_FOR_POPUP, PurchaseRequest.State.DELIVERING)) return;
-            if (save && SAVED.size() < MAX_SAVED_PURCHASES) SAVED.add(request.productId);
-            lastEvent = "Emulated purchase delivered: " + request.productId;
+            if (request == null || request.requestId != requestId ||
+                    !request.transition(PurchaseRequest.State.WAITING_FOR_POPUP, PurchaseRequest.State.DELIVERING)) return;
         }
         boolean delivered = request.claimCallback() && (request.backend == PurchaseBackend.OPEN_IAB
                 ? deliverLegacy(request.listener, request.productId, true, request.developerPayload, request.productType.equals("inapp"), request.sourceActivity.get())
@@ -868,6 +884,10 @@ public final class InAppRuntimePolicy {
         synchronized (InAppRuntimePolicy.class) {
             if (pending == request) {
                 request.finish(delivered ? PurchaseRequest.State.COMPLETED : PurchaseRequest.State.CANCELLED);
+                // A failed callback must never turn future taps into automatic confirmation.
+                if (delivered && save && SAVED.size() < MAX_SAVED_PURCHASES) SAVED.add(request.productId);
+                lastEvent = delivered ? "Emulated purchase delivered: " + request.productId
+                        : "Purchase callback failed: " + request.productId;
                 pending = null;
             }
         }
@@ -878,19 +898,35 @@ public final class InAppRuntimePolicy {
     }
 
     public static boolean cancelPending() {
+        long requestId;
+        synchronized (InAppRuntimePolicy.class) { requestId = pending == null ? 0L : pending.requestId; }
+        return cancelPending(requestId);
+    }
+
+    public static boolean cancelPending(long requestId) {
+        return cancelRequest(requestId, PurchaseRequest.State.CANCELLED);
+    }
+
+    public static boolean timeoutPending(long requestId) {
+        return cancelRequest(requestId, PurchaseRequest.State.TIMED_OUT);
+    }
+
+    /** Checks identity and claims cancellation in the same critical section. */
+    private static boolean cancelRequest(long requestId, PurchaseRequest.State terminalState) {
         PurchaseRequest request;
         synchronized (InAppRuntimePolicy.class) {
             request = pending;
-            if (request == null || request.state() == PurchaseRequest.State.DELIVERING || request.isFinished()) return false;
+            if (request == null || request.requestId != requestId ||
+                    request.state() == PurchaseRequest.State.DELIVERING || request.isFinished()) return false;
             if (!request.transition(request.state(), PurchaseRequest.State.DELIVERING)) return false;
-            lastEvent = "Purchase cancelled: " + request.productId;
+            lastEvent = (terminalState == PurchaseRequest.State.TIMED_OUT ? "Purchase timed out: " : "Purchase cancelled: ") + request.productId;
         }
         boolean delivered = request.claimCallback() && (request.backend == PurchaseBackend.OPEN_IAB
                 ? deliverLegacy(request.listener, request.productId, false, request.developerPayload, request.productType.equals("inapp"), request.sourceActivity.get())
                 : deliver(request.listener, request.productId, 1, false, request.backend, request.sourceActivity.get()));
         synchronized (InAppRuntimePolicy.class) {
             if (pending == request) {
-                request.finish(PurchaseRequest.State.CANCELLED);
+                request.finish(terminalState);
                 pending = null;
             }
         }
