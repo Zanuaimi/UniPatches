@@ -16,6 +16,9 @@ import helpers.spoof.*
 import helpers.startup.StartupHooks.escapeSmali
 import java.util.logging.Logger
 
+internal fun shouldReplaceResult(register: Int?, opcode: Opcode): Boolean =
+    register != null && (opcode == Opcode.MOVE_RESULT || opcode == Opcode.MOVE_RESULT_OBJECT)
+
 /**
  * Replaces every `sget-object vX, Landroid/os/Build;-><FIELD>:Ljava/lang/String;`
  * with `const-string vX, "<value>"`, so the app sees a real device's identity.
@@ -92,10 +95,7 @@ internal fun BytecodePatchContext.foldBuildGetSerial(value: String): Int {
 
                 val next = instructions.getOrNull(index + 1)
                 val register = (next as? OneRegisterInstruction)?.registerA
-                if (next != null &&
-                    (next.opcode == Opcode.MOVE_RESULT ||
-                        next.opcode == Opcode.MOVE_RESULT_OBJECT)
-                ) {
+                if (next != null && shouldReplaceResult(register, next.opcode)) {
                     method.replaceInstruction(index, "const-string v$register, \"${escapeSmali(value)}\"")
                     method.replaceInstruction(index + 1, "nop")
                 } else {
@@ -162,10 +162,7 @@ internal fun BytecodePatchContext.foldSystemPropertyMap(properties: Map<String, 
 
                 val next = instructions.getOrNull(index + 1)
                 val register = (next as? OneRegisterInstruction)?.registerA
-                if (next != null &&
-                    (next.opcode == Opcode.MOVE_RESULT ||
-                        next.opcode == Opcode.MOVE_RESULT_OBJECT)
-                ) {
+                if (next != null && shouldReplaceResult(register, next.opcode)) {
                     method.replaceInstruction(index, "const-string v$register, \"${escapeSmali(value)}\"")
                     method.replaceInstruction(index + 1, "nop")
                 } else {
@@ -213,10 +210,7 @@ internal fun BytecodePatchContext.foldBuildMethodResult(methodName: String, valu
 
                 val next = instructions.getOrNull(index + 1)
                 val register = (next as? OneRegisterInstruction)?.registerA
-                if (next != null &&
-                    (next.opcode == Opcode.MOVE_RESULT ||
-                        next.opcode == Opcode.MOVE_RESULT_OBJECT)
-                ) {
+                if (next != null && shouldReplaceResult(register, next.opcode)) {
                     method.replaceInstruction(index, "const-string v$register, \"${escapeSmali(value)}\"")
                     method.replaceInstruction(index + 1, "nop")
                 } else {

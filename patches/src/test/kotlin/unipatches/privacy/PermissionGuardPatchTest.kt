@@ -28,6 +28,18 @@ class PermissionGuardPatchTest {
         }
 
     @Test
+    fun cameraFeatureCanBeRemovedOnlyWhenExplicitlyRequested() {
+        val document = newDocument(listOf("android.permission.CAMERA"))
+        val manifest = document.documentElement
+        manifest.appendChild(document.createElement("uses-feature").apply {
+            setAttribute("android:name", "android.hardware.camera")
+        })
+
+        assertEquals(2, removeGuardedPermissions(document, setOf("camera"), removeRelatedFeatures = true))
+        assertEquals(0, manifest.getElementsByTagName("uses-feature").length)
+    }
+
+    @Test
     fun noSelectionRemovesNothing() {
         val document = newDocument(listOf("android.permission.CAMERA"))
         assertEquals(0, removeGuardedPermissions(document, emptySet()))
@@ -78,6 +90,18 @@ class PermissionGuardPatchTest {
         val document = newDocument(listOf("android.permission.CAMERA"))
         assertEquals(0, removeGuardedPermissions(document, setOf("root")))
         assertEquals(1, names(document).size)
+    }
+
+    @Test
+    fun cameraGroupRemovesSdk23DeclarationToo() {
+        val document = newDocument(listOf("android.permission.CAMERA"))
+        val sdkDeclaration = document.createElement("uses-permission-sdk-23")
+        sdkDeclaration.setAttribute("android:name", "android.permission.CAMERA")
+        document.documentElement.insertBefore(sdkDeclaration, document.documentElement.firstChild)
+
+        assertEquals(2, removeGuardedPermissions(document, setOf("camera")))
+        assertEquals(0, document.documentElement.getElementsByTagName("uses-permission-sdk-23").length)
+        assertEquals(0, names(document).size)
     }
 
     @Test

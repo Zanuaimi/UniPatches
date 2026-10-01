@@ -55,8 +55,20 @@ public final class LegacyCompatRuntime {
     /**
      * Installs a permissive TrustManager and HostnameVerifier on the
      * HttpsURLConnection defaults. WebView does not inherit these.
+     *
+     * This process-wide override is disabled unless the patch explicitly
+     * acknowledges its high-risk security impact.
      */
     public static void trustAllCertificates() {
+        Log.w(TAG, "Trust-all certificates refused: explicit high-risk acknowledgement is required");
+    }
+
+    /** Enables the process-wide trust-all override only for an acknowledged patch. */
+    public static void trustAllCertificates(boolean acknowledgedHighRisk) {
+        if (!acknowledgedHighRisk) {
+            Log.w(TAG, "Trust-all certificates refused: explicit high-risk acknowledgement is required");
+            return;
+        }
         try {
             TrustManager[] trustAll = new TrustManager[]{new X509TrustManager() {
                 @Override

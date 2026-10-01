@@ -8,6 +8,7 @@ import helpers.bytecode.numberOfParameterRegisters
 import helpers.bytecode.p0Register
 import helpers.bytecode.cloneMutable
 import helpers.startup.StartupHooks
+import helpers.startup.resolveStartupEntryPoint
 import java.util.logging.Logger
 
 /** Runtime hooks backed by unipatch.compatcore.LegacyCompatRuntime in the extension dex. */
@@ -53,7 +54,8 @@ internal fun injectLegacyCompatStartup(
             appendLine("invoke-static {}, $COMPAT_RUNTIME->exemptHiddenApis()V")
         }
         if (options.trustCertificates) {
-            appendLine("invoke-static {}, $COMPAT_RUNTIME->trustAllCertificates()V")
+            appendLine("const/4 v$base, 0x1")
+            appendLine("invoke-static {v$base}, $COMPAT_RUNTIME->trustAllCertificates(Z)V")
         }
     }.trimEnd()
     if (block.isEmpty()) return false
@@ -80,24 +82,15 @@ internal fun legacyRuntimeHooksPatch(optionsProvider: () -> LegacyRuntimeOptions
             return@execute
         }
 
-        val candidates = listOfNotNull(
-            StartupHooks.resolvedApplicationDescriptor,
-            StartupHooks.resolvedLauncherActivityDescriptor,
-        )
-        for (descriptor in candidates) {
-            val classDef = classDefByOrNull(descriptor) ?: continue
-            val method = classDef.methods.firstOrNull {
-                it.name == "onCreate" && it.returnType == "V" && it.parameterTypes.isEmpty()
-            } ?: continue
-            val mutableClass = mutableClassDefByOrNull(classDef.type) ?: continue
-            val mutableMethod = mutableClass.methods.firstOrNull {
-                it.name == "onCreate" && it.returnType == "V" && it.parameterTypes.isEmpty()
-            } ?: continue
-            if (injectLegacyCompatStartup(mutableClass, mutableMethod, options)) {
-                logger.info("Legacy compatibility: injected LegacyCompatRuntime startup hooks ($options) into ${classDef.type}->onCreate.")
-                return@execute
-            }
+        val entry = resolveStartupEntryPoint(logger)
+        if (entry == null) {
+            logger.warning("Legacy compatibility: no suitable Application.onCreate or launcher onCreate found; runtime hooks skipped.")
+            return@execute
         }
-        logger.warning("Legacy compatibility: no suitable Application.onCreate or launcher onCreate found; runtime hooks skipped.")
+        if (injectLegacyCompatStartup(entry.owner, entry.onCreate, options)) {
+            logger.info("Legacy compatibility: injected LegacyCompatRuntime startup hooks ($options) into ${entry.owner.type}->onCreate.")
+        } else {
+            logger.info("Legacy compatibility: startup hooks already present in ${entry.owner.type}->onCreate.")
+        }
     }
 }

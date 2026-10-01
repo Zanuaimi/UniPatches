@@ -257,9 +257,9 @@ val legacyAppCompatibilityPatch = resourcePatch(
 
     val spoofTargetSdk by booleanOption(
         title = "Legacy App Compatibility > Installation and manifest > Spoof Target SDK",
-        default = true,
+        default = false,
         key = "legacyCompatibilitySpoofTargetSdk",
-        description = "Report a compatible target SDK so older apps can install or launch on modern Android. This may change platform behavior and does not repair incompatible code.",
+        description = "Report a compatible target SDK so older apps can install or launch on modern Android. This may change platform behavior and does not repair incompatible code. Explicit opt-in is required because lowering an app's target SDK can weaken platform protections.",
     )
     val targetSdk by intOption(
         title = "Legacy App Compatibility > Installation and manifest > Target SDK version",
@@ -310,15 +310,21 @@ val legacyAppCompatibilityPatch = resourcePatch(
     )
     val bypassHiddenApi by booleanOption(
         title = "Legacy App Compatibility > Runtime compatibility > Bypass Hidden API Restrictions",
-        default = true,
+        default = false,
         key = "legacyCompatibilityHiddenApi",
-        description = "Exempt all hidden non-SDK interfaces for this app on Android 9 and newer, so old apps using reflection on framework internals keep working. Applies at app startup; affects only this app's process.",
+        description = "Exempt all hidden non-SDK interfaces for this app on Android 9 and newer, so old apps using reflection on framework internals keep working. Applies at app startup; affects only this app's process. Explicit opt-in is required because this weakens Android's non-SDK API boundary.",
     )
     val trustCertificates by booleanOption(
         title = "Legacy App Compatibility > Runtime compatibility > Trust All Certificates",
         default = false,
         key = "legacyCompatibilityTrustCertificates",
-        description = "Security risk: disables TLS certificate and hostname validation for HttpsURLConnection traffic, allowing man-in-the-middle interception. Only enable for legacy apps whose servers use expired or self-signed certificates. WebView traffic is not covered.",
+        description = "Security risk: disables TLS certificate and hostname validation for HttpsURLConnection traffic, allowing man-in-the-middle interception. Only enable for legacy apps whose servers use expired or self-signed certificates. WebView traffic is not covered. A separate acknowledgement is required.",
+    )
+    val acknowledgeTrustCertificates by booleanOption(
+        title = "Legacy App Compatibility > Runtime compatibility > Acknowledge Trust-All TLS Risk",
+        default = false,
+        key = "legacyCompatibilityAcknowledgeTrustCertificates",
+        description = "Explicitly acknowledge that trust-all TLS is a high-risk, process-wide override. Trust All Certificates is ignored unless this acknowledgement is enabled too.",
     )
     val redirectLegacyStorage by booleanOption(
         title = "Legacy App Compatibility > Runtime compatibility > Redirect Legacy External Storage Paths",
@@ -334,9 +340,9 @@ val legacyAppCompatibilityPatch = resourcePatch(
     )
     val repairExportFlags by booleanOption(
         title = "Legacy App Compatibility > Installation and manifest > Repair Missing Component Export Flags",
-        default = true,
+        default = false,
         key = "legacyCompatibilityRepairExportFlags",
-        description = "Add missing android:exported values to activities, aliases, services, and receivers that have intent filters. Do NOT enable this together with Export All Activities because they overlap. If both are selected accidentally, Export All Activities takes precedence.",
+        description = "Add missing android:exported values to activities, aliases, services, and receivers that have intent filters. Do NOT enable this together with Export All Activities because they overlap. If both are selected accidentally, Export All Activities takes precedence. Explicit opt-in is required because exported components expand the app's attack surface.",
     )
     val exportAllActivityComponents by booleanOption(
         title = "Legacy App Compatibility > Installation and manifest > Export All Activities",
@@ -410,7 +416,7 @@ val legacyAppCompatibilityPatch = resourcePatch(
     dependsOn(legacyRuntimeHooksPatch {
         LegacyRuntimeOptions(
             hiddenApiExemptions = bypassHiddenApi == true,
-            trustCertificates = trustCertificates == true,
+            trustCertificates = trustCertificates == true && acknowledgeTrustCertificates == true,
             storageRedirect = redirectLegacyStorage == true,
         )
     })
@@ -418,6 +424,9 @@ val legacyAppCompatibilityPatch = resourcePatch(
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)
+        if (trustCertificates == true && acknowledgeTrustCertificates != true) {
+            logger.warning("Legacy compatibility: Trust All Certificates was requested without the required high-risk acknowledgement; trust-all TLS remains disabled.")
+        }
         var changed = 0
         var noApplication = false
         document("AndroidManifest.xml").use { manifest ->

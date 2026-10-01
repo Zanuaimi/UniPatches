@@ -10,14 +10,16 @@ import app.morphe.patcher.patch.stringOption
 import app.morphe.patcher.patch.stringsOption
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
-import com.android.tools.smali.dexlib2.iface.ClassDef
-import com.android.tools.smali.dexlib2.iface.Method
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import helpers.bytecode.*
 import helpers.startup.StartupHooks
+import helpers.startup.StartupEntryPoint
+import helpers.startup.findFallbackActivity
+import helpers.startup.resolveApplicationEntryPoint
+import helpers.startup.resolveLauncherEntryPoint
 import unipatches.overlay.presets.OverlayPresetCatalog
 import unipatches.overlay.presets.OverlayUiPreset
 import unipatches.overlay.presets.UNI_PATCHES_ICON_PARTS
@@ -1849,9 +1851,6 @@ val universalOverlayPatch = bytecodePatch(
 
         // Prefer the process Application entry point. The Activity path is a compatibility fallback
         // for APKs whose Application class or onCreate method cannot be resolved safely.
-        val appDescriptor = StartupHooks.resolvedApplicationDescriptor
-        val appClass = appDescriptor?.let { classDefByOrNull(it) }
-        val appMethod = appClass?.let { findInheritedApplicationOnCreate(it) }
         var bridgeInstalled = false
         var bridgeAttempted = false
         var adsPolicyAttached = false
@@ -1869,37 +1868,16 @@ val universalOverlayPatch = bytecodePatch(
             )
             null
         }
-        val resolvedLauncher = resolveOverlayLauncherActivity(
+        val resolvedLauncher = resolveLauncherEntryPoint(
             StartupHooks.resolvedLauncherActivityDescriptor,
             logger,
         )
         // Prefer the process Application entry point whenever it can be resolved. This installs
         // lifecycle callbacks before Unity's Activity and before BillingClient purchase calls.
-        val applicationTarget = if (appMethod != null) {
-            val targetClass = mutableClassDefByOrNull(appClass.type)
-            val (inheritedOwner, inheritedOnCreate) = appMethod
-            if (targetClass == null) null
-            else if (inheritedOwner.type == targetClass.type) {
-                val mutableOnCreate = targetClass.methods.firstOrNull {
-                    it.name == inheritedOnCreate.name &&
-                        it.returnType == inheritedOnCreate.returnType &&
-                        it.parameterTypes == inheritedOnCreate.parameterTypes
-                }
-                if (mutableOnCreate == null) {
-                    logger.warning("Could not resolve mutable Application.onCreate in ${targetClass.type}")
-                    null
-                } else targetClass to mutableOnCreate
-            } else try {
-                val direct = createApplicationOnCreateOverride(targetClass)
-                logger.info("Created direct Application.onCreate override in ${targetClass.type}; inherited implementation remains untouched in ${inheritedOwner.type}")
-                targetClass to direct
-            } catch (error: Exception) {
-                logger.warning("Could not create direct Application.onCreate override in ${targetClass.type}: ${error.message}")
-                null
-            }
-        } else null
+        val applicationTarget = resolveApplicationEntryPoint(logger)
         if (applicationTarget != null) {
-            val (appOwner, appOnCreate) = applicationTarget
+            val appOwner = applicationTarget.owner
+            val appOnCreate = applicationTarget.onCreate
             if (appOnCreate.hasOverlayBridge(application = true)) {
                 logger.info("Runtime overlay bridge already exists in ${appOwner.type}->onCreate")
                 val configured = attachExistingOverlayPolicies(appOwner, appOnCreate, adsRuntimePolicy)
@@ -1935,7 +1913,7 @@ val universalOverlayPatch = bytecodePatch(
                     }?.let { mutableClassDefByOrNull(it.type) }
                 }
                 ?: resolvedLauncher?.owner
-                ?: findOverlayFallbackActivity()
+                ?: findFallbackActivity()
         }
         val onCreate = resolvedLauncher
             ?.takeIf { it.owner.type == fallback?.type }
@@ -1982,28 +1960,4 @@ val universalOverlayPatch = bytecodePatch(
         }
         if (customMode) exportPreset(exportUiPreset.orEmpty().trim(), exportedUiPresetOutputName.orEmpty(), selectedUiPreset, logger)
     }
-}
-
-/**
- * Finds the implementation of Application.onCreate, including an implementation inherited by
- * the manifest-declared Application class. Mutating a bundled application superclass is safe here:
- * it is still the process Application entry point, whereas selecting an arbitrary Activity or SDK
- * class can leave the actual game screen without an overlay.
- */
-private fun app.morphe.patcher.patch.BytecodePatchContext.findInheritedApplicationOnCreate(
-    start: ClassDef,
-): Pair<ClassDef, Method>? {
-    val seen = mutableSetOf<String>()
-    var current: ClassDef? = start
-    while (current != null && seen.add(current.type)) {
-        val method = current.methods.firstOrNull {
-            it.name == "onCreate" && it.returnType == "V" && it.parameterTypes.isEmpty()
-        }
-        if (method != null) return current to method
-
-        val superclass = current.superclass ?: return null
-        if (superclass == "Landroid/app/Application;" || superclass == "Ljava/lang/Object;") return null
-        current = classDefByOrNull(superclass)
-    }
-    return null
 }

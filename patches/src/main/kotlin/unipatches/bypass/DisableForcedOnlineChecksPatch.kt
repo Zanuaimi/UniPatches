@@ -144,6 +144,7 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
         val useGeneric = genericBytecodeStrategy == true
 
         var patched = 0
+        var skipped = 0
         if (useCommon) {
             patched += foldBooleanReturns(
                 mapOf(
@@ -192,16 +193,30 @@ val disableForcedOnlineChecksPatch = bytecodePatch(
                     val positive = methodName in positiveGateNames
                     val negative = methodName in negativeGateNames
                     if (!positive && !negative) continue
-                    if (!hasOnlineText && !methodName.contains("online") && !methodName.contains("connect")) continue
-                    if (implementation.registerCount < 1) continue
+                    if (!hasOnlineText && !methodName.contains("online") && !methodName.contains("connect")) {
+                        skipped++
+                        continue
+                    }
+                    if (implementation.registerCount < 1) {
+                        skipped++
+                        continue
+                    }
 
                     val value = if (positive) "0x1" else "0x0"
+                    val firstInstruction = implementation.instructions.firstOrNull()?.toString()?.trim()
+                    if (firstInstruction == "const/4 v0, $value") {
+                        skipped++
+                        continue
+                    }
                     method.addInstructions(0, "const/4 v0, $value\nreturn v0")
                     patched++
                 }
             }
         }
 
+        if (skipped > 0) {
+            logger.info("Disable Forced Online Checks: skipped $skipped candidate(s) because evidence, registers, or idempotence checks did not pass.")
+        }
         if (patched > 0) {
             logger.info(
                 "Disable Forced Online Checks: patched $patched check(s); " +

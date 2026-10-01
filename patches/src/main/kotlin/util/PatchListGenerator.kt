@@ -41,7 +41,10 @@ fun main() {
 private fun generatePatchList(version: String, patches: Set<Patch<*>>) {
     val listJson = File("../patches-list.json")
 
-    val patchesMap = patches.sortedBy { it.name }.map { patch ->
+    val patchesMap = patches
+        .filter { !it.name.isNullOrBlank() }
+        .sortedBy { it.name }
+        .map { patch ->
         JsonPatch(
             name = patch.name!!,
             category = patch.category,

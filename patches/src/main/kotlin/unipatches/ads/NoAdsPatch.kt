@@ -18,6 +18,7 @@ import helpers.bytecode.*
 import unipatches.overlay.OverlayAdsRuntimeIntegration
 import unipatches.overlay.attachQueuedAdsRuntimePolicy
 import helpers.startup.StartupHooks
+import helpers.startup.resolveStartupEntryPoint
 import helpers.manager.encodeUniManagerMetadata
 import helpers.manager.UNI_MANAGER_ADS_METADATA_NAME
 import helpers.manager.uniManagerMetadataPatch
@@ -502,11 +503,41 @@ private fun logHeap(logger: Logger, phase: String) {
     )
 }
 
-private fun extractHost(value: String): String? {
-    val candidate = value.substringAfter("://", value).substringBefore('/').substringBefore(':').trim('.').lowercase()
-    return candidate.takeIf { it.length in 3..253 && it.count { char -> char == '.' } >= 1 &&
-        it.all { char -> char.isLetterOrDigit() || char == '.' || char == '-' } }
+internal fun normalizeHost(value: String): String? {
+    val input = value.trim()
+    if (input.isEmpty() || input.any(Char::isWhitespace)) return null
+    val authority = input.substringAfter("://", input).substringBefore('/').substringBefore('?').substringBefore('#')
+        .substringAfterLast('@')
+        .takeIf { it.isNotEmpty() } ?: return null
+    val host = if (authority.startsWith('[')) {
+        val close = authority.indexOf(']')
+        if (close <= 1) return null
+        val remainder = authority.substring(close + 1)
+        if (remainder.isNotEmpty() && !remainder.matches(Regex(":\\d{1,5}"))) return null
+        authority.substring(1, close).takeIf { it.matches(Regex("[0-9A-Fa-f:]+")) } ?: return null
+    } else {
+        val colon = authority.lastIndexOf(':')
+        if (colon >= 0 && authority.indexOf(':') == colon && authority.substring(colon + 1).matches(Regex("\\d{1,5}"))) {
+            authority.substring(0, colon)
+        } else authority
+    }.trim('.')
+    if (host.isEmpty()) return null
+    if (host.contains(':')) {
+        return host.lowercase().takeIf { it.count { char -> char == ':' } >= 2 }
+    }
+    return runCatching { java.net.IDN.toASCII(host, java.net.IDN.USE_STD3_ASCII_RULES).lowercase() }
+        .getOrNull()
+        ?.takeIf { ascii ->
+            ascii.length in 3..253 && ascii.count { char -> char == '.' } >= 1 &&
+                ascii.split('.').all { label ->
+                    label.isNotEmpty() && label.length <= 63 &&
+                        !label.startsWith('-') && !label.endsWith('-') &&
+                        label.all { char -> char.isLetterOrDigit() || char == '-' }
+                }
+        }
 }
+
+private fun extractHost(value: String): String? = normalizeHost(value)
 
 private fun parseFilterHosts(entries: Iterable<String>): Set<String> = entries.mapNotNull { entry ->
     entry.substringBefore('#').trim().takeIf { it.isNotEmpty() }?.let { line ->
@@ -1049,47 +1080,18 @@ val adsBlockPatch = bytecodePatch(
             }
         }
         if (managerIntegration && managerPolicy != null) {
-            val application = StartupHooks.resolvedApplicationDescriptor?.let(::classDefByOrNull)
-            val applicationMethod = application?.methods?.firstOrNull {
-                it.name == "onCreate" && it.returnType == "V" &&
-                    it.parameterTypes.isEmpty()
-            }
-            val launcher = StartupHooks.resolvedLauncherActivityDescriptor?.let(::classDefByOrNull)
-            val launcherMethod = launcher?.methods?.firstOrNull {
-                it.name == "onCreate" && it.returnType == "V" &&
-                    it.parameterTypes.map { parameter -> parameter.toString() } == listOf("Landroid/os/Bundle;")
-            }
             runCatching {
-                when {
-                    application != null && applicationMethod != null -> {
-                        val mutableApplication = mutableClassDefByOrNull(application.type)
-                        val mutableMethod = mutableApplication?.methods?.firstOrNull {
-                            it.name == applicationMethod.name &&
-                                it.returnType == applicationMethod.returnType &&
-                                it.parameterTypes == applicationMethod.parameterTypes
-                        }
-                        if (mutableApplication != null && mutableMethod != null) {
-                            injectUniManagerStartup(mutableApplication, mutableMethod, managerPolicy)
-                            detectionLogger.info("Ads Block Patch: injected UniManager startup configuration into the Application.")
-                        } else {
-                            detectionLogger.warning("Ads Block Patch: UniManager integration could not resolve a mutable Application startup method; embedded defaults remain active.")
-                        }
+                when (val entry = resolveStartupEntryPoint(detectionLogger)) {
+                    null -> detectionLogger.warning(
+                        "Ads Block Patch: UniManager integration could not find a safe startup entry point; embedded defaults remain active.",
+                    )
+                    else -> {
+                        injectUniManagerStartup(entry.owner, entry.onCreate, managerPolicy)
+                        detectionLogger.info(
+                            "Ads Block Patch: injected UniManager startup configuration into the " +
+                                if (entry.isApplication) "Application." else "launcher Activity.",
+                        )
                     }
-                    launcher != null && launcherMethod != null -> {
-                        val mutableLauncher = mutableClassDefByOrNull(launcher.type)
-                        val mutableMethod = mutableLauncher?.methods?.firstOrNull {
-                            it.name == launcherMethod.name &&
-                                it.returnType == launcherMethod.returnType &&
-                                it.parameterTypes == launcherMethod.parameterTypes
-                        }
-                        if (mutableLauncher != null && mutableMethod != null) {
-                            injectUniManagerStartup(mutableLauncher, mutableMethod, managerPolicy)
-                            detectionLogger.info("Ads Block Patch: injected UniManager startup configuration into the launcher Activity.")
-                        } else {
-                            detectionLogger.warning("Ads Block Patch: UniManager integration could not resolve a mutable launcher startup method; embedded defaults remain active.")
-                        }
-                    }
-                    else -> detectionLogger.warning("Ads Block Patch: UniManager integration could not find a safe startup entry point; embedded defaults remain active.")
                 }
             }.onFailure { error ->
                 detectionLogger.warning("Ads Block Patch: UniManager startup injection failed: ${error.message}")

@@ -3,9 +3,6 @@ package unipatches.privacy
 import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.resourcePatch
 import helpers.manifest.NS_ANDROID
-import app.morphe.patcher.patch.booleanOption
-import app.morphe.patcher.patch.resourcePatch
-import helpers.manifest.NS_ANDROID
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import java.util.logging.Logger
@@ -68,14 +65,30 @@ internal val permissionGroups = linkedMapOf(
     ),
 )
 
-internal fun removeGuardedPermissions(document: Document, enabledGroups: Set<String>): Int {
+private val relatedFeatureGroups = mapOf(
+    "camera" to setOf("android.hardware.camera", "android.hardware.camera.autofocus", "android.hardware.camera.front"),
+    "microphone" to setOf("android.hardware.microphone"),
+    "location" to setOf("android.hardware.location", "android.hardware.location.gps", "android.hardware.location.network"),
+    "phone" to setOf("android.hardware.telephony", "android.hardware.telephony.gsm", "android.hardware.telephony.cdma"),
+    "bluetooth" to setOf("android.hardware.bluetooth", "android.hardware.bluetooth_le"),
+)
+
+internal fun removeGuardedPermissions(
+    document: Document,
+    enabledGroups: Set<String>,
+    removeRelatedFeatures: Boolean = false,
+): Int {
     val blocked = enabledGroups.flatMap { permissionGroups[it].orEmpty() }.toSet()
     if (blocked.isEmpty()) return 0
     val root = document.documentElement ?: return 0
-    val permissions = root.getElementsByTagName("uses-permission")
+    // Android supports SDK-qualified declarations such as uses-permission-sdk-23. Scan all
+    // elements so selecting a group cannot leave a declaration active on a newer API level.
+    val permissions = root.getElementsByTagName("*")
     var removed = 0
     for (index in permissions.length - 1 downTo 0) {
         val permission = permissions.item(index) as? Element ?: continue
+        val tagName = (permission.localName ?: permission.nodeName).substringAfterLast(':')
+        if (tagName != "uses-permission" && !tagName.matches(Regex("uses-permission-sdk-\\d+"))) continue
         // Namespace-aware parsers expose the android:name attribute through the Android
         // namespace; plain parsers keep the literal prefixed name. Accept both forms.
         val declared = permission.getAttributeNS(NS_ANDROID, "name")
@@ -83,6 +96,21 @@ internal fun removeGuardedPermissions(document: Document, enabledGroups: Set<Str
         if (declared in blocked) {
             permission.parentNode?.removeChild(permission)
             removed++
+        }
+    }
+    if (removeRelatedFeatures) {
+        val blockedFeatures = enabledGroups.flatMap { relatedFeatureGroups[it].orEmpty() }.toSet()
+        val features = root.getElementsByTagName("*")
+        for (index in features.length - 1 downTo 0) {
+            val feature = features.item(index) as? Element ?: continue
+            val tagName = (feature.localName ?: feature.nodeName).substringAfterLast(':')
+            if (tagName != "uses-feature") continue
+            val declared = feature.getAttributeNS(NS_ANDROID, "name")
+                .ifBlank { feature.getAttribute("android:name") }
+            if (declared in blockedFeatures) {
+                feature.parentNode?.removeChild(feature)
+                removed++
+            }
         }
     }
     return removed
@@ -119,6 +147,12 @@ val permissionGuardPatch = resourcePatch(
     val notifications by booleanOption(key = "permissionGuardNotifications", title = "Permission Guard > Notifications", default = false, description = "Remove POST_NOTIFICATIONS declaration.")
     val nearbyDevices by booleanOption(key = "permissionGuardNearbyDevices", title = "Permission Guard > Nearby devices", default = false, description = "Remove modern nearby-device and Bluetooth scan/connect declarations.")
     val bluetooth by booleanOption(key = "permissionGuardBluetooth", title = "Permission Guard > Bluetooth", default = false, description = "Remove legacy Bluetooth declarations.")
+    val removeRelatedFeatures by booleanOption(
+        key = "permissionGuardRemoveRelatedFeatures",
+        title = "Permission Guard > Also remove related hardware features",
+        default = false,
+        description = "Optional and disabled by default. Remove matching uses-feature declarations too; this can make the APK install without required hardware while the app may still expect that hardware.",
+    )
 
     execute {
         val enabled = buildSet {
@@ -135,7 +169,11 @@ val permissionGuardPatch = resourcePatch(
             if (nearbyDevices == true) add("nearbyDevices")
             if (bluetooth == true) add("bluetooth")
         }
-        val removed = removeGuardedPermissions(document("AndroidManifest.xml"), enabled)
-        logger.info("Permission Guard: removed $removed permission declaration(s)")
+        val removed = removeGuardedPermissions(
+            document("AndroidManifest.xml"),
+            enabled,
+            removeRelatedFeatures = removeRelatedFeatures == true,
+        )
+        logger.info("Permission Guard: removed $removed declaration(s), relatedFeatures=${removeRelatedFeatures == true}")
     }
 }

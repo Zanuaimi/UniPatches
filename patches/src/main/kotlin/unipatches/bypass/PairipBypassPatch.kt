@@ -28,6 +28,19 @@ private data class PairipCallerKey(
     val parameterTypes: List<String>,
 )
 
+internal fun resolveManifestComponentName(packageName: String, rawName: String): String? {
+    val name = rawName.trim()
+    if (packageName.isBlank() || name.isBlank() || name == "." || name.startsWith("..")) return null
+    val resolved = when {
+        name.startsWith('.') -> packageName + name
+        name.contains('.') -> name
+        else -> "$packageName.$name"
+    }
+    return resolved.takeIf {
+        Regex("^[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*$").matches(it)
+    }
+}
+
 private fun ResourcePatchContext.discoverPairipAppClass(logger: Logger): String? {
     val dir = try {
         get("AndroidManifest.xml", false).parentFile
@@ -254,12 +267,15 @@ val pairipBypassPatch = bytecodePatch(
             var removed = 0
 
             document("AndroidManifest.xml").use { manifest ->
+                val packageName = manifest.documentElement?.getAttribute("package").orEmpty()
                 for (tag in listOf("activity", "provider")) {
                     val nodes = manifest.getElementsByTagName(tag)
                     for (index in nodes.length - 1 downTo 0) {
                         val component = nodes.item(index) as? Element ?: continue
                         val name = component.getAttributeNS(androidNamespace, "name")
-                        if (name in pairipComponents) {
+                            .ifEmpty { component.getAttribute("android:name") }
+                        val resolvedName = resolveManifestComponentName(packageName, name)
+                        if (resolvedName in pairipComponents) {
                             component.parentNode?.removeChild(component)
                             removed++
                         }
@@ -350,13 +366,15 @@ val pairipBypassPatch = bytecodePatch(
             )
             var removed = 0
             if (removeFirebaseMeasurementComponents == true) document("AndroidManifest.xml").use { manifest ->
+                val packageName = manifest.documentElement?.getAttribute("package").orEmpty()
                 for (tag in listOf("provider", "receiver", "service")) {
                     val nodes = manifest.getElementsByTagName(tag)
                     for (index in nodes.length - 1 downTo 0) {
                         val component = nodes.item(index) as? Element ?: continue
                         val name = component.getAttributeNS(NS_ANDROID, "name")
                             .ifEmpty { component.getAttribute("android:name") }
-                        if (name in measurementComponents) {
+                        val resolvedName = resolveManifestComponentName(packageName, name)
+                        if (resolvedName in measurementComponents) {
                             component.parentNode?.removeChild(component)
                             removed++
                         }
