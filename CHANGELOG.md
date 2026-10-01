@@ -1,3 +1,9 @@
+## [1.30.0-dev.24](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.23...v1.30.0-dev.24) (2026-10-01)
+
+### 🔧 Improvements
+
+* unipatches wide improvement ([97b9383](https://github.com/Zanuaimi/UniPatches/commit/97b9383a0694145a865a1de16f5a2ce57e68ff13))
+
 ## [1.30.0-dev.23](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.22...v1.30.0-dev.23) (2026-09-25)
 
 ### ✨ New Features
