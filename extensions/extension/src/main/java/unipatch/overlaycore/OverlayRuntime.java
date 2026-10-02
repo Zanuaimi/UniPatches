@@ -71,6 +71,7 @@ import unipatch.overlaycore.modules.OverlayHookModuleRegistry;
 import unipatch.overlaycore.modules.OverlayAppSpecificModuleRegistry;
 import unipatch.overlaycore.modules.example.HillClimbRacingExampleProvider;
 import unipatch.overlaycore.modules.ads.AdsControlRuntimeProvider;
+import unipatch.overlaycore.modules.permission.PermissionGuardRuntimeProvider;
 import unipatch.overlaycore.modules.system.DoNotDisturbModule;
 import unipatch.overlaycore.modules.advanced.OverlayRuntimeLogsModule;
 import unipatch.overlaycore.modules.advanced.OverlayRuntimeLogger;
@@ -121,20 +122,21 @@ public final class OverlayRuntime {
     private static Integer rotationModeState;
     private static boolean fullyClosedToastShown;
     private static final List<OverlayAppSpecificModuleProvider> APP_SPECIFIC_PROVIDERS = new ArrayList<>();
-    private static String pendingAppSpecificProfile;
-    private static String pendingAppSpecificModules;
+    private static final Map<String, String> pendingAppSpecific = new java.util.LinkedHashMap<>();
 
     static {
         registerAppSpecificProvider(new HillClimbRacingExampleProvider());
         registerAppSpecificProvider(new AdsControlRuntimeProvider());
+        registerAppSpecificProvider(new PermissionGuardRuntimeProvider());
     }
 
     private OverlayRuntime() { }
 
     /** Applies app-specific module selection supplied by a dependent patch after Universal Overlay. */
     public static synchronized void configureAppSpecific(String profileId, String modules) {
-        pendingAppSpecificProfile = profileId == null ? "" : profileId.trim();
-        pendingAppSpecificModules = modules == null ? "" : modules.trim();
+        String profile = profileId == null ? "" : profileId.trim();
+        if (profile.isEmpty()) return;
+        pendingAppSpecific.put(profile, modules == null ? "" : modules.trim());
         if (configuration != null) applyPendingAppSpecificConfiguration();
     }
 
@@ -192,6 +194,7 @@ public final class OverlayRuntime {
                     synchronized (OverlayRuntime.class) {
                         if (configuration == null || globallyClosed) return;
                         AdsRuntimePolicy.applyManagedConfiguration(values);
+                        PermissionGuardRuntime.applyManagedConfiguration(values);
                         OverlayConfig.applyManagedConfiguration(configuration, values);
                         managerConfigurationReady = true;
                         List<Activity> pending = new ArrayList<>(PENDING_MANAGER_ACTIVITIES.keySet());
@@ -238,9 +241,29 @@ public final class OverlayRuntime {
     }
 
     private static void applyPendingAppSpecificConfiguration() {
-        if (configuration == null || pendingAppSpecificProfile == null) return;
-        configuration.appSpecificProfile = pendingAppSpecificProfile;
-        configuration.appSpecificModules = pendingAppSpecificModules == null ? "" : pendingAppSpecificModules;
+        if (configuration == null || pendingAppSpecific.isEmpty()) return;
+        for (Map.Entry<String, String> entry : pendingAppSpecific.entrySet()) {
+            configuration.appSpecificProfile = appendCsv(configuration.appSpecificProfile, entry.getKey());
+            configuration.appSpecificModules = appendCsv(configuration.appSpecificModules, entry.getValue());
+        }
+    }
+
+    private static String appendCsv(String current, String addition) {
+        StringBuilder result = new StringBuilder(current == null ? "" : current.trim());
+        if (addition == null) return result.toString();
+        for (String raw : addition.split(",")) {
+            String value = raw.trim();
+            if (value.isEmpty() || isCsvSelected(result.toString(), value)) continue;
+            if (result.length() > 0) result.append(",");
+            result.append(value);
+        }
+        return result.toString();
+    }
+
+    private static boolean isCsvSelected(String values, String expected) {
+        if (values == null || expected == null) return false;
+        for (String value : values.split(",")) if (expected.equals(value.trim())) return true;
+        return false;
     }
 
     public static void logActivityResultEntry(Activity activity, int requestCode, int resultCode) {
@@ -351,8 +374,7 @@ public final class OverlayRuntime {
         configuration = null;
         installedConfigurationPayload = null;
         managerConfigurationReady = true;
-        pendingAppSpecificProfile = null;
-        pendingAppSpecificModules = null;
+        pendingAppSpecific.clear();
         sessionStartElapsed = 0;
         sharedButtonPositionInitialized = false;
         appBrightnessState = null;
@@ -1405,7 +1427,7 @@ public final class OverlayRuntime {
             if (config.appSpecificModules == null || config.appSpecificModules.trim().isEmpty()) return false;
             for (OverlayAppSpecificModuleProvider provider : APP_SPECIFIC_PROVIDERS) {
                 try {
-                    if (config.appSpecificProfile.equals(provider.profileId())) return true;
+                    if (isCsvSelected(config.appSpecificProfile, provider.profileId())) return true;
                 } catch (RuntimeException ignored) {
                     // Ignore broken providers and continue looking for the selected profile.
                 }
@@ -1421,9 +1443,9 @@ public final class OverlayRuntime {
             if (config.appSpecificProfile == null || config.appSpecificProfile.isEmpty()) return;
             for (OverlayAppSpecificModuleProvider provider : APP_SPECIFIC_PROVIDERS) {
                 try {
-                    if (!config.appSpecificProfile.equals(provider.profileId())) continue;
+                    if (!isCsvSelected(config.appSpecificProfile, provider.profileId())) continue;
                     List<OverlayAppSpecificModule> targetModules = provider.create(activity);
-                    if (targetModules == null || targetModules.isEmpty()) return;
+                    if (targetModules == null || targetModules.isEmpty()) continue;
                     List<OverlayAppSpecificModule> supportedModules = new ArrayList<>();
                     for (OverlayAppSpecificModule module : targetModules) {
                         if (module == null) continue;
@@ -1437,7 +1459,7 @@ public final class OverlayRuntime {
                     for (OverlayAppSpecificModule module : supportedModules) {
                         if (isAppSpecificModuleSelected(module.key())) selectedModules.add(module);
                     }
-                    if (selectedModules.isEmpty()) return;
+                    if (selectedModules.isEmpty()) continue;
                     addSectionLabel(parent, "App-specific modules");
                     for (OverlayAppSpecificModule module : selectedModules) {
                         addAppSpecificModuleSafely(parent, () -> module, "App");
@@ -1445,7 +1467,6 @@ public final class OverlayRuntime {
                 } catch (RuntimeException ignored) {
                     // Target-specific code must not prevent universal modules from rendering.
                 }
-                return;
             }
         }
 

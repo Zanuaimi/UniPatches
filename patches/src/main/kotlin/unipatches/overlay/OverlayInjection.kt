@@ -133,6 +133,7 @@ internal fun injectOverlayBridge(
         )
     }
     OverlayPatchRunMarker.publish(context, owner, cloned)
+    PermissionGuardOverlayIntegration.attach(context)
     return cloned
 }
 
@@ -173,10 +174,15 @@ internal fun BytecodePatchContext.injectAppSpecificModules(
         it.name == bridge.methodName && it.returnType == bridge.returnType &&
             it.parameterTypes.map { parameter -> parameter.toString() } == bridge.parameterTypes
     } ?: return false
-    val base = method.implementation?.registerCount ?: return false
+    val implementation = method.implementation ?: return false
+    val profileLiteral = StartupHooks.escapeSmali(profileId)
+    if (implementation.instructions.any {
+            it.toString().contains("configureAppSpecific") && it.toString().contains(profileLiteral)
+        }) return true
+    val base = implementation.registerCount
     val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters + 2)
     cloned.addInstructionsWithLabels(0, """
-        const-string v$base, "${StartupHooks.escapeSmali(profileId)}"
+        const-string v$base, "$profileLiteral"
         const-string v${base + 1}, "${StartupHooks.escapeSmali(selectedModules)}"
         invoke-static/range {v$base .. v${base + 1}}, $OVERLAY_RUNTIME_CLASS->configureAppSpecific(Ljava/lang/String;Ljava/lang/String;)V
     """.trimIndent())

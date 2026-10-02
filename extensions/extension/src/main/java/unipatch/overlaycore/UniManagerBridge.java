@@ -146,8 +146,12 @@ public final class UniManagerBridge {
             ApplicationInfo info = context.getPackageManager().getApplicationInfo(
                     context.getPackageName(), android.content.pm.PackageManager.GET_META_DATA);
             if (info.metaData != null) {
-                mergeRegistration(registration, info.metaData.getString("com.zanuaimi.unimanager.REGISTRATION"));
-                mergeRegistration(registration, info.metaData.getString("com.zanuaimi.unimanager.REGISTRATION.ADS_BLOCK"));
+                for (String key : info.metaData.keySet()) {
+                    if ("com.zanuaimi.unimanager.REGISTRATION".equals(key) ||
+                            key.startsWith("com.zanuaimi.unimanager.REGISTRATION.")) {
+                        mergeRegistration(registration, info.metaData.getString(key));
+                    }
+                }
             }
         } catch (Exception error) {
             Log.w(TAG, "could not read embedded registration metadata", error);
@@ -158,12 +162,18 @@ public final class UniManagerBridge {
     private static void mergeRegistration(JSONObject target, String encoded) {
         if (encoded == null || encoded.trim().isEmpty()) return;
         try {
-            JSONObject incoming = new JSONObject(encoded);
-            for (String key : new String[] {"format", "source_version", "metadata_fingerprint", "patch_generation"}) {
+            JSONObject incoming;
+            try {
+                incoming = new JSONObject(encoded);
+            } catch (Exception notJson) {
+                byte[] decoded = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT);
+                incoming = new JSONObject(new String(decoded, StandardCharsets.UTF_8));
+            }
+            for (String key : new String[] {"format", "source_version", "metadata_fingerprint", "patch_generation", "configuration_prefix"}) {
                 if (incoming.has(key)) target.put(key, incoming.get(key));
             }
-            for (String key : new String[] {"patches", "capabilities"}) {
-                if (incoming.has(key)) target.put(key, incoming.get(key));
+            for (String key : new String[] {"patches", "capabilities", "configuration_prefixes", "configuration_schema"}) {
+                mergeArray(target, incoming, key);
             }
             JSONObject configuration = target.optJSONObject("configuration");
             if (configuration == null) configuration = new JSONObject();
@@ -179,6 +189,31 @@ public final class UniManagerBridge {
         } catch (Exception error) {
             Log.w(TAG, "ignored malformed embedded registration metadata", error);
         }
+    }
+
+    private static void mergeArray(JSONObject target, JSONObject incoming, String key) throws Exception {
+        org.json.JSONArray source = incoming.optJSONArray(key);
+        if (source == null) return;
+        org.json.JSONArray merged = target.optJSONArray(key);
+        if (merged == null) merged = new org.json.JSONArray();
+        for (int i = 0; i < source.length(); i++) {
+            Object candidate = source.get(i);
+            boolean duplicate = false;
+            for (int j = 0; j < merged.length(); j++) {
+                Object existing = merged.get(j);
+                if (candidate instanceof JSONObject && existing instanceof JSONObject) {
+                    String candidateId = ((JSONObject) candidate).optString("id");
+                    String candidateKey = ((JSONObject) candidate).optString("key");
+                    duplicate = (!candidateId.isEmpty() && candidateId.equals(((JSONObject) existing).optString("id"))) ||
+                            (!candidateKey.isEmpty() && candidateKey.equals(((JSONObject) existing).optString("key")));
+                } else {
+                    duplicate = String.valueOf(candidate).equals(String.valueOf(existing));
+                }
+                if (duplicate) break;
+            }
+            if (!duplicate) merged.put(candidate);
+        }
+        target.put(key, merged);
     }
 
     /** Pings UniManager, then reads the registry without rewriting patch-time registration data. */

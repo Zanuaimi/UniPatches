@@ -1,13 +1,31 @@
 package unipatches.privacy
 
+import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.booleanOption
-import app.morphe.patcher.patch.resourcePatch
-import helpers.manifest.NS_ANDROID
-import org.w3c.dom.Document
-import org.w3c.dom.Element
+import app.morphe.patcher.patch.bytecodePatch
+import app.morphe.patcher.patch.BytecodePatchContext
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
+import helpers.manager.UNI_MANAGER_PERMISSION_GUARD_METADATA_NAME
+import helpers.manager.encodeUniManagerMetadata
+import helpers.manager.uniManagerMetadataPatch
+import unipatches.overlay.PermissionGuardOverlayIntegration
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
+import helpers.bytecode.cloneMutable
+import helpers.bytecode.numberOfParameterRegisters
+import helpers.bytecode.p0Register
+import helpers.startup.StartupHooks
+import helpers.startup.resolveStartupEntryPoint
+import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
+import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
+import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import java.util.logging.Logger
 
 private val logger = Logger.getLogger("unipatches.privacy.PermissionGuardPatch")
+
+internal const val PERMISSION_GUARD_PROFILE = "permissionGuardRuntime"
+internal const val PERMISSION_GUARD_CAPABILITY = "permission.guard.v1"
 
 internal val permissionGroups = linkedMapOf(
     "camera" to setOf("android.permission.CAMERA"),
@@ -37,10 +55,7 @@ internal val permissionGroups = linkedMapOf(
         "android.permission.SEND_SMS",
         "android.permission.RECEIVE_WAP_PUSH",
     ),
-    "calendar" to setOf(
-        "android.permission.READ_CALENDAR",
-        "android.permission.WRITE_CALENDAR",
-    ),
+    "calendar" to setOf("android.permission.READ_CALENDAR", "android.permission.WRITE_CALENDAR"),
     "storage" to setOf(
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -59,121 +74,209 @@ internal val permissionGroups = linkedMapOf(
         "android.permission.BLUETOOTH_ADVERTISE",
         "android.permission.NEARBY_WIFI_DEVICES",
     ),
-    "bluetooth" to setOf(
-        "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
+    "bluetooth" to setOf("android.permission.BLUETOOTH", "android.permission.BLUETOOTH_ADMIN"),
+)
+
+internal fun permissionGuardGroups(blocked: Map<String, Boolean>): List<String> =
+    permissionGroups.keys.filter { blocked[it] == true }
+
+private data class GuardTarget(val wrapper: String)
+
+private fun permissionGuardMetadata(blockedGroups: List<String>): String {
+    val root = JsonObject().apply {
+        addProperty("format", "unipatches-unimanager-registration-v1")
+        addProperty("protocol_version", 2)
+        addProperty("source_version", "unipatches-dev")
+        add("patches", JsonArray().apply {
+            add(JsonObject().apply {
+                addProperty("id", "permission-guard")
+                addProperty("version", "1")
+                add("configuration_prefixes", JsonArray().apply { add("permissionGuard") })
+            })
+        })
+        add("capabilities", JsonArray().apply { add(PERMISSION_GUARD_CAPABILITY) })
+        add("configuration", JsonObject().apply {
+            permissionGroups.keys.forEach { group ->
+                addProperty("permissionGuard${group.replaceFirstChar(Char::uppercase)}", group in blockedGroups)
+            }
+        })
+        add("configuration_schema", JsonArray().apply {
+            permissionGroups.keys.forEach { group ->
+                add(JsonObject().apply {
+                    addProperty("key", "permissionGuard${group.replaceFirstChar(Char::uppercase)}")
+                    addProperty("label", "Block ${group.replaceFirstChar(Char::uppercase)}")
+                    addProperty("type", "boolean")
+                })
+            }
+        })
+    }
+    return encodeUniManagerMetadata(root.toString())
+}
+
+private val guardTargets = mapOf(
+    "Landroid/content/Context;#checkSelfPermission" to GuardTarget(
+        "Lunipatch/overlaycore/PermissionGuardRuntime;->checkSelfPermission(Landroid/content/Context;Ljava/lang/String;)I",
+    ),
+    "Landroid/content/Context;#checkCallingPermission" to GuardTarget(
+        "Lunipatch/overlaycore/PermissionGuardRuntime;->checkCallingPermission(Landroid/content/Context;Ljava/lang/String;)I",
+    ),
+    "Landroid/content/Context;#checkCallingOrSelfPermission" to GuardTarget(
+        "Lunipatch/overlaycore/PermissionGuardRuntime;->checkCallingOrSelfPermission(Landroid/content/Context;Ljava/lang/String;)I",
+    ),
+    "Landroidx/core/content/ContextCompat;#checkSelfPermission" to GuardTarget(
+        "Lunipatch/overlaycore/PermissionGuardRuntime;->checkSelfPermissionCompat(Landroid/content/Context;Ljava/lang/String;)I",
+    ),
+    "Landroid/app/Activity;#requestPermissions" to GuardTarget(
+        "Lunipatch/overlaycore/PermissionGuardRuntime;->requestPermissions(Landroid/app/Activity;[Ljava/lang/String;I)V",
+    ),
+    "Landroidx/core/app/ActivityCompat;#requestPermissions" to GuardTarget(
+        "Lunipatch/overlaycore/PermissionGuardRuntime;->requestPermissionsCompat(Landroid/app/Activity;[Ljava/lang/String;I)V",
     ),
 )
 
-private val relatedFeatureGroups = mapOf(
-    "camera" to setOf("android.hardware.camera", "android.hardware.camera.autofocus", "android.hardware.camera.front"),
-    "microphone" to setOf("android.hardware.microphone"),
-    "location" to setOf("android.hardware.location", "android.hardware.location.gps", "android.hardware.location.network"),
-    "phone" to setOf("android.hardware.telephony", "android.hardware.telephony.gsm", "android.hardware.telephony.cdma"),
-    "bluetooth" to setOf("android.hardware.bluetooth", "android.hardware.bluetooth_le"),
-)
-
-internal fun removeGuardedPermissions(
-    document: Document,
-    enabledGroups: Set<String>,
-    removeRelatedFeatures: Boolean = false,
-): Int {
-    val blocked = enabledGroups.flatMap { permissionGroups[it].orEmpty() }.toSet()
-    if (blocked.isEmpty()) return 0
-    val root = document.documentElement ?: return 0
-    // Android supports SDK-qualified declarations such as uses-permission-sdk-23. Scan all
-    // elements so selecting a group cannot leave a declaration active on a newer API level.
-    val permissions = root.getElementsByTagName("*")
-    var removed = 0
-    for (index in permissions.length - 1 downTo 0) {
-        val permission = permissions.item(index) as? Element ?: continue
-        val tagName = (permission.localName ?: permission.nodeName).substringAfterLast(':')
-        if (tagName != "uses-permission" && !tagName.matches(Regex("uses-permission-sdk-\\d+"))) continue
-        // Namespace-aware parsers expose the android:name attribute through the Android
-        // namespace; plain parsers keep the literal prefixed name. Accept both forms.
-        val declared = permission.getAttributeNS(NS_ANDROID, "name")
-            .ifBlank { permission.getAttribute("android:name") }
-        if (declared in blocked) {
-            permission.parentNode?.removeChild(permission)
-            removed++
-        }
+private fun targetFor(reference: MethodReference): GuardTarget? {
+    val key = "${reference.definingClass}#${reference.name}"
+    val target = guardTargets[key] ?: return null
+    val valid = when (key) {
+        "Landroidx/core/content/ContextCompat;#checkSelfPermission" ->
+            reference.parameterTypes == listOf("Landroid/content/Context;", "Ljava/lang/String;") && reference.returnType == "I"
+        "Landroid/app/Activity;#requestPermissions" ->
+            reference.parameterTypes == listOf("[Ljava/lang/String;", "I") && reference.returnType == "V"
+        "Landroidx/core/app/ActivityCompat;#requestPermissions" ->
+            reference.parameterTypes == listOf("Landroid/app/Activity;", "[Ljava/lang/String;", "I") && reference.returnType == "V"
+        else -> reference.parameterTypes == listOf("Ljava/lang/String;") && reference.returnType == "I"
     }
-    if (removeRelatedFeatures) {
-        val blockedFeatures = enabledGroups.flatMap { relatedFeatureGroups[it].orEmpty() }.toSet()
-        val features = root.getElementsByTagName("*")
-        for (index in features.length - 1 downTo 0) {
-            val feature = features.item(index) as? Element ?: continue
-            val tagName = (feature.localName ?: feature.nodeName).substringAfterLast(':')
-            if (tagName != "uses-feature") continue
-            val declared = feature.getAttributeNS(NS_ANDROID, "name")
-                .ifBlank { feature.getAttribute("android:name") }
-            if (declared in blockedFeatures) {
-                feature.parentNode?.removeChild(feature)
-                removed++
+    return target.takeIf { valid }
+}
+
+internal fun permissionGuardInvokeOpcode(instruction: String): String =
+    if (instruction.trimStart().substringBefore(' ').endsWith("/range")) "invoke-static/range" else "invoke-static"
+
+private fun registers(instruction: String): String? {
+    val start = instruction.indexOf('{')
+    val end = instruction.indexOf('}', start + 1)
+    return if (start >= 0 && end > start) instruction.substring(start + 1, end) else null
+}
+
+internal fun BytecodePatchContext.guardPermissionCalls(): Int {
+    var patched = 0
+    classDefForEach { classDef ->
+        val mutableClass = mutableClassDefBy(classDef)
+        for (method in mutableClass.methods) {
+            val instructions = method.implementation?.instructions ?: continue
+            for (instruction in instructions) {
+                val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference ?: continue
+                val target = targetFor(reference) ?: continue
+                val registerList = registers(instruction.toString()) ?: continue
+                method.replaceInstruction(
+                    instructions.indexOf(instruction),
+                    "${permissionGuardInvokeOpcode(instruction.toString())} {$registerList}, ${target.wrapper}",
+                )
+                patched++
             }
         }
     }
-    return removed
+    return patched
 }
+
+private fun injectPermissionGuardStartup(
+    owner: MutableClass,
+    method: MutableMethod,
+    blockedGroups: String,
+): MutableMethod {
+    if (method.implementation?.instructions?.any { it.toString().contains("PermissionGuardRuntime;->initialize") } == true) return method
+    val base = method.implementation?.registerCount ?: error("Cannot inject permission guard without method implementation")
+    val cloned = method.cloneMutable(additionalRegisters = method.numberOfParameterRegisters + 2)
+    val receiver = cloned.p0Register
+    val index = cloned.implementation?.instructions.orEmpty().indexOfFirst {
+        it.toString().contains("invoke-super") && it.toString().contains("->onCreate(")
+    }.let { if (it >= 0) it + 1 else 0 }
+    cloned.addInstructionsWithLabels(index, """
+        move-object/from16 v$base, v$receiver
+        const-string v${base + 1}, "${StartupHooks.escapeSmali(blockedGroups)}"
+        invoke-static/range {v$base .. v${base + 1}}, Lunipatch/overlaycore/PermissionGuardRuntime;->initialize(Landroid/content/Context;Ljava/lang/String;)V
+    """.trimIndent())
+    owner.methods.remove(method)
+    owner.methods.add(cloned)
+    return cloned
+}
+
 @Suppress("unused")
-val permissionGuardPatch = resourcePatch(
-    name = "Permission Guard Patch (Experimental)",
+val permissionGuardPatch = bytecodePatch(
+    name = "Permission Guard Patch (Experimental, Runtime Controls)",
     description = """
-        Remove selected dangerous permission declarations from the patched APK manifest. All
-        permission controls are disabled by default; select each permission group before patching.
-
-        This is a static manifest patch, not a runtime permission manager. It does not revoke
-        permissions already granted to an installed app, stop native or privileged access, or
-        prevent an app from requesting a permission at runtime. Android may still deny requests,
-        and the app may lose features or fail if it requires a selected permission.
-
-        Storage covers legacy external-storage permissions. Media covers Android 13+ photo, video,
-        audio, and selected-photo permissions. Nearby devices covers modern Bluetooth and nearby
-        Wi-Fi declarations; Bluetooth covers legacy Bluetooth declarations.
+        Keep declared permissions while guarding common Android permission checks and requests. Selected
+        groups start blocked and can be changed at runtime through the optional Universal Overlay module.
+        Native, privileged, already-granted, and unknown permission paths are outside this guard.
     """.trimIndent(),
     default = false,
 ) {
-    try { category("Privacy") } catch (_: NoSuchMethodError) {}
+    try { category("Permission Guard") } catch (_: NoSuchMethodError) {}
+    extendWith("extensions/extension.mpe")
+    dependsOn(StartupHooks.resolveRealApplicationPatch)
 
-    val camera by booleanOption(key = "permissionGuardCamera", title = "Permission Guard > Camera", default = false, description = "Remove CAMERA permission declaration.")
-    val microphone by booleanOption(key = "permissionGuardMicrophone", title = "Permission Guard > Microphone", default = false, description = "Remove RECORD_AUDIO permission declaration.")
-    val location by booleanOption(key = "permissionGuardLocation", title = "Permission Guard > Location", default = false, description = "Remove coarse, fine, and background location declarations.")
-    val contacts by booleanOption(key = "permissionGuardContacts", title = "Permission Guard > Contacts", default = false, description = "Remove contacts and account access declarations.")
-    val phone by booleanOption(key = "permissionGuardPhone", title = "Permission Guard > Phone", default = false, description = "Remove phone-state, call, voicemail, and SIP declarations.")
-    val sms by booleanOption(key = "permissionGuardSms", title = "Permission Guard > SMS", default = false, description = "Remove SMS, MMS, and WAP push declarations.")
-    val calendar by booleanOption(key = "permissionGuardCalendar", title = "Permission Guard > Calendar", default = false, description = "Remove calendar read and write declarations.")
-    val storage by booleanOption(key = "permissionGuardStorage", title = "Permission Guard > Storage", default = false, description = "Remove legacy and broad external-storage declarations.")
-    val media by booleanOption(key = "permissionGuardMedia", title = "Permission Guard > Media (Photos, Music)", default = false, description = "Remove modern photo, video, audio, and selected-photo declarations.")
-    val notifications by booleanOption(key = "permissionGuardNotifications", title = "Permission Guard > Notifications", default = false, description = "Remove POST_NOTIFICATIONS declaration.")
-    val nearbyDevices by booleanOption(key = "permissionGuardNearbyDevices", title = "Permission Guard > Nearby devices", default = false, description = "Remove modern nearby-device and Bluetooth scan/connect declarations.")
-    val bluetooth by booleanOption(key = "permissionGuardBluetooth", title = "Permission Guard > Bluetooth", default = false, description = "Remove legacy Bluetooth declarations.")
-    val removeRelatedFeatures by booleanOption(
-        key = "permissionGuardRemoveRelatedFeatures",
-        title = "Permission Guard > Also remove related hardware features",
+    val blockCamera by booleanOption(key = "permissionGuardCamera", default = false, title = "Block Camera", description = "Block camera permission checks and requests at runtime.")
+    val blockMicrophone by booleanOption(key = "permissionGuardMicrophone", default = false, title = "Block Microphone", description = "Block microphone permission checks and requests at runtime.")
+    val blockLocation by booleanOption(key = "permissionGuardLocation", default = false, title = "Block Location", description = "Block location permission checks and requests at runtime.")
+    val blockContacts by booleanOption(key = "permissionGuardContacts", default = false, title = "Block Contacts", description = "Block contacts permission checks and requests at runtime.")
+    val blockPhone by booleanOption(key = "permissionGuardPhone", default = false, title = "Block Phone", description = "Block phone permission checks and requests at runtime.")
+    val blockSms by booleanOption(key = "permissionGuardSms", default = false, title = "Block SMS", description = "Block SMS permission checks and requests at runtime.")
+    val blockCalendar by booleanOption(key = "permissionGuardCalendar", default = false, title = "Block Calendar", description = "Block calendar permission checks and requests at runtime.")
+    val blockStorage by booleanOption(key = "permissionGuardStorage", default = false, title = "Block Storage", description = "Block storage permission checks and requests at runtime.")
+    val blockMedia by booleanOption(key = "permissionGuardMedia", default = false, title = "Block Media", description = "Block media permission checks and requests at runtime.")
+    val blockNotifications by booleanOption(key = "permissionGuardNotifications", default = false, title = "Block Notifications", description = "Block notification permission checks and requests at runtime.")
+    val blockNearbyDevices by booleanOption(key = "permissionGuardNearbyDevices", default = false, title = "Block Nearby Devices", description = "Block nearby-device permission checks and requests at runtime.")
+    val blockBluetooth by booleanOption(key = "permissionGuardBluetooth", default = false, title = "Block Legacy Bluetooth", description = "Block legacy Bluetooth permission checks and requests at runtime.")
+    val enableOverlayRuntime by booleanOption(
+        key = "permissionGuardRuntimeOverlay",
         default = false,
-        description = "Optional and disabled by default. Remove matching uses-feature declarations too; this can make the APK install without required hardware while the app may still expect that hardware.",
+        title = "Enable Universal Overlay runtime controls",
+        description = "Expose runtime allow/block toggles through the shared Universal Overlay bridge when Universal Overlay is selected.",
+    )
+    val enableUniManagerIntegration by booleanOption(
+        key = "permissionGuardEnableUniManagerIntegration",
+        default = true,
+        title = "Enable UniManager integration",
+        description = "Expose Permission Guard runtime defaults to UniManager when Universal Overlay runtime controls are enabled.",
+    )
+    fun selectedGroups(): List<String> = permissionGuardGroups(
+        mapOf(
+            "camera" to (blockCamera == true),
+            "microphone" to (blockMicrophone == true),
+            "location" to (blockLocation == true),
+            "contacts" to (blockContacts == true),
+            "phone" to (blockPhone == true),
+            "sms" to (blockSms == true),
+            "calendar" to (blockCalendar == true),
+            "storage" to (blockStorage == true),
+            "media" to (blockMedia == true),
+            "notifications" to (blockNotifications == true),
+            "nearbyDevices" to (blockNearbyDevices == true),
+            "bluetooth" to (blockBluetooth == true),
+        ),
+    )
+    dependsOn(
+        uniManagerMetadataPatch(
+            name = "Permission Guard UniManager registration",
+            metadataName = UNI_MANAGER_PERMISSION_GUARD_METADATA_NAME,
+            provider = {
+                if (enableOverlayRuntime == true && enableUniManagerIntegration == true) permissionGuardMetadata(selectedGroups()) else null
+            },
+        ),
     )
 
     execute {
-        val enabled = buildSet {
-            if (camera == true) add("camera")
-            if (microphone == true) add("microphone")
-            if (location == true) add("location")
-            if (contacts == true) add("contacts")
-            if (phone == true) add("phone")
-            if (sms == true) add("sms")
-            if (calendar == true) add("calendar")
-            if (storage == true) add("storage")
-            if (media == true) add("media")
-            if (notifications == true) add("notifications")
-            if (nearbyDevices == true) add("nearbyDevices")
-            if (bluetooth == true) add("bluetooth")
+        val blockedGroups = selectedGroups()
+        val startup = resolveStartupEntryPoint(logger)
+        if (startup == null) {
+            logger.warning("Permission Guard startup initialization skipped: no safe Application or Activity entry point")
+        } else {
+            injectPermissionGuardStartup(startup.owner, startup.onCreate, blockedGroups.joinToString(","))
         }
-        val removed = removeGuardedPermissions(
-            document("AndroidManifest.xml"),
-            enabled,
-            removeRelatedFeatures = removeRelatedFeatures == true,
-        )
-        logger.info("Permission Guard: removed $removed declaration(s), relatedFeatures=${removeRelatedFeatures == true}")
+        val patched = guardPermissionCalls()
+        logger.info("Permission Guard runtime guards patched $patched call site(s); blocked groups=${blockedGroups.joinToString(",").ifEmpty { "none" }}")
+        if (enableOverlayRuntime == true) {
+            PermissionGuardOverlayIntegration.queue(this)
+        }
     }
 }
