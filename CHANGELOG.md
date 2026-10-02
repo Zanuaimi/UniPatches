@@ -1,3 +1,9 @@
+## [1.30.0-dev.25](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.24...v1.30.0-dev.25) (2026-10-02)
+
+### ✨ New Features
+
+* add runtime support for permission guard ([7b77d70](https://github.com/Zanuaimi/UniPatches/commit/7b77d704c296bd3cb3599165fa769a669944c507))
+
 ## [1.30.0-dev.24](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.23...v1.30.0-dev.24) (2026-10-01)
 
 ### 🔧 Improvements
