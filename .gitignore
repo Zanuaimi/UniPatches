@@ -145,3 +145,6 @@ testing/
 
 # Generated patch build output
 patches/bin/
+
+# Local doublecheck reports
+.doublecheck/
