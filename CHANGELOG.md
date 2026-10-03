@@ -1,3 +1,9 @@
+## [1.30.0-dev.26](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.25...v1.30.0-dev.26) (2026-10-03)
+
+### 🐛 Bug Fixes
+
+* fix permission guard not appearing in universal overlay ([fde9587](https://github.com/Zanuaimi/UniPatches/commit/fde9587de9b4c7dfea02e2e421bd934afa22911e))
+
 ## [1.30.0-dev.25](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.24...v1.30.0-dev.25) (2026-10-02)
 
 ### ✨ New Features
