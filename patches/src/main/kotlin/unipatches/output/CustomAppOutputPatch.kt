@@ -265,8 +265,8 @@ val customAppOutputPatch = resourcePatch(
                 val changes = enableAppDataPreservation(manifest)
                 when {
                     changes == null -> logger.warning("Custom App Output: no <application> element found; app-data preservation was skipped.")
-                    changes == 0 -> logger.info("Custom App Output: app-data preservation settings were already applied.")
-                    else -> logger.info("Custom App Output: enabled app-data preservation with $changes manifest change(s).")
+                    changes == 0 -> logger.warning("Custom App Output: app-data preservation settings were already applied; Android backup policy still controls whether data is retained.")
+                    else -> logger.warning("Custom App Output: enabled app-data preservation with $changes manifest change(s). This overrides backup/data-extraction policy and may retain sensitive app data after uninstall; Android backup policy still controls whether data is retained.")
                 }
                 if (changes != null && clonedPackage != null) {
                     logger.warning("Custom App Output: app-data preservation applies to the cloned package only; it cannot transfer data from the original package.")

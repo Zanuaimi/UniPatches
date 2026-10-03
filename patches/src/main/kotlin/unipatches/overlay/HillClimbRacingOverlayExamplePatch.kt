@@ -19,7 +19,7 @@ val hillClimbRacingOverlayExamplePatch = bytecodePatch(
         - Vehicle Selection
         - Stage Selection
         - Garage Selection. 
-        All these six module options are enabled by default and can be disabled independently. 
+        This is an example-only addon; all six module options are disabled by default and must be explicitly enabled independently.
         
         Module settings and Preview actions are session-only; this example addon never reads or changes currencies, vehicles, stages, garage state, purchases, save files, or game bytecode.""".trimMargin(),
     default = false,
@@ -38,37 +38,37 @@ val hillClimbRacingOverlayExamplePatch = bytecodePatch(
 
     val addCoins by booleanOption(
         title = "App-specific modules > Add Coins preview",
-        default = true,
+        default = false,
         key = "hcrDemoAddCoins",
         description = "Expose the mock Add Coins preview module in the shared Universal Overlay.",
     )
     val addGems by booleanOption(
         title = "App-specific modules > Add Gems preview",
-        default = true,
+        default = false,
         key = "hcrDemoAddGems",
         description = "Expose the mock Add Gems preview module in the shared Universal Overlay.",
     )
     val addPaints by booleanOption(
         title = "App-specific modules > Add Paints preview",
-        default = true,
+        default = false,
         key = "hcrDemoAddPaints",
         description = "Expose the mock Add Paints preview module in the shared Universal Overlay.",
     )
     val vehicles by booleanOption(
         title = "App-specific modules > Vehicle selection preview",
-        default = true,
+        default = false,
         key = "hcrDemoVehicles",
         description = "Expose the mock vehicle selection preview module in the shared Universal Overlay.",
     )
     val stages by booleanOption(
         title = "App-specific modules > Stage selection preview",
-        default = true,
+        default = false,
         key = "hcrDemoStages",
         description = "Expose the mock stage selection preview module in the shared Universal Overlay.",
     )
     val garage by booleanOption(
         title = "App-specific modules > Garage selection preview",
-        default = true,
+        default = false,
         key = "hcrDemoGarage",
         description = "Expose the mock garage selection preview module in the shared Universal Overlay.",
     )

@@ -1,12 +1,14 @@
 package unipatches.overlay
 
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class OverlayAdsRuntimeIntegrationTest {
     @Test
-    fun queuingANewPolicyDropsAStaleUnconfiguredBridge() {
+    fun queuingPolicyPreservesBridgeForTheMatchingContextOnly() {
         val staleContext = Any()
+        val currentContext = Any()
         OverlayAdsRuntimeIntegration.recordUnconfiguredBridge(
             OverlayAdsRuntimeIntegration.BridgeTarget(
                 context = staleContext,
@@ -19,7 +21,8 @@ class OverlayAdsRuntimeIntegrationTest {
 
         OverlayAdsRuntimeIntegration.queue("1|1|0|0|0|0|0|0|")
 
-        assertNull(OverlayAdsRuntimeIntegration.takeUnconfiguredBridge(staleContext))
+        assertNull(OverlayAdsRuntimeIntegration.takeUnconfiguredBridge(currentContext))
+        assertNotNull(OverlayAdsRuntimeIntegration.takeUnconfiguredBridge(staleContext))
         OverlayAdsRuntimeIntegration.markInjected("test cleanup")
     }
 }

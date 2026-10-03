@@ -16,6 +16,7 @@ internal object OverlayPatchRunMarker {
     )
 
     private var marker: Bridge? = null
+    private var lastPublished: Bridge? = null
     private var markerFile: File? = null
 
     fun publish(context: BytecodePatchContext, owner: MutableClass, method: MutableMethod) {
@@ -39,8 +40,12 @@ internal object OverlayPatchRunMarker {
             markerFile?.delete()
             markerFile = file
             marker = bridge
+            lastPublished = bridge
         }.onFailure { file.delete() }
     }
+
+    fun peek(context: Any): Bridge? =
+        (marker ?: lastPublished)?.takeIf { it.context === context }
 
     fun take(context: Any): Bridge? {
         val current = marker?.takeIf { it.context === context } ?: return null

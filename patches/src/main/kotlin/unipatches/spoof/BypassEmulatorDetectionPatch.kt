@@ -16,6 +16,9 @@ import helpers.spoof.*
 import helpers.startup.StartupHooks.escapeSmali
 import java.util.logging.Logger
 
+internal fun shouldReplaceResult(register: Int?, opcode: Opcode): Boolean =
+    register != null && (opcode == Opcode.MOVE_RESULT || opcode == Opcode.MOVE_RESULT_OBJECT)
+
 /**
  * Replaces every `sget-object vX, Landroid/os/Build;-><FIELD>:Ljava/lang/String;`
  * with `const-string vX, "<value>"`, so the app sees a real device's identity.
@@ -25,6 +28,17 @@ import java.util.logging.Logger
 internal fun BytecodePatchContext.foldBuildStringFields(values: Map<String, String>): Int {
     var patched = 0
     classDefForEach { classDef ->
+        val hasMatch = classDef.methods.any { method ->
+            method.implementation?.instructions?.any { instruction ->
+                if (instruction.opcode != Opcode.SGET_OBJECT) return@any false
+                val reference = (instruction as? ReferenceInstruction)?.reference as? FieldReference
+                    ?: return@any false
+                reference.definingClass == "Landroid/os/Build;" &&
+                    reference.type == "Ljava/lang/String;" &&
+                    reference.name in values
+            } == true
+        }
+        if (!hasMatch) return@classDefForEach
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
@@ -58,6 +72,16 @@ internal fun BytecodePatchContext.foldBuildStringFields(values: Map<String, Stri
 internal fun BytecodePatchContext.foldBuildGetSerial(value: String): Int {
     var patched = 0
     classDefForEach { classDef ->
+        val hasMatch = classDef.methods.any { method ->
+            method.implementation?.instructions?.any { instruction ->
+                val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference
+                    ?: return@any false
+                reference.definingClass == "Landroid/os/Build;" &&
+                    reference.name == "getSerial" &&
+                    reference.returnType == "Ljava/lang/String;"
+            } == true
+        }
+        if (!hasMatch) return@classDefForEach
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
@@ -71,10 +95,7 @@ internal fun BytecodePatchContext.foldBuildGetSerial(value: String): Int {
 
                 val next = instructions.getOrNull(index + 1)
                 val register = (next as? OneRegisterInstruction)?.registerA
-                if (next != null &&
-                    (next.opcode == Opcode.MOVE_RESULT ||
-                        next.opcode == Opcode.MOVE_RESULT_OBJECT)
-                ) {
+                if (next != null && shouldReplaceResult(register, next.opcode)) {
                     method.replaceInstruction(index, "const-string v$register, \"${escapeSmali(value)}\"")
                     method.replaceInstruction(index + 1, "nop")
                 } else {
@@ -101,6 +122,22 @@ internal fun BytecodePatchContext.foldBuildGetSerial(value: String): Int {
 internal fun BytecodePatchContext.foldSystemPropertyMap(properties: Map<String, String>): Int {
     var patched = 0
     classDefForEach { classDef ->
+        val hasMatch = classDef.methods.any { method ->
+            val instructions = method.implementation?.instructions?.toList() ?: return@any false
+            instructions.withIndex().any { (index, instruction) ->
+                val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference
+                    ?: return@any false
+                if (reference.definingClass != "Ljava/lang/System;" ||
+                    reference.name != "getProperty" ||
+                    reference.returnType != "Ljava/lang/String;" ||
+                    reference.parameterTypes != listOf("Ljava/lang/String;")
+                ) return@any false
+                val previous = instructions.getOrNull(index - 1)
+                val key = (previous as? ReferenceInstruction)?.reference as? StringReference
+                key?.string in properties
+            }
+        }
+        if (!hasMatch) return@classDefForEach
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
@@ -125,10 +162,7 @@ internal fun BytecodePatchContext.foldSystemPropertyMap(properties: Map<String, 
 
                 val next = instructions.getOrNull(index + 1)
                 val register = (next as? OneRegisterInstruction)?.registerA
-                if (next != null &&
-                    (next.opcode == Opcode.MOVE_RESULT ||
-                        next.opcode == Opcode.MOVE_RESULT_OBJECT)
-                ) {
+                if (next != null && shouldReplaceResult(register, next.opcode)) {
                     method.replaceInstruction(index, "const-string v$register, \"${escapeSmali(value)}\"")
                     method.replaceInstruction(index + 1, "nop")
                 } else {
@@ -151,6 +185,17 @@ internal fun BytecodePatchContext.foldSystemPropertyMap(properties: Map<String, 
 internal fun BytecodePatchContext.foldBuildMethodResult(methodName: String, value: String): Int {
     var patched = 0
     classDefForEach { classDef ->
+        val hasMatch = classDef.methods.any { method ->
+            method.implementation?.instructions?.any { instruction ->
+                val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference
+                    ?: return@any false
+                reference.definingClass == "Landroid/os/Build;" &&
+                    reference.name == methodName &&
+                    reference.returnType == "Ljava/lang/String;" &&
+                    reference.parameterTypes.isEmpty()
+            } == true
+        }
+        if (!hasMatch) return@classDefForEach
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue
@@ -165,10 +210,7 @@ internal fun BytecodePatchContext.foldBuildMethodResult(methodName: String, valu
 
                 val next = instructions.getOrNull(index + 1)
                 val register = (next as? OneRegisterInstruction)?.registerA
-                if (next != null &&
-                    (next.opcode == Opcode.MOVE_RESULT ||
-                        next.opcode == Opcode.MOVE_RESULT_OBJECT)
-                ) {
+                if (next != null && shouldReplaceResult(register, next.opcode)) {
                     method.replaceInstruction(index, "const-string v$register, \"${escapeSmali(value)}\"")
                     method.replaceInstruction(index + 1, "nop")
                 } else {
@@ -194,6 +236,17 @@ internal fun BytecodePatchContext.foldBuildGetRadioVersion(value: String): Int =
 internal fun BytecodePatchContext.foldPhoneType(value: Int): Int {
     var patched = 0
     classDefForEach { classDef ->
+        val hasMatch = classDef.methods.any { method ->
+            method.implementation?.instructions?.any { instruction ->
+                val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference
+                    ?: return@any false
+                reference.definingClass == "Landroid/telephony/TelephonyManager;" &&
+                    reference.name == "getPhoneType" &&
+                    reference.returnType == "I" &&
+                    reference.parameterTypes.isEmpty()
+            } == true
+        }
+        if (!hasMatch) return@classDefForEach
         val mutableClass = mutableClassDefBy(classDef)
         for (method in mutableClass.methods) {
             val implementation = method.implementation ?: continue

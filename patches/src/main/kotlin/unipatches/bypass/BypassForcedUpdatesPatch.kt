@@ -7,6 +7,7 @@ import app.morphe.patcher.patch.bytecodePatch
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction35c
 import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction3rc
+import com.android.tools.smali.dexlib2.iface.Method
 import com.android.tools.smali.dexlib2.iface.instruction.NarrowLiteralInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
@@ -58,7 +59,7 @@ private fun String.normalized() = lowercase(Locale.ROOT)
 private fun MethodReference.isVoidCall(name: String): Boolean =
     this.name == name && returnType == "V"
 
-private fun methodEvidence(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod): Evidence {
+private fun methodEvidence(method: Method): Evidence {
     val implementation = method.implementation ?: return Evidence()
     val strings = implementation.instructions.mapNotNull { instruction ->
         ((instruction as? ReferenceInstruction)?.reference as? StringReference)?.string
@@ -162,13 +163,22 @@ val bypassForcedUpdatesPatch = bytecodePatch(
         var dialogs = 0
         var redirects = 0
         var exits = 0
+        var ambiguousCandidates = 0
 
         classDefForEach { classDef ->
+            val hasCandidate = classDef.methods.any { method ->
+                val evidence = methodEvidence(method)
+                evidence.score >= 6 && (evidence.hasUpdateString || evidence.hasUpdateUrl)
+            }
+            if (!hasCandidate) return@classDefForEach
             val mutableClass = mutableClassDefBy(classDef)
             for (method in mutableClass.methods) {
                 val implementation = method.implementation ?: continue
                 val evidence = methodEvidence(method)
-                if (evidence.score < 6 || (!evidence.hasUpdateString && !evidence.hasUpdateUrl)) continue
+                if (evidence.score < 6 || (!evidence.hasUpdateString && !evidence.hasUpdateUrl)) {
+                    if (method.returnType == "Z" && evidence.score > 0) ambiguousCandidates++
+                    continue
+                }
 
                 if (bypassUpdateGate == true && falseBooleanGate(method, evidence)) {
                     gates++
@@ -217,6 +227,9 @@ val bypassForcedUpdatesPatch = bytecodePatch(
         }
 
         val total = gates + dialogs + redirects + exits
+        if (ambiguousCandidates > 0) {
+            logger.warning("Bypass Forced Updates: skipped $ambiguousCandidates ambiguous boolean candidate(s); evidence threshold is score >= 6 with update text or URL evidence.")
+        }
         if (total == 0) {
             logger.warning(
                 "No high-confidence forced-update patterns found. This experimental patch " +

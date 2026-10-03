@@ -26,7 +26,7 @@ unrelated framework or SDK Activities. The patch verifies the final `install()` 
 `installActivity()` call before treating the runtime as installed.
 
 Companion patches coordinate through the exact temporary bridge marker containing the owner, method,
-return type, and parameter list. Control App Ads attaches its policy to that bridge only after it is
+return type, and parameter list. Ads Block Patch attaches its policy to that bridge only after it is
 verified. A missing or unverified bridge produces a diagnostic and no dependent runtime module is
 exposed. Providers can be bundled in the extension without appearing in the menu until their
 process-local policy is configured.
@@ -95,14 +95,13 @@ is a fallback only when the target Activity or its `onCreate` method cannot be f
 Integrated providers are registered by `OverlayRuntime` and are driven by process-local state rather
 than ordinary Universal Overlay module-selection fields. The current Ads provider is
 `modules/ads/AdsControlRuntimeProvider.java`, registered under the `adsControlRuntime` profile.
-It contributes `Block Ads`, `Ads Free Rewards`, and `Block Ads / Tracking Hosts` to the
+It contributes `Block Ads` and `Block Ads / Tracking Hosts` to the
 `Ad control hook modules` section when `AdsRuntimePolicy` is integrated and contains the matching
 module bit.
 
-The Control App Ads patch queues the positional policy and the overlay patch attaches it to the
-same Application or Activity bridge. The policy uses these module bits: Block Ads = 1, Ads Free
-Rewards = 2, and Block Ads / Tracking Hosts = 4. The first two runtime modules also require their
-corresponding Ads master settings. The host module requires runtime policy only; its initial
+The Ads Block Patch queues the positional policy and the overlay patch attaches it to the
+same Application or Activity bridge. The policy uses these module bits: Block Ads = 1 and Block Ads /
+Tracking Hosts = 2. The Block Ads runtime module requires its corresponding Ads master setting. The host module requires runtime policy only; its initial
 checkbox value comes from the `Enable Block Ads / Tracking Hosts` master setting.
 
 Integrated modules must remain safe when absent, malformed, unsupported by the current Activity,
@@ -147,7 +146,7 @@ Universal Overlay currently provides:
 - Hook modules: disable haptics and disable animations.
 - System modules: Do Not Disturb, guarded by notification-policy access.
 - Advanced modules: Overlay Runtime Logs, with optional activation at app launch.
-- Integrated modules: Control App Ads runtime controls when its companion policy is configured.
+- Integrated modules: Ads Block Patch runtime controls when its companion policy is configured.
 
 The Do Not Disturb module also requires the Android notification-policy permission and a user-granted
 system access setting. Universal Overlay adds the manifest declaration when the module is selected,
