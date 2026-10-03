@@ -26,7 +26,7 @@ public final class PermissionGuardRuntimeProvider implements OverlayAppSpecificM
 
     @Override public List<OverlayAppSpecificModule> create(Activity activity) {
         List<OverlayAppSpecificModule> modules = new ArrayList<>();
-        if (activity != null) modules.add(new PermissionModule());
+        modules.add(new PermissionModule());
         return modules;
     }
 

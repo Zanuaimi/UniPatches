@@ -80,6 +80,13 @@ internal val permissionGroups = linkedMapOf(
 internal fun permissionGuardGroups(blocked: Map<String, Boolean>): List<String> =
     permissionGroups.keys.filter { blocked[it] == true }
 
+private fun permissionGroupLabel(group: String): String = when (group) {
+    "sms" -> "SMS"
+    "nearbyDevices" -> "Nearby devices"
+    "bluetooth" -> "Legacy Bluetooth"
+    else -> group.replaceFirstChar(Char::uppercase)
+}
+
 private data class GuardTarget(val wrapper: String)
 
 private fun permissionGuardMetadata(blockedGroups: List<String>): String {
@@ -104,7 +111,8 @@ private fun permissionGuardMetadata(blockedGroups: List<String>): String {
             permissionGroups.keys.forEach { group ->
                 add(JsonObject().apply {
                     addProperty("key", "permissionGuard${group.replaceFirstChar(Char::uppercase)}")
-                    addProperty("label", "Block ${group.replaceFirstChar(Char::uppercase)}")
+                    val label = permissionGroupLabel(group)
+                    addProperty("label", "Permission groups > $label > Block $label")
                     addProperty("type", "boolean")
                 })
             }
@@ -203,11 +211,16 @@ private fun injectPermissionGuardStartup(
 
 @Suppress("unused")
 val permissionGuardPatch = bytecodePatch(
-    name = "Permission Guard Patch (Experimental, Runtime Controls)",
+    name = "Permission Guard Patch ( Experimental, Overlay Support, UniManager Support )",
     description = """
         Keep declared permissions while guarding common Android permission checks and requests. Selected
         groups start blocked and can be changed at runtime through the optional Universal Overlay module.
-        Native, privileged, already-granted, and unknown permission paths are outside this guard.
+
+        This patch includes an optional Universal Overlay addon. To use it, patch Permission Guard Patch
+        together with Universal Overlay and enable “Overlay integration > Runtime controls > Permission Guard”.
+        The Permission Guard module then appears in Universal Overlay and exposes the same runtime state to
+        UniManager when “Quick setup > UniManager > Enable UniManager integration” is enabled. Native,
+        privileged, already-granted, and unknown permission paths remain outside this guard.
     """.trimIndent(),
     default = false,
 ) {
@@ -215,29 +228,29 @@ val permissionGuardPatch = bytecodePatch(
     extendWith("extensions/extension.mpe")
     dependsOn(StartupHooks.resolveRealApplicationPatch)
 
-    val blockCamera by booleanOption(key = "permissionGuardCamera", default = false, title = "Block Camera", description = "Block camera permission checks and requests at runtime.")
-    val blockMicrophone by booleanOption(key = "permissionGuardMicrophone", default = false, title = "Block Microphone", description = "Block microphone permission checks and requests at runtime.")
-    val blockLocation by booleanOption(key = "permissionGuardLocation", default = false, title = "Block Location", description = "Block location permission checks and requests at runtime.")
-    val blockContacts by booleanOption(key = "permissionGuardContacts", default = false, title = "Block Contacts", description = "Block contacts permission checks and requests at runtime.")
-    val blockPhone by booleanOption(key = "permissionGuardPhone", default = false, title = "Block Phone", description = "Block phone permission checks and requests at runtime.")
-    val blockSms by booleanOption(key = "permissionGuardSms", default = false, title = "Block SMS", description = "Block SMS permission checks and requests at runtime.")
-    val blockCalendar by booleanOption(key = "permissionGuardCalendar", default = false, title = "Block Calendar", description = "Block calendar permission checks and requests at runtime.")
-    val blockStorage by booleanOption(key = "permissionGuardStorage", default = false, title = "Block Storage", description = "Block storage permission checks and requests at runtime.")
-    val blockMedia by booleanOption(key = "permissionGuardMedia", default = false, title = "Block Media", description = "Block media permission checks and requests at runtime.")
-    val blockNotifications by booleanOption(key = "permissionGuardNotifications", default = false, title = "Block Notifications", description = "Block notification permission checks and requests at runtime.")
-    val blockNearbyDevices by booleanOption(key = "permissionGuardNearbyDevices", default = false, title = "Block Nearby Devices", description = "Block nearby-device permission checks and requests at runtime.")
-    val blockBluetooth by booleanOption(key = "permissionGuardBluetooth", default = false, title = "Block Legacy Bluetooth", description = "Block legacy Bluetooth permission checks and requests at runtime.")
+    val blockCamera by booleanOption(key = "permissionGuardCamera", default = false, title = "Permission groups > Camera > Block Camera", description = "Block camera permission checks and requests at runtime.")
+    val blockMicrophone by booleanOption(key = "permissionGuardMicrophone", default = false, title = "Permission groups > Microphone > Block Microphone", description = "Block microphone permission checks and requests at runtime.")
+    val blockLocation by booleanOption(key = "permissionGuardLocation", default = false, title = "Permission groups > Location > Block Location", description = "Block location permission checks and requests at runtime.")
+    val blockContacts by booleanOption(key = "permissionGuardContacts", default = false, title = "Permission groups > Contacts > Block Contacts", description = "Block contacts permission checks and requests at runtime.")
+    val blockPhone by booleanOption(key = "permissionGuardPhone", default = false, title = "Permission groups > Phone > Block Phone", description = "Block phone permission checks and requests at runtime.")
+    val blockSms by booleanOption(key = "permissionGuardSms", default = false, title = "Permission groups > SMS > Block SMS", description = "Block SMS permission checks and requests at runtime.")
+    val blockCalendar by booleanOption(key = "permissionGuardCalendar", default = false, title = "Permission groups > Calendar > Block Calendar", description = "Block calendar permission checks and requests at runtime.")
+    val blockStorage by booleanOption(key = "permissionGuardStorage", default = false, title = "Permission groups > Storage > Block Storage", description = "Block storage permission checks and requests at runtime.")
+    val blockMedia by booleanOption(key = "permissionGuardMedia", default = false, title = "Permission groups > Media > Block Media", description = "Block media permission checks and requests at runtime.")
+    val blockNotifications by booleanOption(key = "permissionGuardNotifications", default = false, title = "Permission groups > Notifications > Block Notifications", description = "Block notification permission checks and requests at runtime.")
+    val blockNearbyDevices by booleanOption(key = "permissionGuardNearbyDevices", default = false, title = "Permission groups > Nearby devices > Block Nearby Devices", description = "Block nearby-device permission checks and requests at runtime.")
+    val blockBluetooth by booleanOption(key = "permissionGuardBluetooth", default = false, title = "Permission groups > Legacy Bluetooth > Block Legacy Bluetooth", description = "Block legacy Bluetooth permission checks and requests at runtime.")
     val enableOverlayRuntime by booleanOption(
         key = "permissionGuardRuntimeOverlay",
         default = false,
-        title = "Enable Universal Overlay runtime controls",
-        description = "Expose runtime allow/block toggles through the shared Universal Overlay bridge when Universal Overlay is selected.",
+        title = "Overlay integration > Runtime controls > Permission Guard",
+        description = "Add the Permission Guard settings module to Universal Overlay when Universal Overlay is selected.",
     )
     val enableUniManagerIntegration by booleanOption(
         key = "permissionGuardEnableUniManagerIntegration",
         default = true,
-        title = "Enable UniManager integration",
-        description = "Expose Permission Guard runtime defaults to UniManager when Universal Overlay runtime controls are enabled.",
+        title = "Quick setup > UniManager > Enable UniManager integration",
+        description = "Expose Permission Guard runtime defaults to UniManager when the Universal Overlay runtime module is enabled.",
     )
     fun selectedGroups(): List<String> = permissionGuardGroups(
         mapOf(

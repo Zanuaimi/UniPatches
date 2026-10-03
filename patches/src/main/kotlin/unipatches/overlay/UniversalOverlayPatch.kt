@@ -1884,6 +1884,10 @@ val universalOverlayPatch = bytecodePatch(
                 bridgeInstalled = configured.hasOverlayBridge(application = true) &&
                     (adsRuntimePolicy == null || configured.hasRuntimePolicy("Lunipatch/overlaycore/AdsRuntimePolicy"))
                 adsPolicyAttached = bridgeInstalled && adsRuntimePolicy != null
+                if (bridgeInstalled) {
+                    OverlayPatchRunMarker.publish(this, appOwner, configured)
+                    PermissionGuardOverlayIntegration.attach(this)
+                }
             } else {
                 bridgeAttempted = true
                 val injected = tryInjectOverlayBridge(appOwner, appOnCreate, application = true)
@@ -1929,6 +1933,10 @@ val universalOverlayPatch = bytecodePatch(
                 bridgeInstalled = configured.hasOverlayBridge(application = false) &&
                     (adsRuntimePolicy == null || configured.hasRuntimePolicy("Lunipatch/overlaycore/AdsRuntimePolicy"))
                 adsPolicyAttached = bridgeInstalled && adsRuntimePolicy != null
+                if (bridgeInstalled) {
+                    OverlayPatchRunMarker.publish(this, fallback, configured)
+                    PermissionGuardOverlayIntegration.attach(this)
+                }
             } else {
                 bridgeAttempted = true
                 val injected = tryInjectOverlayBridge(fallback, onCreate, application = false)
