@@ -1,3 +1,9 @@
+## [1.30.0-dev.27](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.26...v1.30.0-dev.27) (2026-10-04)
+
+### ✨ New Features
+
+* **permission:** Add internet access support ([c85cfc8](https://github.com/Zanuaimi/UniPatches/commit/c85cfc8fc863adfbc5e775aea4b0e6f22cd8830e))
+
 ## [1.30.0-dev.26](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.25...v1.30.0-dev.26) (2026-10-03)
 
 ### 🐛 Bug Fixes
