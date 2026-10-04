@@ -1,3 +1,9 @@
+## [1.30.0-dev.29](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.28...v1.30.0-dev.29) (2026-10-04)
+
+### 🐛 Bug Fixes
+
+* avoid misleading internet access ([310e496](https://github.com/Zanuaimi/UniPatches/commit/310e496902ee7d5d4d18467f0e33979842e2e64b))
+
 ## [1.30.0-dev.28](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.27...v1.30.0-dev.28) (2026-10-04)
 
 ### 🐛 Bug Fixes
