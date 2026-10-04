@@ -18,7 +18,7 @@ public final class PermissionGuardRuntimeTest {
         assertEquals("permissionGuardRuntime", provider.profileId());
         assertEquals(1, provider.create(null).size());
         OverlayActionModule module = (OverlayActionModule) provider.create(null).get(0);
-        assertEquals("Internet Access", module.settingsChoices()[10]);
+        assertEquals("Block INTERNET Permission Checks", module.settingsChoices()[10]);
     }
 
     @Test

@@ -19,7 +19,7 @@ public final class PermissionGuardRuntimeProvider implements OverlayAppSpecificM
     };
     private static final String[] LABELS = {
         "Camera", "Microphone", "Location", "Contacts", "Phone", "SMS",
-        "Calendar", "Storage", "Media", "Notifications", "Internet Access", "Nearby devices", "Legacy Bluetooth"
+        "Calendar", "Storage", "Media", "Notifications", "Block INTERNET Permission Checks", "Nearby devices", "Legacy Bluetooth"
     };
 
     @Override public String profileId() { return PROFILE_ID; }
@@ -44,7 +44,11 @@ public final class PermissionGuardRuntimeProvider implements OverlayAppSpecificM
         @Override public String[] settingsChoices() { return LABELS.clone(); }
         @Override public String[] settingsDescriptions() {
             String[] values = new String[GROUPS.length];
-            for (int i = 0; i < values.length; i++) values[i] = "Enabled: block " + LABELS[i] + " checks and requests. Disabled: keep normal behavior.";
+            for (int i = 0; i < values.length; i++) {
+                values[i] = "internet".equals(GROUPS[i])
+                        ? "Enabled: block instrumented INTERNET permission checks and requests. Disabled: keep normal behavior."
+                        : "Enabled: block " + LABELS[i] + " checks and requests. Disabled: keep normal behavior.";
+            }
             return values;
         }
         @Override public boolean[] settingsValues() {

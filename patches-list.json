@@ -1842,7 +1842,7 @@
         },
         {
           "key": "permissionGuardInternet",
-          "title": "Permission groups > Internet Access > Block Internet Access",
+          "title": "Permission groups > Internet > Block INTERNET Permission Checks",
           "description": "Block instrumented INTERNET permission checks and requests at runtime. This does not stop socket traffic.",
           "required": false,
           "type": "kotlin.Boolean",

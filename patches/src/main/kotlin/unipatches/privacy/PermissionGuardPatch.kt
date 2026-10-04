@@ -85,7 +85,7 @@ private fun permissionGroupLabel(group: String): String = when (group) {
     "sms" -> "SMS"
     "nearbyDevices" -> "Nearby devices"
     "bluetooth" -> "Legacy Bluetooth"
-    "internet" -> "Internet Access"
+    "internet" -> "Internet"
     else -> group.replaceFirstChar(Char::uppercase)
 }
 
@@ -114,7 +114,8 @@ private fun permissionGuardMetadata(blockedGroups: List<String>): String {
                 add(JsonObject().apply {
                     addProperty("key", "permissionGuard${group.replaceFirstChar(Char::uppercase)}")
                     val label = permissionGroupLabel(group)
-                    addProperty("label", "Permission groups > $label > Block $label")
+                    val optionLabel = if (group == "internet") "Block INTERNET Permission Checks" else "Block $label"
+                    addProperty("label", "Permission groups > $label > $optionLabel")
                     addProperty("type", "boolean")
                 })
             }
@@ -241,7 +242,7 @@ val permissionGuardPatch = bytecodePatch(
     val blockStorage by booleanOption(key = "permissionGuardStorage", default = false, title = "Permission groups > Storage > Block Storage", description = "Block storage permission checks and requests at runtime.")
     val blockMedia by booleanOption(key = "permissionGuardMedia", default = false, title = "Permission groups > Media > Block Media", description = "Block media permission checks and requests at runtime.")
     val blockNotifications by booleanOption(key = "permissionGuardNotifications", default = false, title = "Permission groups > Notifications > Block Notifications", description = "Block notification permission checks and requests at runtime.")
-    val blockInternet by booleanOption(key = "permissionGuardInternet", default = false, title = "Permission groups > Internet Access > Block Internet Access", description = "Block instrumented INTERNET permission checks and requests at runtime. This does not stop socket traffic.")
+    val blockInternet by booleanOption(key = "permissionGuardInternet", default = false, title = "Permission groups > Internet > Block INTERNET Permission Checks", description = "Block instrumented INTERNET permission checks and requests at runtime. This does not stop socket traffic.")
     val blockNearbyDevices by booleanOption(key = "permissionGuardNearbyDevices", default = false, title = "Permission groups > Nearby devices > Block Nearby Devices", description = "Block nearby-device permission checks and requests at runtime.")
     val blockBluetooth by booleanOption(key = "permissionGuardBluetooth", default = false, title = "Permission groups > Legacy Bluetooth > Block Legacy Bluetooth", description = "Block legacy Bluetooth permission checks and requests at runtime.")
     val enableOverlayRuntime by booleanOption(
