@@ -2652,8 +2652,9 @@ public final class OverlayRuntime {
             }
         }
 
+        /** Keep settings popup content bounded instead of allowing long lists to fill the screen. */
         private int settingsChoicesMaxHeight() {
-            return boundedOverlayContentHeight(220);
+            return boundedMenuContentHeight();
         }
 
         private int dp(int value) { return (int) (value * activity.getResources().getDisplayMetrics().density + .5f); }
