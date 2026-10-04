@@ -68,6 +68,7 @@ internal val permissionGroups = linkedMapOf(
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
     ),
     "notifications" to setOf("android.permission.POST_NOTIFICATIONS"),
+    "internet" to setOf("android.permission.INTERNET"),
     "nearbyDevices" to setOf(
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
@@ -84,6 +85,7 @@ private fun permissionGroupLabel(group: String): String = when (group) {
     "sms" -> "SMS"
     "nearbyDevices" -> "Nearby devices"
     "bluetooth" -> "Legacy Bluetooth"
+    "internet" -> "Internet Access"
     else -> group.replaceFirstChar(Char::uppercase)
 }
 
@@ -219,8 +221,9 @@ val permissionGuardPatch = bytecodePatch(
         This patch includes an optional Universal Overlay addon. To use it, patch Permission Guard Patch
         together with Universal Overlay and enable “Overlay integration > Runtime controls > Permission Guard”.
         The Permission Guard module then appears in Universal Overlay and exposes the same runtime state to
-        UniManager when “Quick setup > UniManager > Enable UniManager integration” is enabled. Native,
-        privileged, already-granted, and unknown permission paths remain outside this guard.
+        UniManager when “Quick setup > UniManager > Enable UniManager integration” is enabled. Internet
+        Access only guards instrumented INTERNET checks and requests; it does not stop socket traffic.
+        Native, privileged, already-granted, and unknown permission paths remain outside this guard.
     """.trimIndent(),
     default = false,
 ) {
@@ -238,6 +241,7 @@ val permissionGuardPatch = bytecodePatch(
     val blockStorage by booleanOption(key = "permissionGuardStorage", default = false, title = "Permission groups > Storage > Block Storage", description = "Block storage permission checks and requests at runtime.")
     val blockMedia by booleanOption(key = "permissionGuardMedia", default = false, title = "Permission groups > Media > Block Media", description = "Block media permission checks and requests at runtime.")
     val blockNotifications by booleanOption(key = "permissionGuardNotifications", default = false, title = "Permission groups > Notifications > Block Notifications", description = "Block notification permission checks and requests at runtime.")
+    val blockInternet by booleanOption(key = "permissionGuardInternet", default = false, title = "Permission groups > Internet Access > Block Internet Access", description = "Block instrumented INTERNET permission checks and requests at runtime. This does not stop socket traffic.")
     val blockNearbyDevices by booleanOption(key = "permissionGuardNearbyDevices", default = false, title = "Permission groups > Nearby devices > Block Nearby Devices", description = "Block nearby-device permission checks and requests at runtime.")
     val blockBluetooth by booleanOption(key = "permissionGuardBluetooth", default = false, title = "Permission groups > Legacy Bluetooth > Block Legacy Bluetooth", description = "Block legacy Bluetooth permission checks and requests at runtime.")
     val enableOverlayRuntime by booleanOption(
@@ -264,6 +268,7 @@ val permissionGuardPatch = bytecodePatch(
             "storage" to (blockStorage == true),
             "media" to (blockMedia == true),
             "notifications" to (blockNotifications == true),
+            "internet" to (blockInternet == true),
             "nearbyDevices" to (blockNearbyDevices == true),
             "bluetooth" to (blockBluetooth == true),
         ),

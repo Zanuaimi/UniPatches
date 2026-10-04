@@ -33,4 +33,13 @@ class PermissionGuardPatchTest {
             permissionGroups.getValue("camera"),
         )
     }
+
+    @Test
+    fun internetGroupMapsInternetPermission() {
+        assertEquals(
+            setOf("android.permission.INTERNET"),
+            permissionGroups.getValue("internet"),
+        )
+        assertEquals(listOf("internet"), permissionGuardGroups(mapOf("internet" to true)))
+    }
 }

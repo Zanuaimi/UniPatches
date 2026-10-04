@@ -15,11 +15,11 @@ public final class PermissionGuardRuntimeProvider implements OverlayAppSpecificM
     private static final String MODULE_KEY = "permissionGuardRuntime";
     private static final String[] GROUPS = {
         "camera", "microphone", "location", "contacts", "phone", "sms",
-        "calendar", "storage", "media", "notifications", "nearbyDevices", "bluetooth"
+        "calendar", "storage", "media", "notifications", "internet", "nearbyDevices", "bluetooth"
     };
     private static final String[] LABELS = {
         "Camera", "Microphone", "Location", "Contacts", "Phone", "SMS",
-        "Calendar", "Storage", "Media", "Notifications", "Nearby devices", "Legacy Bluetooth"
+        "Calendar", "Storage", "Media", "Notifications", "Internet Access", "Nearby devices", "Legacy Bluetooth"
     };
 
     @Override public String profileId() { return PROFILE_ID; }
@@ -33,7 +33,7 @@ public final class PermissionGuardRuntimeProvider implements OverlayAppSpecificM
     private static final class PermissionModule extends OverlayActionModule {
         @Override public String key() { return MODULE_KEY; }
         @Override public String label() { return "Permission Guard"; }
-        @Override public String description() { return "Block or allow common permission checks and requests. Native and privileged access is outside this runtime guard."; }
+        @Override public String description() { return "Block or allow common permission checks and requests, including instrumented INTERNET checks. This does not stop socket traffic; native and privileged access is outside this runtime guard."; }
         @Override public boolean hasSettings() { return true; }
         @Override public boolean hasEnableToggle() { return false; }
         @Override public boolean hasActionButton() { return false; }

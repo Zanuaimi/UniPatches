@@ -13,7 +13,7 @@ import java.util.Set;
 public final class PermissionGuardRuntime {
     private static final String[] GROUPS = {
         "camera", "microphone", "location", "contacts", "phone", "sms",
-        "calendar", "storage", "media", "notifications", "nearbyDevices", "bluetooth"
+        "calendar", "storage", "media", "notifications", "internet", "nearbyDevices", "bluetooth"
     };
     private static final Set<String> BLOCKED_GROUPS = new HashSet<>();
 
@@ -115,6 +115,7 @@ public final class PermissionGuardRuntime {
             case "storage": return permission.equals("android.permission.READ_EXTERNAL_STORAGE") || permission.equals("android.permission.WRITE_EXTERNAL_STORAGE") || permission.equals("android.permission.MANAGE_EXTERNAL_STORAGE");
             case "media": return permission.equals("android.permission.READ_MEDIA_IMAGES") || permission.equals("android.permission.READ_MEDIA_VIDEO") || permission.equals("android.permission.READ_MEDIA_AUDIO") || permission.equals("android.permission.READ_MEDIA_VISUAL_USER_SELECTED");
             case "notifications": return "android.permission.POST_NOTIFICATIONS".equals(permission);
+            case "internet": return "android.permission.INTERNET".equals(permission);
             case "nearbyDevices": return permission.equals("android.permission.BLUETOOTH_SCAN") || permission.equals("android.permission.BLUETOOTH_CONNECT") || permission.equals("android.permission.BLUETOOTH_ADVERTISE") || permission.equals("android.permission.NEARBY_WIFI_DEVICES");
             case "bluetooth": return permission.equals("android.permission.BLUETOOTH") || permission.equals("android.permission.BLUETOOTH_ADMIN");
             default: return false;
