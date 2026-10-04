@@ -1,3 +1,9 @@
+## [1.30.0-dev.28](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.27...v1.30.0-dev.28) (2026-10-04)
+
+### 🐛 Bug Fixes
+
+* fix unbounded popup for permission guard patch ([d5f3ea9](https://github.com/Zanuaimi/UniPatches/commit/d5f3ea92863ff2dbaee48ae033e856e04e88ca50))
+
 ## [1.30.0-dev.27](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.26...v1.30.0-dev.27) (2026-10-04)
 
 ### ✨ New Features
