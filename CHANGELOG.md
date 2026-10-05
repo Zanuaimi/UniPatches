@@ -1,3 +1,9 @@
+## [1.30.0-dev.30](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.29...v1.30.0-dev.30) (2026-10-05)
+
+### ✨ New Features
+
+* Add a new patch called Frida Patch ([398cdf9](https://github.com/Zanuaimi/UniPatches/commit/398cdf980b446e1343a0efddd4ee6f538d030566))
+
 ## [1.30.0-dev.29](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.28...v1.30.0-dev.29) (2026-10-04)
 
 ### 🐛 Bug Fixes
