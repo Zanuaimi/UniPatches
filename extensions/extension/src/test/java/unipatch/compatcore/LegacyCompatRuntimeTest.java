@@ -12,4 +12,10 @@ public class LegacyCompatRuntimeTest {
         Method guardedEntryPoint = LegacyCompatRuntime.class.getMethod("trustAllCertificates", boolean.class);
         assertNotNull(guardedEntryPoint);
     }
+
+    @Test
+    public void embeddedExpansionEntryPointIsAvailable() throws Exception {
+        Method entryPoint = LegacyCompatRuntime.class.getMethod("prepareEmbeddedExpansion", android.content.Context.class);
+        assertNotNull(entryPoint);
+    }
 }

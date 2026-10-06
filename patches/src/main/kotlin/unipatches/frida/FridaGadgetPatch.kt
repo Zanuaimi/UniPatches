@@ -299,21 +299,10 @@ private fun injectStartup(
 
 @Suppress("unused")
 val fridaGadgetPatch = bytecodePatch(
-    name = "Patch app with Frida Gadget ( Experimental )",
+    name = "Embed Frida Gadget ( Advanced )",
     description = """
-        Embed Frida Gadget and user-provided JavaScript into an APK for experimental app instrumentation.
-
-        The entry JavaScript file is required. Leaving it empty performs no APK mutation and does not
-        download a Gadget.
-
-        Additional JavaScript paths are read during patching, embedded in input order, and skipped
-        individually when missing, unreadable, invalid UTF-8, or not ending in .js.
-
-        Minimal Footprint Mode is non-evasive. It disables script file watching and keeps runtime behavior
-        minimal. It does not hide Frida from anti-instrumentation or integrity checks.
-
-        Native constructors, privileged code, signing changes, split APK handling, and anti-tamper bypasses
-        are outside this patch.
+        Embeds Frida Gadget and selected JavaScript in an APK. Extra scripts load in order; an empty
+        entry leaves the APK unchanged. Minimal Footprint Mode disables script file watching; it is not stealth.
 
         Warning : This patch has the potential to modify internals of patched APK at runtime depending on given JavaScript files, but is also detectable! Use this patch at your own risk.
     """.trimIndent(),

@@ -125,9 +125,8 @@ private fun isFalseConstant(instruction: Any?, register: Int): Boolean =
 val bypassForcedUpdatesPatch = bytecodePatch(
     name = "Bypass Forced Updates (Experimental)",
     description = """
-        Try to bypass high-confidence client-side forced-update screens. Start with the defaults;
-        each option handles a different part of an update flow. This cannot bypass a server that
-        refuses old app versions, and an unsupported app may still require an update.
+        Try to bypass high-confidence client-side forced-update screens. This cannot bypass a server
+        that refuses old app versions, and an unsupported app may still require an update.
     """.trimIndent(),
     default = false,
 ) {

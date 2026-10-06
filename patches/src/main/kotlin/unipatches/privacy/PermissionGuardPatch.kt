@@ -216,8 +216,8 @@ private fun injectPermissionGuardStartup(
 val permissionGuardPatch = bytecodePatch(
     name = "Permission Guard Patch ( Experimental, Overlay Support, UniManager Support )",
     description = """
-        Keep declared permissions while guarding common Android permission checks and requests. Selected
-        groups start blocked and can be changed at runtime through the optional Universal Overlay module.
+        Keeps declared permissions while guarding selected Android permission checks and requests.
+        Optional Universal Overlay controls can change blocked groups at runtime.
 
         This patch includes an optional Universal Overlay addon. To use it, patch Permission Guard Patch
         together with Universal Overlay and enable “Overlay integration > Runtime controls > Permission Guard”.

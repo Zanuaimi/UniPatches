@@ -603,15 +603,10 @@ internal fun BytecodePatchContext.redirectLiteralHosts(hosts: Set<String>, wildc
 val adsBlockPatch = bytecodePatch(
     name = "Ads Block Patch ( Experimental, Enhanced, Overlay Support, UniManager Support )",
     description = """
-        A merged ad-control patch based on Nai64's No Ads patch, plus literal-host blocking
-        inspired by Entree and Adobo. Block common ad formats, choose the SDKs to target, and
-        redirect matching literal ad/tracker hosts embedded in the APK.
-
-        Host filters are small embedded subsets inspired by uBlock Origin, EasyList, AdGuard,
-        OISD, HaGeZi Pro mini, Privacy Essentials, EasyPrivacy, and Peter Lowe's list; they are
-        not downloaded full subscriptions. Each filter is independently toggleable. They only
-        affect hosts stored as literal strings by the app; they cannot block dynamically generated
-        hosts, encrypted traffic, or requests made entirely inside Google Play services.
+        Merged ad-control patch based on Nai64's No Ads patch, with selectable SDK/ad-format blocking
+        and optional literal-host filters inspired by Entree and Adobo. Filters are embedded,
+        toggleable subsets; they affect literal hosts only, not dynamically generated or encrypted
+        traffic or requests made entirely inside Google Play services.
 
         Compatibility: when combined with Disable Forced Online Checks, keep that patch's “Exclude
         ad SDK and networking code” option enabled; otherwise blocked ad hosts may be treated as

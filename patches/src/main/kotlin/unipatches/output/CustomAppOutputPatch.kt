@@ -63,10 +63,8 @@ private fun enableAppDataPreservation(document: Document): Int? {
 val customAppOutputPatch = resourcePatch(
     name = "Custom App Output Patch (Experimental, Enhanced)",
     description = """
-        Customize an APK's install identity and launcher presentation in one patch. Start with the
-        launcher name or icon; enable Clone only when you need a side-by-side copy. Name, icon,
-        hide-icon, and clone options are
-        independent. This cannot preserve original-app data when a package or signing identity
+        Customizes APK install identity and launcher presentation. Name, icon, hide-icon, and Clone
+        are independent; Clone enables side-by-side install. This cannot preserve original-app data when a package or signing identity
         changes. Clone mode rewrites supported manifest identifiers only; it does not rewrite
         bytecode strings, explicit process names, task affinities, or arbitrary SDK configuration.
         A clone has a new Android package identity and normally a new signing identity: package- or

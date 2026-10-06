@@ -91,17 +91,10 @@ private fun ResourcePatchContext.discoverPairipNativeAbis(logger: Logger): List<
 val pairipBypassPatch = bytecodePatch(
     name = "PairIP Bypass Patch (Experimental, Enhanced)",
     description = """
-        A merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.
-
-        Automatic mode applies compatible strategies up to the selected risk level. It defaults to
-        Low and Med Risk Strategies; that setting includes medium-risk strategies, while Low, Med,
-        and High Risk Strategies also includes invasive high-risk strategies.
-
-        Turn off automatic mode to test individual strategies. Manual selections are independent of
-        the automatic risk-level setting. Firebase auto-init disabling, Firebase component removal,
-        and the LicenseClient FULL_CHECK_OK state strategy are manual-only: automatic mode ignores
-        them at every risk level, including “Low, Med, and High Risk Strategies.” Every manual
-        strategy is disabled by default.
+        Merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.
+        Automatic mode applies compatible strategies through the selected risk level; disable it to
+        test individual strategies. Manual strategies remain disabled by default and are independent
+        of the automatic risk level.
 
         This patch is experimental and app-dependent. It does not bypass server-side Play Integrity,
         server-side licensing, or other server-side enforcement.

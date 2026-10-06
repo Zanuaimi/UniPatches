@@ -77,8 +77,8 @@ private fun isKnownAdOrNetworkClass(type: String): Boolean {
 val disableForcedOnlineChecksPatch = bytecodePatch(
     name = "Disable Forced Online Checks (Experimental)",
     description = """
-        Try to bypass high-confidence client-side “internet required” gates. Start with Auto mode.
-        This cannot bypass server-side login, entitlement, multiplayer, or game-state checks.
+        Try to bypass high-confidence client-side “internet required” gates. This cannot bypass
+        server-side login, entitlement, multiplayer, or game-state checks.
 
         Compatibility: Ads Block Patch can intentionally block ad hosts. Keep “Exclude ad SDK and
         networking code” enabled when both patches are selected so blocked ads are not falsely told

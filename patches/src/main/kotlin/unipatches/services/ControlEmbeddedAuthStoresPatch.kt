@@ -12,11 +12,9 @@ import java.util.logging.Logger
 val controlEmbeddedAuthStoresPatch = rawResourcePatch(
     name = "Control Embedded Auth / Stores Patch ( Enhanced )",
     description = """
-        Control embedded Google Play, Firebase, Google Pay, location, licensing, sign-in, and store availability behavior.
-
-        Choose real Google Play Services, GmsCore, or Zero Google Play behavior. GmsCore mode includes Maps-on-MicroG compatibility and supports package and main-activity overrides.
-
-        All controls are optional and apply only to matching methods or manifest components.
+        Controls embedded Google Play, Firebase, Google Pay, location, licensing, sign-in, and store checks.
+        Choose real Google Play Services, GmsCore, or Zero Google Play behavior; GmsCore supports Maps-on-MicroG,
+        package, and main-activity overrides. Controls apply only to matching methods or manifest components.
 
         This patch only controls embedded services, licensing, and store checks. Its optional GmsCore startup
         Activity override should not target a third-party sign-in or billing Activity. When combined

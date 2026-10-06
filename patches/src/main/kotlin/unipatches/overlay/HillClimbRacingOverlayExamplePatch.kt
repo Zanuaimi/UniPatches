@@ -11,17 +11,12 @@ import app.morphe.patcher.patch.bytecodePatch
 @Suppress("unused")
 val hillClimbRacingOverlayExamplePatch = bytecodePatch(
     name = "Hill Climb Racing Example Overlay Addon",
-    description = """Example overlay addon for Hill Climb Racing (com.fingersoft.hillclimb), used together with UniPatches Universal Overlay.
-        It adds six safe, mock-only app-specific preview modules to the shared overlay: A
-        - Add Coins
-        - Add Gems
-        - Add Paints 
-        - Vehicle Selection
-        - Stage Selection
-        - Garage Selection. 
-        This is an example-only addon; all six module options are disabled by default and must be explicitly enabled independently.
+    description = """Example-only Hill Climb Racing (com.fingersoft.hillclimb) addon for UniPatches Universal Overlay.
+        Adds six mock-only preview modules: Add Coins, Add Gems, Add Paints, Vehicle Selection, Stage Selection, and Garage Selection.
+
+        Options are disabled by default.
         
-        Module settings and Preview actions are session-only; this example addon never reads or changes currencies, vehicles, stages, garage state, purchases, save files, or game bytecode.""".trimMargin(),
+        Settings and previews are session-only and never change game state or bytecode.""".trimMargin(),
     default = false,
 ) {
     // Guarded: morphe-patcher < 1.13.0 has no category() and keeps the patch ungrouped.

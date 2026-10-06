@@ -82,4 +82,17 @@ class LegacyAppCompatibilityManifestTest {
         assertEquals(0, exportAllActivities(document, logger))
         assertEquals(listOf("true", "true"), exportedValues(document))
     }
+
+    @Test
+    fun automaticTargetProfileKeepsOldAppsOnTarget27() {
+        assertEquals(27, selectLegacyTargetSdk(16, TARGET_PROFILE_AUTOMATIC, 34))
+        assertEquals(34, selectLegacyTargetSdk(34, TARGET_PROFILE_AUTOMATIC, 34))
+    }
+
+    @Test
+    fun explicitTargetProfilesOverrideCustomValue() {
+        assertEquals(27, selectLegacyTargetSdk(16, TARGET_PROFILE_27, 34))
+        assertEquals(29, selectLegacyTargetSdk(16, TARGET_PROFILE_29, 34))
+        assertEquals(34, selectLegacyTargetSdk(16, TARGET_PROFILE_CUSTOM, 34))
+    }
 }

@@ -342,9 +342,8 @@ private val DEVICE_PRESETS = mapOf(
 val bypassEmulatorDetectionPatch = bytecodePatch(
     name = "Bypass Emulator Detection",
     description = """
-        Hides common emulator traces by spoofing Build info and related checks so apps are less likely
-        to identify an emulator. This patch is marked for enhancement in future updates; coverage is
-        currently limited to the checks it can safely recognize.
+        Spoofs common Build and device checks to reduce emulator detection. Coverage is limited to
+        checks this patch can safely recognize.
 
         Compatibility: PairIP Bypass and other server-side integrity systems can still reject a
         device when entitlement is bound to genuine device signals, package identity, or attestation.

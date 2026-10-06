@@ -7,12 +7,15 @@
 package unipatch.compatcore;
 
 import android.content.Context;
+import android.content.res.AssetManager;
 import android.os.Environment;
 import android.util.Log;
 
 import org.lsposed.hiddenapibypass.HiddenApiBypass;
 
 import java.io.File;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 
@@ -34,6 +37,98 @@ public final class LegacyCompatRuntime {
     /** Stores the application context for later path redirects. */
     public static void init(Context context) {
         appContext = context != null ? context.getApplicationContext() : null;
+    }
+
+    /**
+     * Copies one embedded expansion OBB into the conventional Android OBB directory.
+     * The asset is copied through a temporary file so Unity never sees a partial archive.
+     * Failure is logged and leaves the original app behavior intact.
+     */
+    public static void prepareEmbeddedExpansion(Context context) {
+        if (context == null) {
+            Log.w(TAG, "Embedded expansion skipped: no application context");
+            return;
+        }
+        File temporary = null;
+        try {
+            AssetManager assets = context.getAssets();
+            String[] names = assets.list("unipatch-legacy-expansion");
+            if (names == null || names.length != 1 || !names[0].endsWith(".obb")) {
+                Log.w(TAG, "Embedded expansion skipped: expected one .obb asset");
+                return;
+            }
+            String name = names[0];
+            File obbDir = context.getObbDir();
+            if (obbDir == null) {
+                Log.w(TAG, "Embedded expansion skipped: getObbDir returned null");
+                return;
+            }
+            if (!obbDir.exists() && !obbDir.mkdirs()) {
+                Log.w(TAG, "Embedded expansion skipped: cannot create " + obbDir);
+                return;
+            }
+            File target = new File(obbDir, name);
+            long assetLength = -1L;
+            try (android.content.res.AssetFileDescriptor descriptor = assets.openFd("unipatch-legacy-expansion/" + name)) {
+                assetLength = descriptor.getLength();
+            } catch (Throwable ignored) {
+                // Compressed assets do not expose a length; package update time still detects APK updates.
+            }
+            long packageUpdateTime = 0L;
+            try {
+                packageUpdateTime = context.getPackageManager()
+                        .getPackageInfo(context.getPackageName(), 0)
+                        .lastUpdateTime;
+            } catch (Throwable ignored) {
+                // Keep length-only freshness when package metadata is unavailable.
+            }
+            boolean targetFresh = target.isFile()
+                    && target.length() > 0
+                    && (assetLength < 0 || target.length() == assetLength)
+                    && (packageUpdateTime <= 0 || target.lastModified() >= packageUpdateTime);
+            if (targetFresh) {
+                return;
+            }
+            if (target.exists() && !target.isFile()) {
+                Log.w(TAG, "Embedded expansion skipped: target is not a file " + target);
+                return;
+            }
+            temporary = new File(obbDir, "." + name + ".unipatch.tmp");
+            if (temporary.exists() && !temporary.delete()) {
+                Log.w(TAG, "Embedded expansion skipped: cannot clear temporary file " + temporary);
+                return;
+            }
+            try (InputStream input = assets.open("unipatch-legacy-expansion/" + name);
+                 OutputStream output = new java.io.FileOutputStream(temporary)) {
+                byte[] buffer = new byte[64 * 1024];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, read);
+                }
+                output.flush();
+            }
+            if (temporary.length() == 0) {
+                temporary.delete();
+                Log.w(TAG, "Embedded expansion skipped: asset is empty");
+                return;
+            }
+            if (target.exists() && !target.delete()) {
+                temporary.delete();
+                Log.w(TAG, "Embedded expansion failed: cannot replace " + target);
+                return;
+            }
+            if (!temporary.renameTo(target)) {
+                temporary.delete();
+                Log.w(TAG, "Embedded expansion failed: cannot publish " + target);
+                return;
+            }
+            Log.i(TAG, "Embedded expansion staged at " + target);
+        } catch (Throwable t) {
+            if (temporary != null) {
+                temporary.delete();
+            }
+            Log.w(TAG, "Embedded expansion staging failed", t);
+        }
     }
 
     /**
