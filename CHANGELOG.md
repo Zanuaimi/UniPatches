@@ -1,3 +1,9 @@
+## [1.30.0-dev.32](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.31...v1.30.0-dev.32) (2026-10-06)
+
+### 🔧 Improvements
+
+* improve existing options ([b73ac56](https://github.com/Zanuaimi/UniPatches/commit/b73ac563d9fd13b0bdc913f47dfad2678a00893e))
+
 ## [1.30.0-dev.31](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.30...v1.30.0-dev.31) (2026-10-06)
 
 ### 🔧 Improvements

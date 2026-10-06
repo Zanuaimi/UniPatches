@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-10-06T10:28:15",
-  "description": "## [1.30.0-dev.31](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.30...v1.30.0-dev.31) (2026-10-06)\n\n### 🔧 Improvements\n\n* patches get concise descriptions and legacy app compatibility patch has been improved ([bbaf959](https://github.com/Zanuaimi/UniPatches/commit/bbaf959ce62df96f81d054de4edefe03725f376e))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.30.0-dev.31/patches-1.30.0-dev.31.mpp",
+  "created_at": "2026-10-06T13:26:25",
+  "description": "## [1.30.0-dev.32](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.31...v1.30.0-dev.32) (2026-10-06)\n\n### 🔧 Improvements\n\n* improve existing options ([b73ac56](https://github.com/Zanuaimi/UniPatches/commit/b73ac563d9fd13b0bdc913f47dfad2678a00893e))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.30.0-dev.32/patches-1.30.0-dev.32.mpp",
   "signature_download_url": "",
-  "version": "1.30.0-dev.31"
+  "version": "1.30.0-dev.32"
 }
