@@ -410,6 +410,12 @@ val legacyAppCompatibilityPatch = resourcePatch(
         key = "legacyCompatibilityRelocateExpansionNativeLibraries",
         description = "Copy assets/libs/<abi>/*.so entries from the selected OBB into APK lib/<abi>/ paths. Use when Unity/Mono native libraries are incomplete or misplaced in the OBB.",
     )
+    val removeRelocatedNativeLibrariesFromObb by booleanOption(
+        title = "Legacy App Compatibility > Unity/OBB > Remove relocated native libraries from embedded OBB",
+        default = false,
+        key = "legacyCompatibilityRemoveRelocatedNativeLibrariesFromObb",
+        description = "When native-library relocation and OBB embedding are both enabled, omit relocated assets/libs/<abi>/*.so entries from the embedded OBB without changing the source file.",
+    )
     val embedExpansionObb by booleanOption(
         title = "Legacy App Compatibility > Unity/OBB > Embed and stage expansion OBB",
         default = false,
@@ -475,6 +481,7 @@ val legacyAppCompatibilityPatch = resourcePatch(
             obbPath = expansionObbPath.orEmpty().trim(),
             relocateNativeLibraries = relocateExpansionNativeLibraries == true,
             embedExpansionObb = embedExpansionObb == true,
+            removeRelocatedNativeLibrariesFromObb = removeRelocatedNativeLibrariesFromObb == true,
         )
     })
     dependsOn(legacyReceiverFlagsPatch { receiverFixAppWide == true })

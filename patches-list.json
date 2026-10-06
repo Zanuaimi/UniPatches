@@ -1308,6 +1308,15 @@
           "values": null
         },
         {
+          "key": "legacyCompatibilityRemoveRelocatedNativeLibrariesFromObb",
+          "title": "Legacy App Compatibility > Unity/OBB > Remove relocated native libraries from embedded OBB",
+          "description": "When native-library relocation and OBB embedding are both enabled, omit relocated assets/libs/<abi>/*.so entries from the embedded OBB without changing the source file.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
           "key": "legacyCompatibilityEmbedExpansionObb",
           "title": "Legacy App Compatibility > Unity/OBB > Embed and stage expansion OBB",
           "description": "Embed selected OBB as an APK asset and stage it into Android's conventional OBB directory before app startup. Large APK growth and external-storage policy limits still apply.",

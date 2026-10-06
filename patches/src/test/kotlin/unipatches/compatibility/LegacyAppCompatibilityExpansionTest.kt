@@ -1,14 +1,20 @@
 package unipatches.compatibility
 
 import helpers.manifest.NS_ANDROID
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Document
 import org.w3c.dom.Element
+import java.io.File
 import java.util.logging.Logger
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
 class LegacyAppCompatibilityExpansionTest {
@@ -34,6 +40,41 @@ class LegacyAppCompatibilityExpansionTest {
             "assets/unipatch-legacy-expansion/main.123.com.glu.gunbros2.obb",
             expansionAssetPath("main.123.com.glu.gunbros2.obb"),
         )
+    }
+
+    @Test
+    fun rewritesObbWithoutRelocatedEntriesAndLeavesSourceUntouched() {
+        val source = File.createTempFile("legacy-source-", ".obb").apply { deleteOnExit() }
+        val rewritten = File.createTempFile("legacy-rewritten-", ".obb").apply { deleteOnExit() }
+        val removed = "assets/libs/armeabi-v7a/libunity.so"
+        val retained = "assets/libs/armeabi-v7a/libmono.so"
+        val data = "assets/bin/Data/game.dat"
+
+        ZipOutputStream(source.outputStream().buffered()).use { zip ->
+            zip.putNextEntry(ZipEntry(removed))
+            zip.write("unity".toByteArray())
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry(retained))
+            zip.write("mono".toByteArray())
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("assets/bin/Data/"))
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry(data))
+            zip.write("game".toByteArray())
+            zip.closeEntry()
+        }
+        val originalSource = source.readBytes()
+
+        rewriteExpansionObb(source, rewritten, setOf(removed))
+
+        assertArrayEquals(originalSource, source.readBytes())
+        ZipFile(rewritten).use { zip ->
+            assertNull(zip.getEntry(removed))
+            assertNotNull(zip.getEntry(retained))
+            assertNotNull(zip.getEntry("assets/bin/Data/"))
+            assertEquals("mono", zip.getInputStream(zip.getEntry(retained)).use { it.readBytes().toString(Charsets.UTF_8) })
+            assertEquals("game", zip.getInputStream(zip.getEntry(data)).use { it.readBytes().toString(Charsets.UTF_8) })
+        }
     }
 
     @Test

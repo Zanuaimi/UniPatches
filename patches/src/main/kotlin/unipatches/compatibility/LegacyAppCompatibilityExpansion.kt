@@ -2,7 +2,9 @@ package unipatches.compatibility
 
 import app.morphe.patcher.patch.rawResourcePatch
 import java.io.File
+import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
 import helpers.manifest.NS_ANDROID
 import helpers.startup.StartupHooks
 import java.util.logging.Logger
@@ -17,6 +19,7 @@ internal data class LegacyExpansionOptions(
     val obbPath: String,
     val relocateNativeLibraries: Boolean,
     val embedExpansionObb: Boolean,
+    val removeRelocatedNativeLibrariesFromObb: Boolean,
 )
 
 internal fun expansionAssetPath(fileName: String): String = "$EXPANSION_ASSET_DIRECTORY/$fileName"
@@ -36,9 +39,42 @@ internal fun isExpansionFileForPackage(fileName: String, packageName: String?): 
     return packageName?.takeIf { it.isNotBlank() } == match.groupValues[1]
 }
 
+/** Copies an OBB while omitting only entries explicitly marked as relocated. */
+internal fun rewriteExpansionObb(source: File, output: File, removedEntries: Set<String>) {
+    output.parentFile?.mkdirs()
+    ZipFile(source).use { input ->
+        output.outputStream().buffered().use { fileOutput ->
+            ZipOutputStream(fileOutput).use { outputZip ->
+                input.entries().asSequence().forEach { entry ->
+                    if (entry.name in removedEntries) return@forEach
+                    val copy = ZipEntry(entry.name).apply {
+                        time = entry.time
+                        comment = entry.comment
+                        extra = entry.extra
+                        when (entry.method) {
+                            ZipEntry.STORED -> {
+                                method = ZipEntry.STORED
+                                size = entry.size
+                                crc = entry.crc
+                            }
+                            ZipEntry.DEFLATED -> method = ZipEntry.DEFLATED
+                        }
+                    }
+                    outputZip.putNextEntry(copy)
+                    if (!entry.isDirectory) {
+                        input.getInputStream(entry).use { stream -> stream.copyTo(outputZip, DEFAULT_COPY_BUFFER) }
+                    }
+                    outputZip.closeEntry()
+                }
+            }
+        }
+    }
+}
+
 /**
- * Stages an optional expansion OBB and relocates full native libraries that old Unity packages
- * incorrectly kept inside the OBB. Both operations happen at patch time; no host path is retained.
+ * Stages an optional expansion OBB, relocates full native libraries that old Unity packages
+ * incorrectly kept inside it, and can omit those relocated entries from embedded output.
+ * All operations happen at patch time; no host path is retained.
  */
 internal fun legacyExpansionFilesPatch(optionsProvider: () -> LegacyExpansionOptions) = rawResourcePatch(
     name = null,
@@ -50,7 +86,7 @@ internal fun legacyExpansionFilesPatch(optionsProvider: () -> LegacyExpansionOpt
     execute {
         val logger = Logger.getLogger(this::class.java.name)
         val options = optionsProvider()
-        if (!options.relocateNativeLibraries && !options.embedExpansionObb) {
+        if (!options.relocateNativeLibraries && !options.embedExpansionObb && !options.removeRelocatedNativeLibrariesFromObb) {
             return@execute
         }
         if (options.obbPath.isBlank()) {
@@ -99,13 +135,23 @@ internal fun legacyExpansionFilesPatch(optionsProvider: () -> LegacyExpansionOpt
             }
         }
 
+        val rewriteEmbeddedObb = options.removeRelocatedNativeLibrariesFromObb &&
+            options.relocateNativeLibraries && options.embedExpansionObb
+        if (options.removeRelocatedNativeLibrariesFromObb && !rewriteEmbeddedObb) {
+            logger.warning("Legacy compatibility: removing relocated OBB libraries requires both native-library relocation and OBB embedding; OBB rewrite skipped.")
+        }
         if (options.embedExpansionObb) {
             val output = get(expansionAssetPath(source.name), false)
-            output.parentFile?.mkdirs()
-            source.inputStream().use { input ->
-                output.outputStream().use { outputStream -> input.copyTo(outputStream, DEFAULT_COPY_BUFFER) }
+            if (rewriteEmbeddedObb) {
+                rewriteExpansionObb(source, output, nativeEntries.map { it.first }.toSet())
+                logger.info("Legacy compatibility: embedded expansion OBB ${source.name} without ${nativeEntries.size} relocated native libraries.")
+            } else {
+                output.parentFile?.mkdirs()
+                source.inputStream().use { input ->
+                    output.outputStream().use { outputStream -> input.copyTo(outputStream, DEFAULT_COPY_BUFFER) }
+                }
+                logger.info("Legacy compatibility: embedded expansion OBB ${source.name} (${source.length()} bytes).")
             }
-            logger.info("Legacy compatibility: embedded expansion OBB ${source.name} (${source.length()} bytes).")
         }
     }
 }
