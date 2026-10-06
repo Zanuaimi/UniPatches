@@ -1,3 +1,9 @@
+## [1.30.0-dev.31](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.30...v1.30.0-dev.31) (2026-10-06)
+
+### 🔧 Improvements
+
+* patches get concise descriptions and legacy app compatibility patch has been improved ([bbaf959](https://github.com/Zanuaimi/UniPatches/commit/bbaf959ce62df96f81d054de4edefe03725f376e))
+
 ## [1.30.0-dev.30](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.29...v1.30.0-dev.30) (2026-10-05)
 
 ### ✨ New Features

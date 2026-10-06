@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-10-05T07:30:01",
-  "description": "## [1.30.0-dev.30](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.29...v1.30.0-dev.30) (2026-10-05)\n\n### ✨ New Features\n\n* Add a new patch called Frida Patch ([398cdf9](https://github.com/Zanuaimi/UniPatches/commit/398cdf980b446e1343a0efddd4ee6f538d030566))",
-  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.30.0-dev.30/patches-1.30.0-dev.30.mpp",
+  "created_at": "2026-10-06T10:28:15",
+  "description": "## [1.30.0-dev.31](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.30...v1.30.0-dev.31) (2026-10-06)\n\n### 🔧 Improvements\n\n* patches get concise descriptions and legacy app compatibility patch has been improved ([bbaf959](https://github.com/Zanuaimi/UniPatches/commit/bbaf959ce62df96f81d054de4edefe03725f376e))",
+  "download_url": "https://github.com/Zanuaimi/UniPatches/releases/download/v1.30.0-dev.31/patches-1.30.0-dev.31.mpp",
   "signature_download_url": "",
-  "version": "1.30.0-dev.30"
+  "version": "1.30.0-dev.31"
 }
