@@ -28,6 +28,19 @@ private data class PairipCallerKey(
     val parameterTypes: List<String>,
 )
 
+internal fun resolveManifestComponentName(packageName: String, rawName: String): String? {
+    val name = rawName.trim()
+    if (packageName.isBlank() || name.isBlank() || name == "." || name.startsWith("..")) return null
+    val resolved = when {
+        name.startsWith('.') -> packageName + name
+        name.contains('.') -> name
+        else -> "$packageName.$name"
+    }
+    return resolved.takeIf {
+        Regex("^[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*$").matches(it)
+    }
+}
+
 private fun ResourcePatchContext.discoverPairipAppClass(logger: Logger): String? {
     val dir = try {
         get("AndroidManifest.xml", false).parentFile
@@ -78,17 +91,10 @@ private fun ResourcePatchContext.discoverPairipNativeAbis(logger: Logger): List<
 val pairipBypassPatch = bytecodePatch(
     name = "PairIP Bypass Patch (Experimental, Enhanced)",
     description = """
-        A merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.
-
-        Automatic mode applies compatible strategies up to the selected risk level. It defaults to
-        Low and Med Risk Strategies; that setting includes medium-risk strategies, while Low, Med,
-        and High Risk Strategies also includes invasive high-risk strategies.
-
-        Turn off automatic mode to test individual strategies. Manual selections are independent of
-        the automatic risk-level setting. Firebase auto-init disabling, Firebase component removal,
-        and the LicenseClient FULL_CHECK_OK state strategy are manual-only: automatic mode ignores
-        them at every risk level, including “Low, Med, and High Risk Strategies.” Every manual
-        strategy is disabled by default.
+        Merged experimental PairIP bypass for common legacy, V2, and V3 protection layouts.
+        Automatic mode applies compatible strategies through the selected risk level; disable it to
+        test individual strategies. Manual strategies remain disabled by default and are independent
+        of the automatic risk level.
 
         This patch is experimental and app-dependent. It does not bypass server-side Play Integrity,
         server-side licensing, or other server-side enforcement.
@@ -97,7 +103,7 @@ val pairipBypassPatch = bytecodePatch(
         original package or signing certificate. Firebase component removal can break Firebase Auth,
         Google Play Games, billing, analytics, and ad rewards. Device spoofing can also change apps'
         device-integrity behavior. These identity and server-side conditions cannot be fixed safely
-        by combining PairIP Bypass with Custom App Output, Control App Ads, or Emulator Detection.
+        by combining PairIP Bypass with Custom App Output, Ads Block Patch, or Emulator Detection.
 
         Compatibility: when combining this patch with Universal Overlay, the shared overlay startup
         bridge is preserved. PairIP Application redirect and Application.onCreate bypass strategies
@@ -254,12 +260,15 @@ val pairipBypassPatch = bytecodePatch(
             var removed = 0
 
             document("AndroidManifest.xml").use { manifest ->
+                val packageName = manifest.documentElement?.getAttribute("package").orEmpty()
                 for (tag in listOf("activity", "provider")) {
                     val nodes = manifest.getElementsByTagName(tag)
                     for (index in nodes.length - 1 downTo 0) {
                         val component = nodes.item(index) as? Element ?: continue
                         val name = component.getAttributeNS(androidNamespace, "name")
-                        if (name in pairipComponents) {
+                            .ifEmpty { component.getAttribute("android:name") }
+                        val resolvedName = resolveManifestComponentName(packageName, name)
+                        if (resolvedName in pairipComponents) {
                             component.parentNode?.removeChild(component)
                             removed++
                         }
@@ -350,13 +359,15 @@ val pairipBypassPatch = bytecodePatch(
             )
             var removed = 0
             if (removeFirebaseMeasurementComponents == true) document("AndroidManifest.xml").use { manifest ->
+                val packageName = manifest.documentElement?.getAttribute("package").orEmpty()
                 for (tag in listOf("provider", "receiver", "service")) {
                     val nodes = manifest.getElementsByTagName(tag)
                     for (index in nodes.length - 1 downTo 0) {
                         val component = nodes.item(index) as? Element ?: continue
                         val name = component.getAttributeNS(NS_ANDROID, "name")
                             .ifEmpty { component.getAttribute("android:name") }
-                        if (name in measurementComponents) {
+                        val resolvedName = resolveManifestComponentName(packageName, name)
+                        if (resolvedName in measurementComponents) {
                             component.parentNode?.removeChild(component)
                             removed++
                         }
@@ -1287,6 +1298,7 @@ val pairipBypassPatch = bytecodePatch(
                     PairipCallerKey(method.name, method.returnType, method.parameterTypes.map { it.toString() })
                 }
                 if (callers.isEmpty()) return@classDefForEach
+                if (callers.none { it.returnType == "V" }) return@classDefForEach
 
                 val mutableClass = mutableClassDefByOrNull(classDef.type) ?: return@classDefForEach
                 callers.forEach { caller ->

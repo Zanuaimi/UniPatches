@@ -13,7 +13,10 @@ import android.graphics.Typeface;
 import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
@@ -68,6 +71,7 @@ import unipatch.overlaycore.modules.OverlayHookModuleRegistry;
 import unipatch.overlaycore.modules.OverlayAppSpecificModuleRegistry;
 import unipatch.overlaycore.modules.example.HillClimbRacingExampleProvider;
 import unipatch.overlaycore.modules.ads.AdsControlRuntimeProvider;
+import unipatch.overlaycore.modules.permission.PermissionGuardRuntimeProvider;
 import unipatch.overlaycore.modules.system.DoNotDisturbModule;
 import unipatch.overlaycore.modules.advanced.OverlayRuntimeLogsModule;
 import unipatch.overlaycore.modules.advanced.OverlayRuntimeLogger;
@@ -87,13 +91,16 @@ import java.util.WeakHashMap;
  * in ordinary Android apps, Unity/Godot hosts, and game Activities without AppCompat coupling.
  */
 public final class OverlayRuntime {
+    private static final String TAG = "UniPatchesOverlay";
     private static final Map<Activity, Controller> CONTROLLERS = new WeakHashMap<>();
+    private static final Map<Activity, Boolean> PENDING_MANAGER_ACTIVITIES = new WeakHashMap<>();
     private static boolean callbacksRegistered;
     private static boolean globallyClosed;
     private static Application installedApplication;
     private static OverlayLifecycle lifecycleCallbacks;
     private static OverlayConfig configuration;
     private static String installedConfigurationPayload;
+    private static boolean managerConfigurationReady = true;
     private static Boolean keepAwakeState;
     private static Boolean fullscreenState;
     private static Boolean screenshotsState;
@@ -115,20 +122,21 @@ public final class OverlayRuntime {
     private static Integer rotationModeState;
     private static boolean fullyClosedToastShown;
     private static final List<OverlayAppSpecificModuleProvider> APP_SPECIFIC_PROVIDERS = new ArrayList<>();
-    private static String pendingAppSpecificProfile;
-    private static String pendingAppSpecificModules;
+    private static final Map<String, String> pendingAppSpecific = new java.util.LinkedHashMap<>();
 
     static {
         registerAppSpecificProvider(new HillClimbRacingExampleProvider());
         registerAppSpecificProvider(new AdsControlRuntimeProvider());
+        registerAppSpecificProvider(new PermissionGuardRuntimeProvider());
     }
 
     private OverlayRuntime() { }
 
     /** Applies app-specific module selection supplied by a dependent patch after Universal Overlay. */
     public static synchronized void configureAppSpecific(String profileId, String modules) {
-        pendingAppSpecificProfile = profileId == null ? "" : profileId.trim();
-        pendingAppSpecificModules = modules == null ? "" : modules.trim();
+        String profile = profileId == null ? "" : profileId.trim();
+        if (profile.isEmpty()) return;
+        pendingAppSpecific.put(profile, modules == null ? "" : modules.trim());
         if (configuration != null) applyPendingAppSpecificConfiguration();
     }
 
@@ -160,9 +168,16 @@ public final class OverlayRuntime {
             // Keep the first complete configuration instead of silently replacing a live menu.
             return;
         }
-        configuration = OverlayConfig.decode(encodedConfig);
+        if (installedConfigurationPayload == null) {
+            configuration = OverlayConfig.decode(encodedConfig);
+            AdsRuntimePolicy.configureManager(application, configuration.managerPersistence);
+            managerConfigurationReady = !configuration.managerIntegration;
+            installedConfigurationPayload = encodedConfig;
+            if (configuration.managerIntegration) {
+                initializeUniManager(application);
+            }
+        }
         applyPendingAppSpecificConfiguration();
-        installedConfigurationPayload = encodedConfig;
         if (sessionStartElapsed == 0) sessionStartElapsed = SystemClock.elapsedRealtime();
         if (!callbacksRegistered) {
             installedApplication = application;
@@ -170,6 +185,34 @@ public final class OverlayRuntime {
             application.registerActivityLifecycleCallbacks(lifecycleCallbacks);
             callbacksRegistered = true;
         }
+    }
+
+    private static void initializeUniManager(Application application) {
+        UniManagerBridge.resolve(application, "{}", new UniManagerBridge.Callback() {
+            @Override public void onConfiguration(String values) {
+                Runnable applyConfiguration = () -> {
+                    synchronized (OverlayRuntime.class) {
+                        if (configuration == null || globallyClosed) return;
+                        AdsRuntimePolicy.applyManagedConfiguration(values);
+                        PermissionGuardRuntime.applyManagedConfiguration(values);
+                        OverlayConfig.applyManagedConfiguration(configuration, values);
+                        managerConfigurationReady = true;
+                        List<Activity> pending = new ArrayList<>(PENDING_MANAGER_ACTIVITIES.keySet());
+                        PENDING_MANAGER_ACTIVITIES.clear();
+                        for (Activity activity : pending) showActivity(activity);
+                    }
+                };
+                if (Looper.myLooper() == Looper.getMainLooper()) {
+                    applyConfiguration.run();
+                } else {
+                    new Handler(Looper.getMainLooper()).post(applyConfiguration);
+                }
+            }
+
+            @Override public void onBridgeStatus(String status, String reason) {
+                Log.d(TAG, "UniManager read status=" + status + " reason=" + reason);
+            }
+        });
     }
 
     /** Compatibility fallback for APKs where Application.onCreate cannot be resolved. */
@@ -198,9 +241,29 @@ public final class OverlayRuntime {
     }
 
     private static void applyPendingAppSpecificConfiguration() {
-        if (configuration == null || pendingAppSpecificProfile == null) return;
-        configuration.appSpecificProfile = pendingAppSpecificProfile;
-        configuration.appSpecificModules = pendingAppSpecificModules == null ? "" : pendingAppSpecificModules;
+        if (configuration == null || pendingAppSpecific.isEmpty()) return;
+        for (Map.Entry<String, String> entry : pendingAppSpecific.entrySet()) {
+            configuration.appSpecificProfile = appendCsv(configuration.appSpecificProfile, entry.getKey());
+            configuration.appSpecificModules = appendCsv(configuration.appSpecificModules, entry.getValue());
+        }
+    }
+
+    private static String appendCsv(String current, String addition) {
+        StringBuilder result = new StringBuilder(current == null ? "" : current.trim());
+        if (addition == null) return result.toString();
+        for (String raw : addition.split(",")) {
+            String value = raw.trim();
+            if (value.isEmpty() || isCsvSelected(result.toString(), value)) continue;
+            if (result.length() > 0) result.append(",");
+            result.append(value);
+        }
+        return result.toString();
+    }
+
+    private static boolean isCsvSelected(String values, String expected) {
+        if (values == null || expected == null) return false;
+        for (String value : values.split(",")) if (expected.equals(value.trim())) return true;
+        return false;
     }
 
     public static void logActivityResultEntry(Activity activity, int requestCode, int resultCode) {
@@ -220,6 +283,10 @@ public final class OverlayRuntime {
     static synchronized void showActivity(Activity activity) {
         if (activity == null) return;
         if (configuration == null || globallyClosed) return;
+        if (configuration.managerIntegration && !managerConfigurationReady) {
+            PENDING_MANAGER_ACTIVITIES.put(activity, Boolean.TRUE);
+            return;
+        }
         if (isActivityInstallBanned(activity)) return;
         if (activity.isFinishing() || (android.os.Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
         Controller existing = CONTROLLERS.get(activity);
@@ -288,6 +355,7 @@ public final class OverlayRuntime {
             if (controller != null) controller.detach();
         }
         CONTROLLERS.clear();
+        PENDING_MANAGER_ACTIVITIES.clear();
         MODULE_STATES.clear();
         MONITOR_STATES.clear();
         HOOK_STATES.clear();
@@ -305,8 +373,8 @@ public final class OverlayRuntime {
         callbacksRegistered = false;
         configuration = null;
         installedConfigurationPayload = null;
-        pendingAppSpecificProfile = null;
-        pendingAppSpecificModules = null;
+        managerConfigurationReady = true;
+        pendingAppSpecific.clear();
         sessionStartElapsed = 0;
         sharedButtonPositionInitialized = false;
         appBrightnessState = null;
@@ -630,6 +698,14 @@ public final class OverlayRuntime {
                     button.setText(config.buttonText);
                     button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, config.iconTextSize);
                     button.setTypeface(OverlayViews.typeface(config.iconTextFont, config.iconBold ? Typeface.BOLD : Typeface.NORMAL));
+                    applyIconTextColor(button);
+                    if (config.iconShadow) {
+                        button.setShadowLayer(dp(config.iconShadowBlur + config.iconShadowSpread),
+                                dp(config.iconShadowOffsetX), dp(config.iconShadowOffsetY),
+                                withAlpha(config.iconShadowColor, config.iconShadowOpacity / 100f));
+                    } else {
+                        button.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT);
+                    }
                     button.setBackground(OverlayViews.gradientBackground(
                             config.buttonBackground,
                             config.gradientBackground ? config.iconBackground2 : config.buttonBackground,
@@ -665,10 +741,28 @@ public final class OverlayRuntime {
                     config.iconShapeScale / 100f,
                     config.iconHighlight,
                     config.iconShadow,
+                    config.iconShadowColor,
+                    config.iconShadowOpacity,
+                    dp(config.iconShadowOffsetX),
+                    dp(config.iconShadowOffsetY),
+                    dp(config.iconShadowBlur),
+                    dp(config.iconShadowSpread),
                     config.iconBackgroundStyle,
                     config.iconBackgroundColor3,
                     config.iconBackgroundColor4,
                     config.iconParts);
+        }
+
+        private void applyIconTextColor(TextView view) {
+            view.setTextColor(config.buttonTextColor);
+            if (config.iconTextGradient) {
+                float size = dp(Math.max(32, config.buttonSize));
+                view.getPaint().setShader(OverlayViews.textGradient(
+                        config.buttonTextColor, config.iconTextColor2, config.iconTextGradientAngle, size, size));
+            } else {
+                view.getPaint().setShader(null);
+            }
+            view.invalidate();
         }
 
         private String buttonShape() {
@@ -1060,6 +1154,7 @@ public final class OverlayRuntime {
             icon.setText(config.buttonText);
             icon.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, Math.max(10, config.iconTextSize - 4));
             icon.setTypeface(OverlayViews.typeface(config.iconTextFont, config.iconBold ? Typeface.BOLD : Typeface.NORMAL));
+            applyIconTextColor(icon);
             Bitmap customIcon = "image".equals(config.iconType) ? decodeCustomIcon(config.customIconImage) : null;
             if (customIcon != null) {
                 icon.setText("");
@@ -1332,7 +1427,7 @@ public final class OverlayRuntime {
             if (config.appSpecificModules == null || config.appSpecificModules.trim().isEmpty()) return false;
             for (OverlayAppSpecificModuleProvider provider : APP_SPECIFIC_PROVIDERS) {
                 try {
-                    if (config.appSpecificProfile.equals(provider.profileId())) return true;
+                    if (isCsvSelected(config.appSpecificProfile, provider.profileId())) return true;
                 } catch (RuntimeException ignored) {
                     // Ignore broken providers and continue looking for the selected profile.
                 }
@@ -1341,16 +1436,16 @@ public final class OverlayRuntime {
         }
 
         private boolean hasIntegratedModules() {
-            return AdsRuntimePolicy.hasAnyModule();
+            return AdsRuntimePolicy.hasAnyOverlayModule();
         }
 
         private void addAppSpecificModules(LinearLayout parent) {
             if (config.appSpecificProfile == null || config.appSpecificProfile.isEmpty()) return;
             for (OverlayAppSpecificModuleProvider provider : APP_SPECIFIC_PROVIDERS) {
                 try {
-                    if (!config.appSpecificProfile.equals(provider.profileId())) continue;
+                    if (!isCsvSelected(config.appSpecificProfile, provider.profileId())) continue;
                     List<OverlayAppSpecificModule> targetModules = provider.create(activity);
-                    if (targetModules == null || targetModules.isEmpty()) return;
+                    if (targetModules == null || targetModules.isEmpty()) continue;
                     List<OverlayAppSpecificModule> supportedModules = new ArrayList<>();
                     for (OverlayAppSpecificModule module : targetModules) {
                         if (module == null) continue;
@@ -1364,7 +1459,7 @@ public final class OverlayRuntime {
                     for (OverlayAppSpecificModule module : supportedModules) {
                         if (isAppSpecificModuleSelected(module.key())) selectedModules.add(module);
                     }
-                    if (selectedModules.isEmpty()) return;
+                    if (selectedModules.isEmpty()) continue;
                     addSectionLabel(parent, "App-specific modules");
                     for (OverlayAppSpecificModule module : selectedModules) {
                         addAppSpecificModuleSafely(parent, () -> module, "App");
@@ -1372,7 +1467,6 @@ public final class OverlayRuntime {
                 } catch (RuntimeException ignored) {
                     // Target-specific code must not prevent universal modules from rendering.
                 }
-                return;
             }
         }
 
@@ -1764,7 +1858,7 @@ public final class OverlayRuntime {
                 try {
                     String profileId = provider.profileId();
                     String section;
-                    if (AdsControlRuntimeProvider.PROFILE_ID.equals(profileId) && AdsRuntimePolicy.hasAnyModule()) {
+                    if (AdsControlRuntimeProvider.PROFILE_ID.equals(profileId) && AdsRuntimePolicy.hasAnyOverlayModule()) {
                         section = "Ad control hook modules";
                     } else {
                         continue;
@@ -2558,8 +2652,9 @@ public final class OverlayRuntime {
             }
         }
 
+        /** Keep settings popup content bounded instead of allowing long lists to fill the screen. */
         private int settingsChoicesMaxHeight() {
-            return boundedOverlayContentHeight(220);
+            return boundedMenuContentHeight();
         }
 
         private int dp(int value) { return (int) (value * activity.getResources().getDisplayMetrics().density + .5f); }

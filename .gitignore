@@ -118,6 +118,7 @@ gradle-app.setting
 *.apk
 
 # Ignore vscode config
+.DS_Store
 .vscode/
 
 # Dependency directories
@@ -144,3 +145,6 @@ testing/
 
 # Generated patch build output
 patches/bin/
+
+# Local doublecheck reports
+.doublecheck/
