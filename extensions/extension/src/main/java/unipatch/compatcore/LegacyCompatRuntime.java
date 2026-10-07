@@ -1,8 +1,9 @@
 /*
  * UniPatches legacy compatibility runtime hooks.
  *
- * Static helpers invoked from Application.onCreate by Legacy App Compatibility
- * patches. Kept dependency-free so the extension dex stays small.
+ * Static helpers invoked from Application.onCreate or a validated launcher
+ * Activity by Legacy App Compatibility patches. Kept dependency-free so the
+ * extension dex stays small.
  */
 package unipatch.compatcore;
 
@@ -30,6 +31,41 @@ public final class LegacyCompatRuntime {
     private static final String TAG = "UniPatchLegacy";
 
     private static volatile Context appContext = null;
+
+    enum HiddenApiExemptionOutcome {
+        UNSUPPORTED,
+        APPLIED,
+        ALREADY_APPLIED,
+        REJECTED
+    }
+
+    interface HiddenApiExemptionApplier {
+        boolean apply(String signaturePrefix) throws Throwable;
+    }
+
+    /** Prevents repeated VMRuntime.setHiddenApiExemptions calls within one app process. */
+    static final class HiddenApiExemptionOnce {
+        private boolean applied;
+
+        synchronized HiddenApiExemptionOutcome apply(
+                int sdk,
+                HiddenApiExemptionApplier applier
+        ) throws Throwable {
+            if (sdk < android.os.Build.VERSION_CODES.P) {
+                return HiddenApiExemptionOutcome.UNSUPPORTED;
+            }
+            if (applied) {
+                return HiddenApiExemptionOutcome.ALREADY_APPLIED;
+            }
+            if (!applier.apply("L")) {
+                return HiddenApiExemptionOutcome.REJECTED;
+            }
+            applied = true;
+            return HiddenApiExemptionOutcome.APPLIED;
+        }
+    }
+
+    private static final HiddenApiExemptionOnce HIDDEN_API_EXEMPTION_ONCE = new HiddenApiExemptionOnce();
 
     private LegacyCompatRuntime() {
     }
@@ -136,12 +172,28 @@ public final class LegacyCompatRuntime {
      * relying on non-SDK reflection keep working. Requires Android P+.
      */
     public static void exemptHiddenApis() {
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P) {
+        int sdk = android.os.Build.VERSION.SDK_INT;
+        if (sdk < android.os.Build.VERSION_CODES.P) {
             return; // Hidden API enforcement did not exist before P.
         }
         try {
-            HiddenApiBypass.addHiddenApiExemptions("L");
-            Log.i(TAG, "Hidden API exemptions applied");
+            HiddenApiExemptionOutcome outcome = HIDDEN_API_EXEMPTION_ONCE.apply(
+                    sdk,
+                    signaturePrefix -> HiddenApiBypass.setHiddenApiExemptions(signaturePrefix)
+            );
+            switch (outcome) {
+                case APPLIED:
+                    Log.i(TAG, "Hidden API exemptions applied");
+                    break;
+                case ALREADY_APPLIED:
+                    Log.i(TAG, "Hidden API exemptions already applied");
+                    break;
+                case REJECTED:
+                    Log.w(TAG, "Hidden API exemptions were not applied");
+                    break;
+                case UNSUPPORTED:
+                    return;
+            }
         } catch (Throwable t) {
             Log.w(TAG, "Hidden API exemptions failed", t);
         }

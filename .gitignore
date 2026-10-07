@@ -148,3 +148,9 @@ patches/bin/
 
 # Local doublecheck reports
 .doublecheck/
+
+# Eclipse IDE metadata
+.metadata/
+.project
+.classpath
+.settings/

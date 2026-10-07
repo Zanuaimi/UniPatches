@@ -237,7 +237,7 @@ internal fun exportAllActivities(document: Document, logger: Logger): Int {
 
 @Suppress("unused")
 val legacyAppCompatibilityPatch = resourcePatch(
-    name = "Improve Legacy App / Game Compatibility for Modern Android Patch ( Experimental, Enhanced )",
+    name = "Legacy App Compatibility Patch ( Experimental, Enhanced )",
     description = """
         Improves older app and game compatibility on modern Android with manifest, storage, screen,
         native runtime, network, shared-library, device-identity, and OpenIAB receiver controls.
@@ -252,9 +252,10 @@ val legacyAppCompatibilityPatch = resourcePatch(
 
         Experimental: Its functionalities are not guaranteed to work in all apps.
 
-        Credits: Nai64Patches from Nai64 for the original legacy compatibility functionality. Hidden API
-        bypass uses AndroidHiddenApiBypass by LSPosed (Apache-2.0). UniPatches
-        provides the merged settings, validation, manifest safeguards, compatibility organization, and provides suppress GPlay Login UI patch option.
+        Credits: Nai64Patches from Nai64 for the original legacy compatibility functionality. Credits to
+        LSPosed for the Hidden API bypass approach and AndroidHiddenApiBypass implementation (Apache-2.0).
+        UniPatches adds the merged settings, validation, manifest safeguards, compatibility organization,
+        and the Suppress GPlay Login UI patch option.
     """.trimIndent(),
     default = false,
 ) {
