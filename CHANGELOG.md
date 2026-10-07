@@ -1,3 +1,9 @@
+## [1.30.1-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0...v1.30.1-dev.1) (2026-10-07)
+
+### 🔧 Improvements
+
+* improve Hidden API Bypass by LSPosed in Legacy ([fffd0ae](https://github.com/Zanuaimi/UniPatches/commit/fffd0ae4a72ddb6c58758177927a38e1b9d35727))
+
 ## [1.30.0](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0...v1.30.0) (2026-10-06)
 
 ### 🐛 Bug Fixes
