@@ -1,3 +1,14 @@
+## [1.30.1](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0...v1.30.1) (2026-10-08)
+
+### 🐛 Bug Fixes
+
+* update tests ([01a5f7b](https://github.com/Zanuaimi/UniPatches/commit/01a5f7b0858ab30f6982246664683d4ce17ee36b))
+
+### 🔧 Improvements
+
+* improve frida patch ([c2c27d8](https://github.com/Zanuaimi/UniPatches/commit/c2c27d8c56a52ee84002021c9023a79293055d48))
+* improve Hidden API Bypass by LSPosed in Legacy ([fffd0ae](https://github.com/Zanuaimi/UniPatches/commit/fffd0ae4a72ddb6c58758177927a38e1b9d35727))
+
 ## [1.30.1-dev.2](https://github.com/Zanuaimi/UniPatches/compare/v1.30.1-dev.1...v1.30.1-dev.2) (2026-10-08)
 
 ### 🐛 Bug Fixes
