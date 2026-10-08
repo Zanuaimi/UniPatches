@@ -19,7 +19,7 @@ class PatchDescriptionConcisenessTest {
             "Disable Forced Online Checks (Experimental)" to 440,
             "Embed Frida Gadget ( Advanced )" to 390,
             "Hill Climb Racing Example Overlay Addon" to 450,
-            "Improve Legacy App / Game Compatibility for Modern Android Patch ( Experimental, Enhanced )" to 1150,
+            "Legacy App Compatibility Patch ( Experimental, Enhanced )" to 1150,
             "PairIP Bypass Patch (Experimental, Enhanced)" to 1700,
             "Permission Guard Patch ( Experimental, Overlay Support, UniManager Support )" to 800,
             "Universal Overlay Patch v2.6.1 ( Experimental, UniManager Support )" to 2200,
