@@ -7,6 +7,48 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FridaGadgetPatchTest {
+    private fun assertFailure(message: String, block: () -> Unit) {
+        try {
+            block()
+            throw AssertionError("Expected failure containing $message")
+        } catch (exception: IllegalArgumentException) {
+            assertTrue(exception.message.orEmpty().contains(message))
+        }
+    }
+
+    @Test
+    fun scriptFailuresIdentifyMissingEmptyOversizedAndInvalidUtf8Inputs() {
+        val file = File.createTempFile("frida-validation-", ".js")
+        try {
+            assertFailure("empty") { readUtf8Script(file) }
+            file.writeBytes(byteArrayOf(0xc3.toByte(), 0x28))
+            assertFailure("UTF-8") { readUtf8Script(file) }
+            java.io.RandomAccessFile(file, "rw").use { it.setLength(8L * 1024 * 1024 + 1) }
+            assertFailure("limit") { readUtf8Script(file) }
+        } finally {
+            file.delete()
+        }
+        assertFailure(file.path) { readUtf8Script(file) }
+    }
+
+    @Test
+    fun bundleSeparatesExpressionsAndTrailingCommentsWithoutWrappingScope() {
+        val bundle = String(buildFridaBundle(
+            ScriptSource("entry\nunsafe.js", "var shared = 1 // trailing comment"),
+            listOf(ScriptSource("extra.js", "(function () { shared++; })()")),
+        ))
+        assertTrue(bundle.contains("var shared = 1 // trailing comment\n\n;\n"))
+        assertTrue(bundle.contains("entry unsafe.js"))
+        assertTrue(bundle.contains("(function () { shared++; })()"))
+    }
+
+    @Test
+    fun selectsApkAbisAndRejectsUnsupportedDirectories() {
+        assertEquals(listOf(FridaAbi.ARM), targetAbis(listOf("lib/armeabi-v7a/libgame.so")).values)
+        assertEquals(FridaAbi.values().toList(), targetAbis(emptyList()).values)
+        assertFailure("mips") { targetAbis(listOf("lib/mips/libgame.so")) }
+    }
+
     @Test
     fun acceptsOnlyFinalJavaScriptExtension() {
         assertTrue(hasJavaScriptExtension("hook.js"))
@@ -20,14 +62,14 @@ class FridaGadgetPatchTest {
     }
 
     @Test
-    fun invalidAdditionalPathIsSkippedAndNextPathIsRead() {
+    fun invalidAdditionalPathFailsWithFilename() {
         val valid = File.createTempFile("frida-extra-", ".js")
         val invalid = File.createTempFile("frida-extra-", ".json")
         try {
             valid.writeText("send('ok');")
             invalid.writeText("{}")
-            val scripts = readAdditionalScripts(listOf(invalid.path, valid.path))
-            assertEquals(listOf(valid.name), scripts.map { it.name })
+            assertFailure(invalid.path) { readAdditionalScripts(listOf(invalid.path, valid.path)) }
+            assertEquals(listOf(valid.name), readAdditionalScripts(listOf(valid.path, valid.path)).map { it.name })
         } finally {
             valid.delete()
             invalid.delete()
@@ -46,6 +88,9 @@ class FridaGadgetPatchTest {
         elf[16] = 3.toByte()
         elf[18] = 183.toByte()
         assertEquals(elf.toList(), validateGadget(elf, FridaAbi.ARM64).toList())
+        assertFailure("does not match") { validateGadget(elf, FridaAbi.ARM) }
+        elf[4] = 1
+        assertFailure("class") { validateGadget(elf, FridaAbi.ARM64) }
 
         try {
             validateGadget("not an ELF".toByteArray())

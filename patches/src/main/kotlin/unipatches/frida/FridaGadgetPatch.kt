@@ -53,7 +53,7 @@ internal enum class FridaAbi(
 
 internal data class ScriptSource(val name: String, val source: String)
 private data class GadgetPayload(val gadgets: Map<String, ByteArray>, val bundle: ByteArray)
-private data class TargetAbis(val values: List<FridaAbi>, val discovered: Boolean)
+internal data class TargetAbis(val values: List<FridaAbi>, val discovered: Boolean)
 
 /** Exact final-extension check. `.jsonimage.json` and `hook.js.json` are not JavaScript files. */
 internal fun hasJavaScriptExtension(path: String): Boolean {
@@ -74,16 +74,24 @@ private fun readBounded(input: InputStream, maxBytes: Int): ByteArray {
     return output.toByteArray()
 }
 
-private fun readUtf8Script(file: File): String? {
-    if (!file.isFile || !file.canRead() || file.length() <= 0L || file.length() > MAX_SCRIPT_BYTES) return null
-    val bytes = FileInputStream(file).use { readBounded(it, MAX_SCRIPT_BYTES) }
-    return runCatching {
+internal fun readUtf8Script(file: File): String {
+    require(file.isFile && file.canRead()) { "JavaScript file is missing or unreadable: ${file.path}" }
+    require(file.length() > 0L) { "JavaScript file is empty: ${file.path}" }
+    require(file.length() <= MAX_SCRIPT_BYTES) { "JavaScript file exceeds the $MAX_SCRIPT_BYTES-byte limit: ${file.path}" }
+    val bytes = try {
+        FileInputStream(file).use { readBounded(it, MAX_SCRIPT_BYTES) }
+    } catch (exception: Exception) {
+        throw IllegalArgumentException("Could not read JavaScript file ${file.path}: ${exception.message}", exception)
+    }
+    return try {
         StandardCharsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
             .decode(ByteBuffer.wrap(bytes))
             .toString()
-    }.getOrNull()
+    } catch (exception: java.nio.charset.CharacterCodingException) {
+        throw IllegalArgumentException("JavaScript file is not valid UTF-8: ${file.path}", exception)
+    }
 }
 
 private fun readEntryScript(path: String): ScriptSource {
@@ -96,7 +104,6 @@ private fun readEntryScript(path: String): ScriptSource {
         "Entry JavaScript file is missing or unreadable: ${file.path}"
     }
     val source = readUtf8Script(file)
-        ?: error("Entry JavaScript file is empty, too large, or not valid UTF-8: ${file.path}")
     return ScriptSource(file.name, source)
 }
 
@@ -109,32 +116,21 @@ internal fun readAdditionalScripts(paths: List<String>): List<ScriptSource> {
         .filter(String::isNotEmpty)
         .forEach { sourcePath ->
             val file = runCatching { File(sourcePath).canonicalFile }.getOrNull()
-            when {
-                file == null -> logger.warning("Frida Gadget: skipped unresolved JavaScript path: $sourcePath")
-                !hasJavaScriptExtension(file.name) -> logger.warning("Frida Gadget: skipped non-JavaScript path: $sourcePath")
-                !file.isFile || !file.canRead() -> logger.warning("Frida Gadget: skipped missing or unreadable JavaScript path: $sourcePath")
-                !seen.add(file.path) -> logger.info("Frida Gadget: skipped duplicate JavaScript path: $sourcePath")
-                else -> {
-                    val source = runCatching { readUtf8Script(file) }.getOrNull()
-                    if (source == null) {
-                        logger.warning("Frida Gadget: skipped empty, oversized, or non-UTF-8 JavaScript path: $sourcePath")
-                    } else {
-                        result += ScriptSource(file.name, source)
-                    }
-                }
-            }
+            requireNotNull(file) { "Additional JavaScript path cannot be resolved: $sourcePath" }
+            require(hasJavaScriptExtension(file.name)) { "Additional JavaScript file must end with .js: $sourcePath" }
+            if (seen.add(file.path)) result += ScriptSource(file.name, readUtf8Script(file))
         }
     return result
 }
 
 internal fun buildFridaBundle(entry: ScriptSource, extras: List<ScriptSource>): ByteArray {
     val output = buildString {
-        append("// UniPatches Frida Gadget entry script: ").append(entry.name).append('\n')
+        append("// UniPatches Frida Gadget entry script: ").append(entry.name.replace(Regex("[\\r\\n\\u2028\\u2029]"), " ")).append('\n')
         append(entry.source)
         if (!endsWith("\n")) append('\n')
         extras.forEachIndexed { index, script ->
-            append("\n// UniPatches Frida Gadget additional script ").append(index + 1)
-                .append(": ").append(script.name).append('\n')
+            append("\n;\n// UniPatches Frida Gadget additional script ").append(index + 1)
+                .append(": ").append(script.name.replace(Regex("[\\r\\n\\u2028\\u2029]"), " ")).append('\n')
             append(script.source)
             if (!endsWith("\n")) append('\n')
         }
@@ -169,6 +165,11 @@ internal fun validateGadget(bytes: ByteArray, expected: FridaAbi? = null): ByteA
         "Frida Gadget ELF is not a shared object"
     }
     val machine = readUnsignedShort(bytes, 18, littleEndian)
+    val abi = FridaAbi.values().firstOrNull { it.elfMachine == machine }
+    val expectedClass = if (abi == FridaAbi.ARM64 || abi == FridaAbi.X86_64) 2 else 1
+    require(abi != null && (bytes[4].toInt() and 0xff) == expectedClass) {
+        "Frida Gadget ELF class does not match supported architecture $machine"
+    }
     if (expected != null) {
         require(machine == expected.elfMachine) {
             "Frida Gadget architecture $machine does not match ${expected.apkDirectory}"
@@ -192,9 +193,14 @@ private fun readGadgetFile(path: String, expected: FridaAbi?): ByteArray {
     require(file.length() > 0L && file.length() <= MAX_DOWNLOAD_BYTES) {
         "Frida Gadget file is empty or too large: ${file.path}"
     }
-    val source = FileInputStream(file).use { readBounded(it, MAX_DOWNLOAD_BYTES) }
-    val decompressed = if (name.endsWith(".so.xz")) readXz(source) else source
-    return validateGadget(decompressed, expected)
+    return try {
+        val source = FileInputStream(file).use { readBounded(it, MAX_DOWNLOAD_BYTES) }
+        val decompressed = if (name.endsWith(".so.xz")) readXz(source) else source
+        require(decompressed.size <= MAX_GADGET_BYTES) { "Frida Gadget exceeds the $MAX_GADGET_BYTES-byte limit" }
+        validateGadget(decompressed, expected)
+    } catch (exception: Exception) {
+        throw IllegalArgumentException("Could not prepare Frida Gadget ${file.path}: ${exception.message}", exception)
+    }
 }
 
 private fun download(url: String, maxBytes: Int): ByteArray {
@@ -236,7 +242,7 @@ private fun downloadLatestGadget(abi: FridaAbi): ByteArray {
     return gadget
 }
 
-private fun targetAbis(entries: List<String>): TargetAbis {
+internal fun targetAbis(entries: List<String>): TargetAbis {
     val directories = entries.mapNotNull { entry ->
         Regex("^lib/([^/]+)/").find(entry)?.groupValues?.get(1)
     }.toSet()
@@ -336,7 +342,7 @@ val fridaGadgetPatch = bytecodePatch(
         title = "Frida Gadget > Scripts > Additional JavaScript files",
         default = emptyList(),
         key = "fridaGadgetAdditionalScripts",
-        description = "Optional patch-time paths, one per row. No artificial path-count limit. Exact final .js files are embedded in order; invalid paths are skipped and processing continues.",
+        description = "Optional patch-time paths, one per row. No artificial path-count limit. Exact final .js files are embedded in order and share script scope; invalid inputs stop patching with an error.",
     )
 
     val payloadPatch = rawResourcePatch(
