@@ -12,7 +12,7 @@ import org.w3c.dom.Document
 import org.w3c.dom.Element
 
 private const val EXPANSION_ASSET_DIRECTORY = "assets/unipatch-legacy-expansion"
-private val expansionFilePattern = Regex("main\\.\\d+\\.([A-Za-z0-9_.]+)\\.obb")
+private val expansionFilePattern = Regex("(?:main|patch)\\.\\d+\\.([A-Za-z0-9_.]+)\\.obb")
 private val nativeEntryPattern = Regex("assets/libs/([^/]+)/([^/]+\\.so)")
 
 internal data class LegacyExpansionOptions(
@@ -71,9 +71,23 @@ internal fun rewriteExpansionObb(source: File, output: File, removedEntries: Set
     }
 }
 
+internal fun stageExpansionNativeLibraries(
+    zip: ZipFile,
+    nativeEntries: List<Pair<String, String>>,
+    outputForDestination: (String) -> File,
+) {
+    for ((entryName, destination) in nativeEntries) {
+        val output = outputForDestination(destination)
+        output.parentFile?.mkdirs()
+        zip.getInputStream(zip.getEntry(entryName)).use { input ->
+            output.outputStream().use { outputStream -> input.copyTo(outputStream, DEFAULT_COPY_BUFFER) }
+        }
+    }
+}
+
 /**
- * Stages an optional expansion OBB, relocates full native libraries that old Unity packages
- * incorrectly kept inside it, and can omit those relocated entries from embedded output.
+ * Stages an optional main or patch expansion OBB, relocates full native libraries stored
+ * under the conventional assets/libs/<abi>/ path, and can omit them from embedded output.
  * All operations happen at patch time; no host path is retained.
  */
 internal fun legacyExpansionFilesPatch(optionsProvider: () -> LegacyExpansionOptions) = rawResourcePatch(
@@ -102,7 +116,7 @@ internal fun legacyExpansionFilesPatch(optionsProvider: () -> LegacyExpansionOpt
             "Legacy compatibility: cannot validate expansion OBB because APK package name could not be resolved."
         }
         require(isExpansionFileForPackage(source.name, packageName)) {
-            "Legacy compatibility: expected OBB filename main.<versionCode>.<package>.obb matching package $packageName, got ${source.name}"
+            "Legacy compatibility: expected main.<versionCode>.<package>.obb or patch.<versionCode>.<package>.obb matching package $packageName, got ${source.name}"
         }
 
         val nativeEntries = mutableListOf<Pair<String, String>>()
@@ -124,12 +138,8 @@ internal fun legacyExpansionFilesPatch(optionsProvider: () -> LegacyExpansionOpt
                 require(nativeEntries.isNotEmpty()) {
                     "Legacy compatibility: requested native-library relocation, but OBB contains no assets/libs/<abi>/*.so entries."
                 }
-                for ((entryName, destination) in nativeEntries) {
-                    val output = get(destination, false)
-                    output.parentFile?.mkdirs()
-                    zip.getInputStream(zip.getEntry(entryName)).use { input ->
-                        output.outputStream().use { outputStream -> input.copyTo(outputStream, DEFAULT_COPY_BUFFER) }
-                    }
+                stageExpansionNativeLibraries(zip, nativeEntries) { destination -> get(destination, false) }
+                nativeEntries.forEach { (entryName, destination) ->
                     logger.info("Legacy compatibility: relocated OBB native library $entryName to $destination.")
                 }
             }
