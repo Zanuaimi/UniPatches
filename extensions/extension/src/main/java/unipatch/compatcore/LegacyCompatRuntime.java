@@ -14,9 +14,15 @@ import android.util.Log;
 
 import org.lsposed.hiddenapibypass.HiddenApiBypass;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.InputStreamReader;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 
@@ -75,6 +81,161 @@ public final class LegacyCompatRuntime {
         appContext = context != null ? context.getApplicationContext() : null;
     }
 
+    static final class ExpansionMetadata {
+        final long length;
+        final String sha256;
+
+        ExpansionMetadata(long length, String sha256) {
+            this.length = length;
+            this.sha256 = sha256;
+        }
+
+        String encode() {
+            return length + " " + sha256;
+        }
+    }
+
+    static ExpansionMetadata parseExpansionMetadata(String text) {
+        if (text == null) return null;
+        String[] fields = text.trim().split("\\s+");
+        if (fields.length != 2 || !fields[1].matches("[0-9a-f]{64}")) return null;
+        try {
+            long length = Long.parseLong(fields[0]);
+            return length > 0 ? new ExpansionMetadata(length, fields[1]) : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    static boolean fileMatchesExpected(File file, ExpansionMetadata metadata) {
+        if (file == null || metadata == null || !file.isFile() || file.length() != metadata.length) return false;
+        try {
+            return metadata.sha256.equals(sha256(file));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    static boolean copyAndVerify(InputStream input, File temporary, ExpansionMetadata metadata) throws IOException {
+        if (metadata == null || temporary == null) return false;
+        if (temporary.exists() && !temporary.delete()) return false;
+        try (FileOutputStream output = new FileOutputStream(temporary)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = input.read(buffer)) != -1) output.write(buffer, 0, read);
+            output.flush();
+            output.getFD().sync();
+        } catch (IOException e) {
+            temporary.delete();
+            throw e;
+        }
+        if (!fileMatchesExpected(temporary, metadata)) {
+            temporary.delete();
+            return false;
+        }
+        return true;
+    }
+
+    static boolean stageVerifiedFile(
+            InputStream input,
+            File temporary,
+            File target,
+            File backup,
+            ExpansionMetadata metadata
+    ) throws IOException {
+        try (InputStream source = input) {
+            if (!copyAndVerify(source, temporary, metadata)) return false;
+        }
+        if (publishVerifiedTemp(temporary, target, backup)) return true;
+        temporary.delete();
+        return false;
+    }
+
+    static boolean publishVerifiedTemp(File temporary, File target, File backup) {
+        if (temporary == null || target == null || backup == null || !temporary.isFile()) return false;
+        // Android/Linux rename replaces an existing file atomically within the same directory.
+        if (temporary.renameTo(target)) return true;
+        if (!target.exists() || backup.exists() || !target.renameTo(backup)) return false;
+        if (!temporary.renameTo(target)) {
+            if (!backup.renameTo(target)) Log.e(TAG, "Could not restore prior OBB after failed publish: " + backup);
+            return false;
+        }
+        return true;
+    }
+
+    private static String sha256(File file) throws IOException {
+        final MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IOException("SHA-256 unavailable", e);
+        }
+        try (InputStream input = new FileInputStream(file)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = input.read(buffer)) != -1) digest.update(buffer, 0, read);
+        }
+        byte[] bytes = digest.digest();
+        char[] hex = "0123456789abcdef".toCharArray();
+        char[] output = new char[bytes.length * 2];
+        for (int i = 0; i < bytes.length; i++) {
+            int value = bytes[i] & 0xff;
+            output[i * 2] = hex[value >>> 4];
+            output[i * 2 + 1] = hex[value & 0x0f];
+        }
+        return new String(output);
+    }
+
+    private static String readUtf8(InputStream input) throws IOException {
+        StringBuilder text = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, "UTF-8"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (text.length() + line.length() > 128) return null;
+                if (text.length() > 0) text.append(' ');
+                text.append(line);
+            }
+        }
+        return text.toString();
+    }
+
+    private static boolean markerMatches(File marker, File target, ExpansionMetadata metadata) {
+        if (!fileMatchesExpected(target, metadata) || !marker.isFile() || marker.lastModified() < target.lastModified()) return false;
+        try (InputStream input = new FileInputStream(marker)) {
+            return metadata.encode().equals(readUtf8(input));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static boolean writeMarker(File marker, ExpansionMetadata metadata) {
+        File temporary = new File(marker.getPath() + ".tmp");
+        if (temporary.exists() && !temporary.delete()) return false;
+        try (FileOutputStream output = new FileOutputStream(temporary)) {
+            output.write(metadata.encode().getBytes("UTF-8"));
+            output.flush();
+            output.getFD().sync();
+        } catch (IOException e) {
+            temporary.delete();
+            return false;
+        }
+        if (marker.exists() && !marker.delete()) {
+            temporary.delete();
+            return false;
+        }
+        if (!temporary.renameTo(marker)) {
+            temporary.delete();
+            return false;
+        }
+        return true;
+    }
+
+    private static ExpansionMetadata readExpansionMetadata(AssetManager assets, String name) throws IOException {
+        try (InputStream input = assets.open("unipatch-legacy-expansion/" + name + ".sha256")) {
+            return parseExpansionMetadata(readUtf8(input));
+        }
+    }
+
     /**
      * Copies one embedded expansion OBB into the conventional Android OBB directory.
      * The asset is copied through a temporary file so Unity never sees a partial archive.
@@ -89,11 +250,31 @@ public final class LegacyCompatRuntime {
         try {
             AssetManager assets = context.getAssets();
             String[] names = assets.list("unipatch-legacy-expansion");
-            if (names == null || names.length != 1 || !names[0].endsWith(".obb")) {
-                Log.w(TAG, "Embedded expansion skipped: expected one .obb asset");
+            String name = null;
+            int obbCount = 0;
+            boolean hasChecksum = false;
+            if (names != null) {
+                for (String assetName : names) {
+                    if (assetName.endsWith(".obb")) {
+                        name = assetName;
+                        obbCount++;
+                    }
+                }
+                if (obbCount == 1) {
+                    for (String assetName : names) {
+                        if ((name + ".sha256").equals(assetName)) hasChecksum = true;
+                    }
+                }
+            }
+            if (names == null || names.length != 2 || obbCount != 1 || !hasChecksum) {
+                Log.w(TAG, "Embedded expansion skipped: expected one .obb and its .sha256 metadata asset");
                 return;
             }
-            String name = names[0];
+            ExpansionMetadata metadata = readExpansionMetadata(assets, name);
+            if (metadata == null) {
+                Log.w(TAG, "Embedded expansion skipped: checksum metadata is invalid");
+                return;
+            }
             File obbDir = context.getObbDir();
             if (obbDir == null) {
                 Log.w(TAG, "Embedded expansion skipped: getObbDir returned null");
@@ -104,69 +285,70 @@ public final class LegacyCompatRuntime {
                 return;
             }
             File target = new File(obbDir, name);
-            long assetLength = -1L;
-            try (android.content.res.AssetFileDescriptor descriptor = assets.openFd("unipatch-legacy-expansion/" + name)) {
-                assetLength = descriptor.getLength();
-            } catch (Throwable ignored) {
-                // Compressed assets do not expose a length; package update time still detects APK updates.
-            }
-            long packageUpdateTime = 0L;
-            try {
-                packageUpdateTime = context.getPackageManager()
-                        .getPackageInfo(context.getPackageName(), 0)
-                        .lastUpdateTime;
-            } catch (Throwable ignored) {
-                // Keep length-only freshness when package metadata is unavailable.
-            }
-            boolean targetFresh = target.isFile()
-                    && target.length() > 0
-                    && (assetLength < 0 || target.length() == assetLength)
-                    && (packageUpdateTime <= 0 || target.lastModified() >= packageUpdateTime);
-            if (targetFresh) {
+            String versionKey = ".unipatch." + metadata.sha256;
+            File marker = new File(obbDir, "." + name + versionKey + ".verified");
+            File backup = new File(obbDir, "." + name + versionKey + ".bak");
+            temporary = new File(obbDir, "." + name + ".unipatch.tmp");
+
+            if (!target.exists() && backup.isFile() && !backup.renameTo(target)) {
+                Log.w(TAG, "Embedded expansion skipped: cannot restore interrupted OBB replacement " + backup);
                 return;
             }
             if (target.exists() && !target.isFile()) {
                 Log.w(TAG, "Embedded expansion skipped: target is not a file " + target);
                 return;
             }
-            temporary = new File(obbDir, "." + name + ".unipatch.tmp");
+            if (markerMatches(marker, target, metadata)) {
+                if (backup.exists()) backup.delete();
+                Log.i(TAG, "Embedded expansion already verified at " + target);
+                return;
+            }
+            if (fileMatchesExpected(target, metadata)) {
+                writeMarker(marker, metadata);
+                if (backup.exists()) backup.delete();
+                Log.i(TAG, "Existing expansion OBB matches embedded checksum at " + target);
+                return;
+            }
+            if (backup.exists()) {
+                if (fileMatchesExpected(backup, metadata)) {
+                    if (target.exists() && !target.delete()) {
+                        Log.w(TAG, "Embedded expansion skipped: cannot replace stale target with verified backup " + target);
+                        return;
+                    }
+                    if (!backup.renameTo(target)) {
+                        Log.w(TAG, "Embedded expansion skipped: cannot restore verified OBB backup " + backup);
+                        return;
+                    }
+                    writeMarker(marker, metadata);
+                    return;
+                }
+                Log.w(TAG, "Embedded expansion skipped: an unverified recovery file already exists " + backup);
+                return;
+            }
             if (temporary.exists() && !temporary.delete()) {
                 Log.w(TAG, "Embedded expansion skipped: cannot clear temporary file " + temporary);
                 return;
             }
-            try (InputStream input = assets.open("unipatch-legacy-expansion/" + name);
-                 OutputStream output = new java.io.FileOutputStream(temporary)) {
-                byte[] buffer = new byte[64 * 1024];
-                int read;
-                while ((read = input.read(buffer)) != -1) {
-                    output.write(buffer, 0, read);
-                }
-                output.flush();
+            boolean staged;
+            try (InputStream input = assets.open("unipatch-legacy-expansion/" + name)) {
+                staged = stageVerifiedFile(input, temporary, target, backup, metadata);
             }
-            if (temporary.length() == 0) {
-                temporary.delete();
-                Log.w(TAG, "Embedded expansion skipped: asset is empty");
+            if (!staged) {
+                Log.w(TAG, "Embedded expansion skipped: staged OBB length or SHA-256 did not match metadata");
                 return;
             }
-            if (target.exists() && !target.delete()) {
-                temporary.delete();
-                Log.w(TAG, "Embedded expansion failed: cannot replace " + target);
-                return;
+            if (!writeMarker(marker, metadata)) {
+                Log.w(TAG, "Embedded expansion staged and verified, but freshness marker could not be written");
             }
-            if (!temporary.renameTo(target)) {
-                temporary.delete();
-                Log.w(TAG, "Embedded expansion failed: cannot publish " + target);
-                return;
+            if (backup.exists() && !backup.delete()) {
+                Log.w(TAG, "Embedded expansion staged; old OBB backup remains at " + backup);
             }
-            Log.i(TAG, "Embedded expansion staged at " + target);
+            Log.i(TAG, "Embedded expansion staged and verified at " + target);
         } catch (Throwable t) {
-            if (temporary != null) {
-                temporary.delete();
-            }
+            if (temporary != null) temporary.delete();
             Log.w(TAG, "Embedded expansion staging failed", t);
         }
     }
-
     /**
      * Exempts every hidden API prefix ("L") for this app process so old apps
      * relying on non-SDK reflection keep working. Requires Android P+.

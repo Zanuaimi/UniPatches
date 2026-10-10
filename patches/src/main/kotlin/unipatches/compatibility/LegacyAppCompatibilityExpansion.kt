@@ -2,6 +2,7 @@ package unipatches.compatibility
 
 import app.morphe.patcher.patch.rawResourcePatch
 import java.io.File
+import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -23,6 +24,31 @@ internal data class LegacyExpansionOptions(
 )
 
 internal fun expansionAssetPath(fileName: String): String = "$EXPANSION_ASSET_DIRECTORY/$fileName"
+
+internal fun expansionChecksumAssetPath(fileName: String): String = expansionAssetPath("$fileName.sha256")
+
+internal fun expansionChecksumText(file: File): String = "${file.length()}\n${expansionSha256(file)}\n"
+
+internal fun expansionSha256(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().buffered().use { input ->
+        val buffer = ByteArray(DEFAULT_COPY_BUFFER)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+    }
+    val bytes = digest.digest()
+    val hex = "0123456789abcdef"
+    return buildString(bytes.size * 2) {
+        for (byte in bytes) {
+            val value = byte.toInt() and 0xff
+            append(hex[value ushr 4])
+            append(hex[value and 0x0f])
+        }
+    }
+}
 
 internal fun expansionNativeDestination(entryName: String): String? =
     nativeEntryPattern.matchEntire(entryName)?.let { match ->
@@ -162,6 +188,11 @@ internal fun legacyExpansionFilesPatch(optionsProvider: () -> LegacyExpansionOpt
                 }
                 logger.info("Legacy compatibility: embedded expansion OBB ${source.name} (${source.length()} bytes).")
             }
+            val checksumAsset = get(expansionChecksumAssetPath(source.name), false)
+            checksumAsset.parentFile?.mkdirs()
+            val checksumText = expansionChecksumText(output)
+            checksumAsset.writeText(checksumText)
+            logger.info("Legacy compatibility: embedded OBB checksum metadata prepared for ${source.name} (${output.length()} bytes).")
         }
     }
 }

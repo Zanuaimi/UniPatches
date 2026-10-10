@@ -152,7 +152,8 @@ internal fun legacyRuntimeHooksPatch(optionsProvider: () -> LegacyRuntimeOptions
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)
-        val options = optionsProvider()
+        val requested = optionsProvider()
+        val options = requested.copy(expansionDownloaderBypass = requested.expansionDownloaderBypass && detectLegacyEngines().unity)
         if (!options.anyEnabled) {
             logger.info("Legacy compatibility: no runtime hooks selected; startup injection skipped.")
             return@execute

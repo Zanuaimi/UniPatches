@@ -27,9 +27,10 @@ private val frameworkContextOwners = setOf(
     "Landroid/app/Activity;",
 )
 private val externalStoreActionPrefixes = listOf(
-    "com.android.vending.", "com.amazon.", "com.sec.", "com.samsung.",
-    "com.yandex.", "com.nokia.", "com.slideme.", "com.appland.",
-    "com.aptoide.", "com.appmall.",
+    "com.android.vending.",
+    "com.amazon.device.ads.", "com.amazon.inapp.purchasing.",
+    "com.sec.android.iap.", "com.samsung.android.iap.",
+    "com.yandex.store.", "com.nokia.payment.",
 )
 
 private fun receiverCallRegisters(instruction: ReferenceInstruction): List<Int>? = when (instruction) {
@@ -96,7 +97,7 @@ private fun isSafeOpenIabAction(action: String): Boolean {
     return false
 }
 
-private fun isExternalStoreAction(action: String): Boolean =
+internal fun isExternalStoreAction(action: String): Boolean =
     externalStoreActionPrefixes.any(action::startsWith)
 
 private fun receiverFlagsForOpenIabActions(actions: Set<String>): Int? = when {
@@ -167,6 +168,10 @@ internal fun openIabReceiverFlagsPatch(enabledProvider: () -> String) = bytecode
         if (mode == OPEN_IAB_DISABLED) return@execute
         if (mode !in setOf(OPEN_IAB_AUTOMATIC, OPEN_IAB_FORCE)) {
             logger.warning("Legacy compatibility: unknown OpenIAB receiver mode '$mode'; fix skipped.")
+            return@execute
+        }
+        if (!detectLegacyEngines().openIab) {
+            logger.info("Legacy compatibility: exact OpenIAB descriptor pair not found; receiver mutation skipped.")
             return@execute
         }
         val openIab = classDefByOrNull(OPEN_IAB_UNITY_PLUGIN)
