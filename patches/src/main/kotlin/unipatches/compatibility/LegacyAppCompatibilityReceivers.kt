@@ -16,6 +16,9 @@ import java.util.logging.Logger
  * (private there). When a third receiver variant is needed, extract shared helpers into
  * helpers/bytecode instead of copying again.
  */
+internal fun receiverSkipDiagnostic(classType: String, methodName: String, reason: String): String =
+    "Legacy compatibility: skipped receiver fix in $classType->$methodName; $reason"
+
 private val frameworkContextOwners = setOf(
     "Landroid/content/Context;",
     "Landroid/content/ContextWrapper;",
@@ -121,7 +124,7 @@ internal fun legacyReceiverFlagsPatch(enabledProvider: () -> Boolean) = bytecode
             // branch-safe scratch layout instead of emitting malformed bytecode.
             if (scratchBase + 5 > 15) {
                 skipped += calls.size
-                logger.info("Legacy compatibility: skipped receiver fix in ${classDef.type}->${method.name}; scratch registers cannot fit the branch-safe v0..v15 range.")
+                logger.info(receiverSkipDiagnostic(classDef.type, method.name, "scratch registers cannot fit the branch-safe v0..v15 range."))
                 continue
             }
 
@@ -131,6 +134,7 @@ internal fun legacyReceiverFlagsPatch(enabledProvider: () -> Boolean) = bytecode
                 val index = call.first + prologueSize
                 val registers = receiverCallRegisters(call.second) ?: run {
                     skipped++
+                    logger.info(receiverSkipDiagnostic(classDef.type, method.name, "invoke register layout is not supported (expected exactly 3 registers in 35c/3rc form)."))
                     continue
                 }
                 val oldOwner = ((call.second.reference as? MethodReference)?.definingClass)

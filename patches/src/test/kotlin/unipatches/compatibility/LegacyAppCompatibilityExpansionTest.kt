@@ -19,10 +19,11 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 class LegacyAppCompatibilityExpansionTest {
     @Test
-    fun validatesConventionalObbNameAgainstPackage() {
-        assertTrue(isExpansionFileForPackage("main.123.com.glu.gunbros2.obb", "com.glu.gunbros2"))
-        assertFalse(isExpansionFileForPackage("main.123.other.app.obb", "com.glu.gunbros2"))
-        assertFalse(isExpansionFileForPackage("main.123.com.glu.gunbros2.obb", null))
+    fun validatesMainAndPatchObbNamesAgainstPackage() {
+        assertTrue(isExpansionFileForPackage("main.123.org.example.legacy.obb", "org.example.legacy"))
+        assertTrue(isExpansionFileForPackage("patch.456.org.example.legacy.obb", "org.example.legacy"))
+        assertFalse(isExpansionFileForPackage("patch.123.other.app.obb", "org.example.legacy"))
+        assertFalse(isExpansionFileForPackage("main.123.org.example.legacy.obb", null))
         assertFalse(isExpansionFileForPackage("expansion.obb", null))
     }
 
@@ -37,8 +38,8 @@ class LegacyAppCompatibilityExpansionTest {
     @Test
     fun writesExpansionUnderAssetDirectory() {
         assertEquals(
-            "assets/unipatch-legacy-expansion/main.123.com.glu.gunbros2.obb",
-            expansionAssetPath("main.123.com.glu.gunbros2.obb"),
+            "assets/unipatch-legacy-expansion/patch.456.org.example.legacy.obb",
+            expansionAssetPath("patch.456.org.example.legacy.obb"),
         )
     }
 
@@ -46,15 +47,15 @@ class LegacyAppCompatibilityExpansionTest {
     fun rewritesObbWithoutRelocatedEntriesAndLeavesSourceUntouched() {
         val source = File.createTempFile("legacy-source-", ".obb").apply { deleteOnExit() }
         val rewritten = File.createTempFile("legacy-rewritten-", ".obb").apply { deleteOnExit() }
-        val removed = "assets/libs/armeabi-v7a/libunity.so"
-        val retained = "assets/libs/armeabi-v7a/libmono.so"
+        val unityLibrary = "assets/libs/armeabi-v7a/libunity.so"
+        val monoLibrary = "assets/libs/armeabi-v7a/libmono.so"
         val data = "assets/bin/Data/game.dat"
 
         ZipOutputStream(source.outputStream().buffered()).use { zip ->
-            zip.putNextEntry(ZipEntry(removed))
+            zip.putNextEntry(ZipEntry(unityLibrary))
             zip.write("unity".toByteArray())
             zip.closeEntry()
-            zip.putNextEntry(ZipEntry(retained))
+            zip.putNextEntry(ZipEntry(monoLibrary))
             zip.write("mono".toByteArray())
             zip.closeEntry()
             zip.putNextEntry(ZipEntry("assets/bin/Data/"))
@@ -64,15 +65,26 @@ class LegacyAppCompatibilityExpansionTest {
             zip.closeEntry()
         }
         val originalSource = source.readBytes()
+        val stagedApkRoot = java.nio.file.Files.createTempDirectory("legacy-apk-stage-").toFile().apply { deleteOnExit() }
+        val nativeEntries = listOf(
+            unityLibrary to requireNotNull(expansionNativeDestination(unityLibrary)),
+            monoLibrary to requireNotNull(expansionNativeDestination(monoLibrary)),
+        )
+        ZipFile(source).use { zip ->
+            stageExpansionNativeLibraries(zip, nativeEntries) { destination -> File(stagedApkRoot, destination) }
+        }
 
-        rewriteExpansionObb(source, rewritten, setOf(removed))
+        assertEquals("lib/armeabi-v7a/libunity.so", expansionNativeDestination(unityLibrary))
+        assertEquals("lib/armeabi-v7a/libmono.so", expansionNativeDestination(monoLibrary))
+        assertEquals("unity", File(stagedApkRoot, "lib/armeabi-v7a/libunity.so").readText())
+        assertEquals("mono", File(stagedApkRoot, "lib/armeabi-v7a/libmono.so").readText())
 
+        rewriteExpansionObb(source, rewritten, setOf(unityLibrary, monoLibrary))
         assertArrayEquals(originalSource, source.readBytes())
         ZipFile(rewritten).use { zip ->
-            assertNull(zip.getEntry(removed))
-            assertNotNull(zip.getEntry(retained))
+            assertNull(zip.getEntry(unityLibrary))
+            assertNull(zip.getEntry(monoLibrary))
             assertNotNull(zip.getEntry("assets/bin/Data/"))
-            assertEquals("mono", zip.getInputStream(zip.getEntry(retained)).use { it.readBytes().toString(Charsets.UTF_8) })
             assertEquals("game", zip.getInputStream(zip.getEntry(data)).use { it.readBytes().toString(Charsets.UTF_8) })
         }
     }

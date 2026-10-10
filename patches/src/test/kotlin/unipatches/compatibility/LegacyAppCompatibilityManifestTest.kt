@@ -24,6 +24,7 @@ class LegacyAppCompatibilityManifestTest {
         activityExported.forEach { exported ->
             val activity = document.createElement("activity")
             exported?.let { activity.setAttributeNS(NS_ANDROID, "android:exported", it) }
+            activity.appendChild(document.createElement("intent-filter"))
             manifest.appendChild(activity)
         }
         return document
@@ -69,11 +70,44 @@ class LegacyAppCompatibilityManifestTest {
     }
 
     @Test
-    fun exportAllActivitiesFillsMissingAndOverridesFalse() {
+    fun repairMissingExportFlagsExposesOnlyLauncherAndPreservesExplicitValues() {
+        val document = newDocument()
+        val manifest = document.createElement("manifest")
+        document.appendChild(manifest)
+
+        val launcher = document.createElement("activity")
+        val launcherFilter = document.createElement("intent-filter")
+        launcherFilter.appendChild(document.createElement("action").apply {
+            setAttributeNS(NS_ANDROID, "android:name", "android.intent.action.MAIN")
+        })
+        launcherFilter.appendChild(document.createElement("category").apply {
+            setAttributeNS(NS_ANDROID, "android:name", "android.intent.category.LAUNCHER")
+        })
+        launcher.appendChild(launcherFilter)
+        manifest.appendChild(launcher)
+
+        val otherFiltered = document.createElement("activity").apply {
+            appendChild(document.createElement("intent-filter"))
+        }
+        manifest.appendChild(otherFiltered)
+
+        val explicitFalse = document.createElement("activity").apply {
+            setAttributeNS(NS_ANDROID, "android:exported", "false")
+            appendChild(document.createElement("intent-filter"))
+        }
+        manifest.appendChild(explicitFalse)
+        manifest.appendChild(document.createElement("activity"))
+
+        assertEquals(2, repairMissingComponentExportFlags(document, logger))
+        assertEquals(listOf("true", "false", "false", ""), exportedValues(document))
+    }
+
+    @Test
+    fun exportAllActivitiesFillsMissingButPreservesExplicitFalse() {
         val document = manifestWith(null, "false", "true")
         val changed = exportAllActivities(document, logger)
-        assertEquals(2, changed)
-        assertEquals(listOf("true", "true", "true"), exportedValues(document))
+        assertEquals(1, changed)
+        assertEquals(listOf("true", "false", "true"), exportedValues(document))
     }
 
     @Test
@@ -84,9 +118,22 @@ class LegacyAppCompatibilityManifestTest {
     }
 
     @Test
-    fun automaticTargetProfileKeepsOldAppsOnTarget27() {
-        assertEquals(27, selectLegacyTargetSdk(16, TARGET_PROFILE_AUTOMATIC, 34))
+    fun exportAllActivitiesDoesNotExposeComponentWithoutIntentFilter() {
+        val document = newDocument()
+        val manifest = document.createElement("manifest")
+        document.appendChild(manifest)
+        manifest.appendChild(document.createElement("activity"))
+
+        assertEquals(0, exportAllActivities(document, logger))
+        assertEquals(listOf(""), exportedValues(document))
+    }
+
+    @Test
+    fun automaticTargetProfilePreservesKnownTargetAndUsesConservativeFallback() {
+        assertEquals(16, selectLegacyTargetSdk(16, TARGET_PROFILE_AUTOMATIC, 34))
+        assertEquals(30, selectLegacyTargetSdk(30, TARGET_PROFILE_AUTOMATIC, 34))
         assertEquals(34, selectLegacyTargetSdk(34, TARGET_PROFILE_AUTOMATIC, 34))
+        assertEquals(27, selectLegacyTargetSdk(null, TARGET_PROFILE_AUTOMATIC, 34))
     }
 
     @Test
@@ -94,5 +141,18 @@ class LegacyAppCompatibilityManifestTest {
         assertEquals(27, selectLegacyTargetSdk(16, TARGET_PROFILE_27, 34))
         assertEquals(29, selectLegacyTargetSdk(16, TARGET_PROFILE_29, 34))
         assertEquals(34, selectLegacyTargetSdk(16, TARGET_PROFILE_CUSTOM, 34))
+    }
+
+    @Test
+    fun packageVisibilityQueryIsScopedAndIdempotent() {
+        val document = newDocument()
+        document.appendChild(document.createElement("manifest"))
+
+        assertTrue(addPackageVisibilityQuery(document, "com.android.vending"))
+        assertFalse(addPackageVisibilityQuery(document, "com.android.vending"))
+        val packages = document.getElementsByTagName("package")
+        assertEquals(1, packages.length)
+        assertEquals("com.android.vending", (packages.item(0) as Element).getAttributeNS(NS_ANDROID, "name"))
+        assertEquals(0, document.getElementsByTagName("uses-permission").length)
     }
 }
