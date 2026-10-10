@@ -45,13 +45,13 @@ internal fun replacementDownloaderPendingIntentInstruction(instruction: Instruct
     return BuilderInstruction21ih(Opcode.CONST_HIGH16, flagsRegister, mergedFlags)
 }
 
-private data class DownloaderPendingIntentTarget(
+internal data class DownloaderPendingIntentTarget(
     val classType: String,
     val methodName: String,
     val parameterTypes: List<String>,
 )
 
-private val downloaderPendingIntentTargets = listOf(
+internal val downloaderPendingIntentTargets = listOf(
     DownloaderPendingIntentTarget(DOWNLOADER_ACTIVITY, "finishOnCreate", emptyList()),
     DownloaderPendingIntentTarget(
         UNPACKING_LISTENER,
@@ -60,7 +60,7 @@ private val downloaderPendingIntentTargets = listOf(
     ),
 )
 
-private fun pendingIntentCallRegisters(instruction: ReferenceInstruction): List<Int>? = when (instruction) {
+internal fun pendingIntentCallRegisters(instruction: ReferenceInstruction): List<Int>? = when (instruction) {
     is BuilderInstruction35c -> if (instruction.registerCount == 4) {
         listOf(instruction.registerC, instruction.registerD, instruction.registerE, instruction.registerF)
     } else null
@@ -70,7 +70,7 @@ private fun pendingIntentCallRegisters(instruction: ReferenceInstruction): List<
     else -> null
 }
 
-private fun isFixedGetActivity(instruction: ReferenceInstruction): Boolean {
+internal fun isFixedGetActivity(instruction: ReferenceInstruction): Boolean {
     val reference = instruction.reference as? MethodReference ?: return false
     return reference.definingClass == PENDING_INTENT &&
         reference.name == "getActivity" &&
@@ -152,5 +152,111 @@ internal fun legacyDownloaderPendingIntentPatch(enabledProvider: () -> Boolean) 
             }
         }
         logger.info("Legacy compatibility: downloader PendingIntent fix patched $patched call(s); skipped $skipped.")
+    }
+}
+
+private const val LICENSE_CHECKER_CLASS = "Lcom/google/android/vending/licensing/LicenseChecker;"
+private const val LICENSE_CHECKER_CALLBACK = "Lcom/google/android/vending/licensing/LicenseCheckerCallback;"
+private const val INTENT_CLASS = "Landroid/content/Intent;"
+private const val PLAY_STORE_PACKAGE = "com.android.vending"
+internal const val APKPURE_LICENSE_ACTION_BASE64 = "Y29tLmFuZHJvaWQudmVuZGluZy5saWNlbnNpbmcuSUxpY2Vuc2luZ1NlcnZpY2U="
+
+internal fun hasApkPureLicenseAction(instructions: List<Instruction>): Boolean = instructions.any { instruction ->
+    val reference = (instruction as? ReferenceInstruction)?.reference as? com.android.tools.smali.dexlib2.iface.reference.StringReference
+    (instruction.opcode == Opcode.CONST_STRING || instruction.opcode == Opcode.CONST_STRING_JUMBO) &&
+        reference?.string == APKPURE_LICENSE_ACTION_BASE64
+}
+
+internal fun licenseServiceIntentPackageBlock(intentRegister: Int, actionRegister: Int, packageRegister: Int): String? {
+    if (listOf(intentRegister, actionRegister, packageRegister).any { it !in 0..15 }) return null
+    if (packageRegister == intentRegister || packageRegister == actionRegister) return null
+    return """
+        invoke-direct {v$intentRegister, v$actionRegister}, $INTENT_CLASS-><init>(Ljava/lang/String;)V
+        const-string v$packageRegister, "$PLAY_STORE_PACKAGE"
+        invoke-virtual {v$intentRegister, v$packageRegister}, $INTENT_CLASS->setPackage(Ljava/lang/String;)Landroid/content/Intent;
+    """.trimIndent()
+}
+
+internal fun isIntentStringConstructor(instruction: ReferenceInstruction): Boolean {
+    val reference = instruction.reference as? MethodReference ?: return false
+    return reference.definingClass == INTENT_CLASS &&
+        reference.name == "<init>" &&
+        reference.returnType == "V" &&
+        reference.parameterTypes == listOf("Ljava/lang/String;")
+}
+
+internal fun intentStringConstructorRegisters(instruction: ReferenceInstruction): List<Int>? {
+    if (!isIntentStringConstructor(instruction)) return null
+    return when (instruction) {
+        is BuilderInstruction35c -> if (instruction.registerCount == 2) {
+            listOf(instruction.registerC, instruction.registerD)
+        } else null
+        is BuilderInstruction3rc -> if (instruction.registerCount == 2) {
+            listOf(instruction.startRegister, instruction.startRegister + 1)
+        } else null
+        else -> null
+    }
+}
+
+/** Restricts the LVL service intent to Google Play without bypassing license validation. */
+internal fun legacyLicenseServiceIntentPatch(enabledProvider: () -> Boolean) = bytecodePatch(
+    name = null,
+    description = "Internal explicit Google Play licensing service intent phase.",
+    default = false,
+) {
+    execute {
+        val logger = Logger.getLogger(this::class.java.name)
+        if (!enabledProvider()) return@execute
+
+        var hasLicenseChecker = false
+        classDefForEach { classDef ->
+            if (classDef.type == LICENSE_CHECKER_CLASS) hasLicenseChecker = true
+        }
+        if (!hasLicenseChecker) {
+            logger.info("Legacy compatibility: Google Play LicenseChecker not found; no LVL intent change made.")
+            return@execute
+        }
+        val mutableClass = mutableClassDefByOrNull(LICENSE_CHECKER_CLASS)
+        val method = mutableClass?.methods?.firstOrNull {
+            it.name == "checkAccess" && it.parameterTypes == listOf(LICENSE_CHECKER_CALLBACK) && it.returnType == "V"
+        }
+        if (method == null) {
+            logger.warning("Legacy compatibility: expected LicenseChecker.checkAccess method not found; leaving LVL binding unchanged.")
+            return@execute
+        }
+        val implementation = method.implementation
+        val instructions = implementation?.instructions?.toList()
+        if (instructions == null) {
+            logger.warning("Legacy compatibility: LicenseChecker.checkAccess has no implementation; leaving LVL binding unchanged.")
+            return@execute
+        }
+        if (!hasApkPureLicenseAction(instructions)) {
+            logger.warning("Legacy compatibility: APKPure LVL service-action fingerprint was not found; leaving LicenseChecker unchanged.")
+            return@execute
+        }
+        val constructors = instructions.mapIndexedNotNull { index, instruction ->
+            val reference = instruction as? ReferenceInstruction ?: return@mapIndexedNotNull null
+            if (isIntentStringConstructor(reference)) index to reference else null
+        }
+        if (constructors.size != 1) {
+            logger.warning("Legacy compatibility: expected one Intent(String) constructor in LicenseChecker.checkAccess; found ${constructors.size}; leaving LVL binding unchanged.")
+            return@execute
+        }
+        val (constructorIndex, constructor) = constructors.single()
+        val registers = intentStringConstructorRegisters(constructor)
+        val originalRegisterCount = implementation.registerCount
+        val packageRegister = originalRegisterCount
+        val block = registers?.let { licenseServiceIntentPackageBlock(it[0], it[1], packageRegister) }
+        if (block == null) {
+            logger.warning("Legacy compatibility: unsupported Intent(String) register layout in LicenseChecker.checkAccess; leaving LVL binding unchanged.")
+            return@execute
+        }
+
+        val cloned = method.cloneMutable(additionalRegisters = 1)
+        val prologueSize = cloned.implementation!!.instructions.size - instructions.size
+        cloned.replaceInstruction(constructorIndex + prologueSize, block)
+        mutableClass.methods.remove(method)
+        mutableClass.methods.add(cloned)
+        logger.info("Legacy compatibility: scoped the Google Play LVL service intent to $PLAY_STORE_PACKAGE in LicenseChecker.checkAccess.")
     }
 }

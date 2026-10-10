@@ -1,7 +1,9 @@
 package unipatches.compatibility
 
 import com.android.tools.smali.dexlib2.Opcode
+import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction21c
 import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction21ih
+import com.android.tools.smali.dexlib2.immutable.reference.ImmutableStringReference
 import com.android.tools.smali.dexlib2.iface.instruction.NarrowLiteralInstruction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -51,5 +53,39 @@ class LegacyAppCompatibilityPendingIntentsTest {
     fun immutableMergePreservesUnrelatedFlags() {
         val unrelatedFlags = 0x00000001 or 0x00000002
         assertEquals(unrelatedFlags or FLAG_IMMUTABLE, immutablePendingIntentFlags(unrelatedFlags))
+    }
+
+    @Test
+    fun apkpureLicenseCheckerActionFixtureMatchesAndFailsClosedOnDrift() {
+        val originalAction = BuilderInstruction21c(
+            Opcode.CONST_STRING,
+            4,
+            ImmutableStringReference(APKPURE_LICENSE_ACTION_BASE64),
+        )
+        val changedAction = BuilderInstruction21c(
+            Opcode.CONST_STRING,
+            4,
+            ImmutableStringReference("com.example.other.Service"),
+        )
+
+        assertTrue(hasApkPureLicenseAction(listOf(originalAction)))
+        assertFalse(hasApkPureLicenseAction(listOf(changedAction)))
+    }
+
+    @Test
+    fun licenseServiceIntentIsScopedToPlayWithoutReplacingLicenseAction() {
+        assertEquals(
+            """
+                invoke-direct {v2, v3}, Landroid/content/Intent;-><init>(Ljava/lang/String;)V
+                const-string v9, "com.android.vending"
+                invoke-virtual {v2, v9}, Landroid/content/Intent;->setPackage(Ljava/lang/String;)Landroid/content/Intent;
+            """.trimIndent(),
+            licenseServiceIntentPackageBlock(intentRegister = 2, actionRegister = 3, packageRegister = 9),
+        )
+    }
+
+    @Test
+    fun licenseServicePackageBlockRejectsRegistersOutsideInvokeEncoding() {
+        assertNull(licenseServiceIntentPackageBlock(intentRegister = 2, actionRegister = 3, packageRegister = 16))
     }
 }

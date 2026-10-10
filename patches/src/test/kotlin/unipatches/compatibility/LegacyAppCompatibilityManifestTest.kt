@@ -103,6 +103,68 @@ class LegacyAppCompatibilityManifestTest {
     }
 
     @Test
+    fun repairMissingFlagsHandlesPrefixedLauncherAliasServiceAndExplicitReceiver() {
+        val document = newDocument()
+        val manifest = document.createElement("manifest")
+        document.appendChild(manifest)
+        manifest.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:m", "urn:manifest")
+        manifest.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:a", NS_ANDROID)
+
+        val alias = document.createElementNS("urn:manifest", "m:activity-alias")
+        alias.setAttributeNS(NS_ANDROID, "a:name", "example.LauncherAlias")
+        alias.appendChild(document.createElement("intent-filter"))
+        val launcherFilter = document.createElementNS("urn:manifest", "m:intent-filter")
+        launcherFilter.appendChild(document.createElement("action").apply {
+            setAttributeNS(NS_ANDROID, "a:name", "com.example.UNRELATED")
+        })
+        launcherFilter.appendChild(document.createElementNS("urn:manifest", "m:action").apply {
+            setAttributeNS(NS_ANDROID, "a:name", "android.intent.action.MAIN")
+        })
+        launcherFilter.appendChild(document.createElement("category").apply {
+            setAttributeNS(NS_ANDROID, "a:name", "com.example.UNRELATED_CATEGORY")
+        })
+        launcherFilter.appendChild(document.createElementNS("urn:manifest", "m:category").apply {
+            setAttributeNS(NS_ANDROID, "a:name", "android.intent.category.LAUNCHER")
+        })
+        alias.appendChild(launcherFilter)
+        manifest.appendChild(alias)
+
+        val service = document.createElementNS("urn:manifest", "m:service")
+        service.appendChild(document.createElementNS("urn:manifest", "m:intent-filter"))
+        manifest.appendChild(service)
+
+        val receiver = document.createElementNS("urn:manifest", "m:receiver")
+        receiver.setAttributeNS(NS_ANDROID, "a:exported", "false")
+        receiver.appendChild(document.createElementNS("urn:manifest", "m:intent-filter"))
+        manifest.appendChild(receiver)
+
+        assertEquals(2, repairMissingComponentExportFlags(document, logger))
+        assertEquals("true", alias.androidAttribute("exported"))
+        assertEquals("false", service.androidAttribute("exported"))
+        assertEquals("false", receiver.androidAttribute("exported"))
+    }
+
+    @Test
+    fun exportAllActivitiesFindsPrefixedActivityAndPreservesAliasFalse() {
+        val document = newDocument()
+        val manifest = document.createElement("manifest")
+        document.appendChild(manifest)
+        manifest.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:m", "urn:manifest")
+        manifest.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:a", NS_ANDROID)
+        val activity = document.createElementNS("urn:manifest", "m:activity")
+        activity.appendChild(document.createElementNS("urn:manifest", "m:intent-filter"))
+        manifest.appendChild(activity)
+        val alias = document.createElementNS("urn:manifest", "m:activity-alias")
+        alias.setAttributeNS(NS_ANDROID, "a:exported", "false")
+        alias.appendChild(document.createElementNS("urn:manifest", "m:intent-filter"))
+        manifest.appendChild(alias)
+
+        assertEquals(1, exportAllActivities(document, logger))
+        assertEquals("true", activity.androidAttribute("exported"))
+        assertEquals("false", alias.androidAttribute("exported"))
+    }
+
+    @Test
     fun exportAllActivitiesFillsMissingButPreservesExplicitFalse() {
         val document = manifestWith(null, "false", "true")
         val changed = exportAllActivities(document, logger)
@@ -154,5 +216,39 @@ class LegacyAppCompatibilityManifestTest {
         assertEquals(1, packages.length)
         assertEquals("com.android.vending", (packages.item(0) as Element).getAttributeNS(NS_ANDROID, "name"))
         assertEquals(0, document.getElementsByTagName("uses-permission").length)
+    }
+
+    @Test
+    fun existingPrefixedPackageQueryIsPreservedAcrossMultipleQueries() {
+        val document = newDocument()
+        val manifest = document.createElement("manifest")
+        document.appendChild(manifest)
+        manifest.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:m", "urn:manifest")
+        manifest.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:a", NS_ANDROID)
+        manifest.appendChild(document.createElement("queries"))
+        val prefixedQueries = document.createElementNS("urn:manifest", "m:queries")
+        val packageElement = document.createElementNS("urn:manifest", "m:package")
+        packageElement.setAttributeNS(NS_ANDROID, "a:name", "com.android.vending")
+        prefixedQueries.appendChild(packageElement)
+        manifest.appendChild(prefixedQueries)
+
+        assertFalse(addPackageVisibilityQuery(document, "com.android.vending"))
+        assertEquals(1, document.getElementsByTagNameNS("*", "package").length)
+        assertFalse(addPackageVisibilityQuery(document, ""))
+    }
+
+    @Test
+    fun newScopedQueryIsInsertedBeforeApplicationWithoutBroadPermission() {
+        val document = newDocument()
+        val manifest = document.createElement("manifest")
+        document.appendChild(manifest)
+        manifest.appendChild(document.createElement("uses-sdk"))
+        val application = document.createElement("application")
+        manifest.appendChild(application)
+
+        assertTrue(addPackageVisibilityQuery(document, "com.android.vending"))
+        assertEquals("queries", (manifest.childNodes.item(1) as Element).tagName)
+        assertEquals("application", (manifest.childNodes.item(2) as Element).tagName)
+        assertFalse(hasPermission(document, QUERY_ALL_PACKAGES))
     }
 }

@@ -19,6 +19,19 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 class LegacyAppCompatibilityExpansionTest {
     @Test
+    fun checksumMetadataDescribesTheFinalObbAsset() {
+        val file = File.createTempFile("legacy-obb-checksum-", ".obb")
+        try {
+            file.writeText("abc")
+            assertEquals("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", expansionSha256(file))
+            assertEquals("3\nba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n", expansionChecksumText(file))
+            assertEquals("assets/unipatch-legacy-expansion/main.123.com.glu.gunbros2.obb.sha256", expansionChecksumAssetPath("main.123.com.glu.gunbros2.obb"))
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
     fun validatesMainAndPatchObbNamesAgainstPackage() {
         assertTrue(isExpansionFileForPackage("main.123.org.example.legacy.obb", "org.example.legacy"))
         assertTrue(isExpansionFileForPackage("patch.456.org.example.legacy.obb", "org.example.legacy"))
