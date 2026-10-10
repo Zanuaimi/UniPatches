@@ -1,3 +1,9 @@
+## [1.30.2](https://github.com/Zanuaimi/UniPatches/compare/v1.30.1...v1.30.2) (2026-10-10)
+
+### 🔧 Improvements
+
+* improve legacy compatibility patch ([d518dbc](https://github.com/Zanuaimi/UniPatches/commit/d518dbc41bc1f76321050310713085aebd465cef))
+
 ## [1.30.2-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.30.1...v1.30.2-dev.1) (2026-10-10)
 
 ### 🔧 Improvements
