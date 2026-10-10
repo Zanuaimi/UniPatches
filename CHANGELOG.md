@@ -1,3 +1,9 @@
+## [1.31.0-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.30.2...v1.31.0-dev.1) (2026-10-10)
+
+### ✨ New Features
+
+* **legacy:** add preset selection to legacy compatibility patch ([4176afb](https://github.com/Zanuaimi/UniPatches/commit/4176afb0ba5251aed1960960459be86f2a0cbfb8))
+
 ## [1.30.2](https://github.com/Zanuaimi/UniPatches/compare/v1.30.1...v1.30.2) (2026-10-10)
 
 ### 🔧 Improvements
