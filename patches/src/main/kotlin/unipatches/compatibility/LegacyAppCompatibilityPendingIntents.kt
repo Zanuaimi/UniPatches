@@ -2,14 +2,17 @@ package unipatches.compatibility
 
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
+import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction21ih
 import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction35c
 import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction3rc
+import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.Instruction
 import com.android.tools.smali.dexlib2.iface.instruction.NarrowLiteralInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstruction
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import helpers.bytecode.cloneMutable
 import java.util.logging.Logger
@@ -178,6 +181,99 @@ internal fun licenseServiceIntentPackageBlock(intentRegister: Int, actionRegiste
     """.trimIndent()
 }
 
+internal fun hasExplicitPlayPackage(instructions: Iterable<Instruction>): Boolean {
+    val list = instructions.toList()
+    return list.indices.any { index ->
+        if (index < 2) return@any false
+        val invoke = list[index]
+        val method = (invoke as? ReferenceInstruction)?.reference as? MethodReference
+        if (method?.definingClass != INTENT_CLASS || method.name != "setPackage" ||
+            method.parameterTypes != listOf("Ljava/lang/String;") || method.returnType != INTENT_CLASS
+        ) return@any false
+        val invokeRegisters = when (invoke) {
+            is FiveRegisterInstruction -> if (invoke.registerCount == 2) listOf(invoke.registerC, invoke.registerD) else null
+            is RegisterRangeInstruction -> if (invoke.registerCount == 2) listOf(invoke.startRegister, invoke.startRegister + 1) else null
+            else -> null
+        } ?: return@any false
+        val stringInstruction = list[index - 1]
+        val stringReference = (stringInstruction as? ReferenceInstruction)?.reference as? com.android.tools.smali.dexlib2.iface.reference.StringReference
+        val stringRegister = (stringInstruction as? OneRegisterInstruction)?.registerA
+        if ((stringInstruction.opcode != Opcode.CONST_STRING && stringInstruction.opcode != Opcode.CONST_STRING_JUMBO) ||
+            stringReference?.string != PLAY_STORE_PACKAGE || stringRegister != invokeRegisters[1]
+        ) return@any false
+        val constructor = list[index - 2] as? ReferenceInstruction ?: return@any false
+        intentStringConstructorRegisters(constructor)?.firstOrNull() == invokeRegisters[0]
+    }
+}
+
+internal fun hasPlayScopedLicenseServiceIntent(instructions: List<Instruction>): Boolean {
+    if (!hasApkPureLicenseAction(instructions) || !hasExplicitPlayPackage(instructions)) return false
+    val packageIntentRegisters = instructions.indices.mapNotNull { index ->
+        val reference = (instructions[index] as? ReferenceInstruction)?.reference as? MethodReference ?: return@mapNotNull null
+        if (reference.definingClass != INTENT_CLASS || reference.name != "setPackage" ||
+            reference.parameterTypes != listOf("Ljava/lang/String;") || reference.returnType != INTENT_CLASS
+        ) return@mapNotNull null
+        val invokeRegisters = invocationRegisters(instructions[index]) ?: return@mapNotNull null
+        val packageInstruction = instructions.getOrNull(index - 1) ?: return@mapNotNull null
+        val packageString = (packageInstruction as? ReferenceInstruction)?.reference as? com.android.tools.smali.dexlib2.iface.reference.StringReference
+        if (packageString?.string != PLAY_STORE_PACKAGE ||
+            (packageInstruction as? OneRegisterInstruction)?.registerA != invokeRegisters.getOrNull(1)
+        ) return@mapNotNull null
+        val constructor = instructions.getOrNull(index - 2) as? ReferenceInstruction ?: return@mapNotNull null
+        val constructorRegisters = intentStringConstructorRegisters(constructor) ?: return@mapNotNull null
+        if (invokeRegisters.size == 2 && constructorRegisters[0] == invokeRegisters[0]) Triple(index - 2, index, constructorRegisters) else null
+    }
+    return packageIntentRegisters.any { (constructorIndex, packageIndex, registers) ->
+        hasApkPureLicenseActionForIntent(instructions, constructorIndex, registers[1]) &&
+            hasLicenseServiceBinding(instructions, registers[0], packageIndex)
+    }
+}
+
+private fun invocationRegisters(instruction: Instruction): List<Int>? = when (instruction) {
+    is FiveRegisterInstruction -> {
+        if (instruction.registerCount !in 1..5) null
+        else listOf(instruction.registerC, instruction.registerD, instruction.registerE, instruction.registerF, instruction.registerG)
+            .take(instruction.registerCount)
+    }
+    is RegisterRangeInstruction -> {
+        if (instruction.registerCount !in 1..5) null
+        else List(instruction.registerCount) { instruction.startRegister + it }
+    }
+    else -> null
+}
+
+private fun hasApkPureLicenseActionForIntent(instructions: List<Instruction>, constructorIndex: Int, actionRegister: Int): Boolean {
+    val stringConstructor = instructions.getOrNull(constructorIndex - 1) as? ReferenceInstruction ?: return false
+    val stringMethod = stringConstructor.reference as? MethodReference ?: return false
+    if (stringMethod.definingClass != "Ljava/lang/String;" || stringMethod.name != "<init>" ||
+        stringMethod.parameterTypes != listOf("[B")
+    ) return false
+    val stringRegisters = invocationRegisters(stringConstructor) ?: return false
+    if (stringRegisters.size != 2 || stringRegisters[0] != actionRegister) return false
+    val moveResult = instructions.getOrNull(constructorIndex - 2) ?: return false
+    if (moveResult.opcode != Opcode.MOVE_RESULT_OBJECT || (moveResult as? OneRegisterInstruction)?.registerA != stringRegisters[1]) return false
+    val decode = instructions.getOrNull(constructorIndex - 3) as? ReferenceInstruction ?: return false
+    val decodeMethod = decode.reference as? MethodReference ?: return false
+    if (decodeMethod.definingClass != "Lcom/google/android/vending/licensing/util/Base64;" ||
+        decodeMethod.name != "decode" || decodeMethod.parameterTypes != listOf("Ljava/lang/String;") || decodeMethod.returnType != "[B"
+    ) return false
+    val decodeRegisters = invocationRegisters(decode) ?: return false
+    val actionString = instructions.getOrNull(constructorIndex - 4) ?: return false
+    val reference = (actionString as? ReferenceInstruction)?.reference as? com.android.tools.smali.dexlib2.iface.reference.StringReference
+    return (actionString.opcode == Opcode.CONST_STRING || actionString.opcode == Opcode.CONST_STRING_JUMBO) &&
+        reference?.string == APKPURE_LICENSE_ACTION_BASE64 &&
+        (actionString as? OneRegisterInstruction)?.registerA == decodeRegisters.singleOrNull()
+}
+
+private fun hasLicenseServiceBinding(instructions: List<Instruction>, intentRegister: Int, packageIndex: Int): Boolean =
+    instructions.withIndex().any { (index, instruction) ->
+        if (index <= packageIndex) return@any false
+        val method = (instruction as? ReferenceInstruction)?.reference as? MethodReference ?: return@any false
+        method.definingClass == "Landroid/content/Context;" && method.name == "bindService" &&
+            method.parameterTypes == listOf("Landroid/content/Intent;", "Landroid/content/ServiceConnection;", "I") &&
+            method.returnType == "Z" && invocationRegisters(instruction)?.getOrNull(1) == intentRegister
+    }
+
 internal fun isIntentStringConstructor(instruction: ReferenceInstruction): Boolean {
     val reference = instruction.reference as? MethodReference ?: return false
     return reference.definingClass == INTENT_CLASS &&
@@ -189,10 +285,10 @@ internal fun isIntentStringConstructor(instruction: ReferenceInstruction): Boole
 internal fun intentStringConstructorRegisters(instruction: ReferenceInstruction): List<Int>? {
     if (!isIntentStringConstructor(instruction)) return null
     return when (instruction) {
-        is BuilderInstruction35c -> if (instruction.registerCount == 2) {
+        is FiveRegisterInstruction -> if (instruction.registerCount == 2) {
             listOf(instruction.registerC, instruction.registerD)
         } else null
-        is BuilderInstruction3rc -> if (instruction.registerCount == 2) {
+        is RegisterRangeInstruction -> if (instruction.registerCount == 2) {
             listOf(instruction.startRegister, instruction.startRegister + 1)
         } else null
         else -> null
@@ -218,30 +314,27 @@ internal fun legacyLicenseServiceIntentPatch(enabledProvider: () -> Boolean) = b
             return@execute
         }
         val mutableClass = mutableClassDefByOrNull(LICENSE_CHECKER_CLASS)
-        val method = mutableClass?.methods?.firstOrNull {
+            ?: error("Legacy compatibility: LicenseChecker class was detected but could not be modified; refusing to ship an implicit LVL service intent.")
+        val method = mutableClass.methods.firstOrNull {
             it.name == "checkAccess" && it.parameterTypes == listOf(LICENSE_CHECKER_CALLBACK) && it.returnType == "V"
         }
         if (method == null) {
-            logger.warning("Legacy compatibility: expected LicenseChecker.checkAccess method not found; leaving LVL binding unchanged.")
-            return@execute
+            error("Legacy compatibility: detected LicenseChecker has no supported checkAccess method; refusing to ship an unverified LVL service intent.")
         }
         val implementation = method.implementation
         val instructions = implementation?.instructions?.toList()
         if (instructions == null) {
-            logger.warning("Legacy compatibility: LicenseChecker.checkAccess has no implementation; leaving LVL binding unchanged.")
-            return@execute
+            error("Legacy compatibility: LicenseChecker.checkAccess has no implementation; refusing to ship an unverified LVL service intent.")
         }
         if (!hasApkPureLicenseAction(instructions)) {
-            logger.warning("Legacy compatibility: APKPure LVL service-action fingerprint was not found; leaving LicenseChecker unchanged.")
-            return@execute
+            error("Legacy compatibility: APKPure LVL service-action fingerprint was not found in LicenseChecker.checkAccess; refusing to ship an unverified service intent.")
         }
         val constructors = instructions.mapIndexedNotNull { index, instruction ->
             val reference = instruction as? ReferenceInstruction ?: return@mapIndexedNotNull null
             if (isIntentStringConstructor(reference)) index to reference else null
         }
         if (constructors.size != 1) {
-            logger.warning("Legacy compatibility: expected one Intent(String) constructor in LicenseChecker.checkAccess; found ${constructors.size}; leaving LVL binding unchanged.")
-            return@execute
+            error("Legacy compatibility: expected one Intent(String) constructor in LicenseChecker.checkAccess; found ${constructors.size}; refusing to ship an unverified LVL service intent.")
         }
         val (constructorIndex, constructor) = constructors.single()
         val registers = intentStringConstructorRegisters(constructor)
@@ -249,15 +342,25 @@ internal fun legacyLicenseServiceIntentPatch(enabledProvider: () -> Boolean) = b
         val packageRegister = originalRegisterCount
         val block = registers?.let { licenseServiceIntentPackageBlock(it[0], it[1], packageRegister) }
         if (block == null) {
-            logger.warning("Legacy compatibility: unsupported Intent(String) register layout in LicenseChecker.checkAccess; leaving LVL binding unchanged.")
-            return@execute
+            error("Legacy compatibility: unsupported Intent(String) register layout in LicenseChecker.checkAccess; refusing to ship an unverified LVL service intent.")
         }
 
         val cloned = method.cloneMutable(additionalRegisters = 1)
         val prologueSize = cloned.implementation!!.instructions.size - instructions.size
-        cloned.replaceInstruction(constructorIndex + prologueSize, block)
+        val replacementInstructions = block.lines()
+        cloned.replaceInstruction(constructorIndex + prologueSize, replacementInstructions.first())
+        cloned.addInstructions(constructorIndex + prologueSize + 1, replacementInstructions.drop(1).joinToString("\n"))
+        check(hasPlayScopedLicenseServiceIntent(cloned.implementation!!.instructions.toList())) {
+            "Legacy compatibility: patched LicenseChecker.checkAccess is missing the APKPure license action or explicit Intent.setPackage(com.android.vending); refusing to ship an invalid LVL binding."
+        }
         mutableClass.methods.remove(method)
         mutableClass.methods.add(cloned)
-        logger.info("Legacy compatibility: scoped the Google Play LVL service intent to $PLAY_STORE_PACKAGE in LicenseChecker.checkAccess.")
+        val patchedMethod = mutableClass.methods.firstOrNull {
+            it.name == "checkAccess" && it.parameterTypes == listOf(LICENSE_CHECKER_CALLBACK) && it.returnType == "V"
+        }
+        check(patchedMethod?.implementation?.instructions?.toList()?.let(::hasPlayScopedLicenseServiceIntent) == true) {
+            "Legacy compatibility: post-patch LicenseChecker.checkAccess DEX is missing the APKPure license action or explicit Intent.setPackage(com.android.vending); refusing to ship an invalid LVL binding."
+        }
+        logger.info("Legacy compatibility: LicenseChecker.checkAccess patch verified; APKPure license action preserved, Intent.setPackage(com.android.vending) added, and license verification remains enabled.")
     }
 }

@@ -42,7 +42,6 @@ class LegacyAppCompatibilityPreflightTest {
             repairExportFlags = false,
             exportAllActivityComponents = false,
             playStorePackageVisibility = false,
-            bypassPackageVisibility = false,
             embedExpansionObb = false,
             expansionObbPath = null,
         ).single { it.pattern == "uses-sdk targetSdkVersion" }
@@ -69,7 +68,6 @@ class LegacyAppCompatibilityPreflightTest {
             repairExportFlags = false,
             exportAllActivityComponents = false,
             playStorePackageVisibility = false,
-            bypassPackageVisibility = false,
             embedExpansionObb = false,
             expansionObbPath = null,
         ).single { it.pattern == "uses-sdk targetSdkVersion" }
@@ -94,7 +92,6 @@ class LegacyAppCompatibilityPreflightTest {
             repairExportFlags = false,
             exportAllActivityComponents = false,
             playStorePackageVisibility = false,
-            bypassPackageVisibility = false,
             embedExpansionObb = false,
             expansionObbPath = null,
         ).single { it.pattern == "uses-sdk targetSdkVersion" }
@@ -131,8 +128,7 @@ class LegacyAppCompatibilityPreflightTest {
                 repairExportFlags = false,
                 exportAllActivityComponents = false,
                 playStorePackageVisibility = false,
-                bypassPackageVisibility = false,
-                embedExpansionObb = true,
+                    embedExpansionObb = true,
                 expansionObbPath = path,
             ).single { it.pattern == "embedded expansion OBB" }
 
@@ -164,8 +160,7 @@ class LegacyAppCompatibilityPreflightTest {
                 repairExportFlags = false,
                 exportAllActivityComponents = false,
                 playStorePackageVisibility = false,
-                bypassPackageVisibility = false,
-                embedExpansionObb = true,
+                    embedExpansionObb = true,
                 expansionObbPath = path,
             ).single { it.pattern == "embedded expansion OBB" }
 
@@ -200,14 +195,13 @@ class LegacyAppCompatibilityPreflightTest {
             repairExportFlags = true,
             exportAllActivityComponents = false,
             playStorePackageVisibility = true,
-            bypassPackageVisibility = false,
             embedExpansionObb = false,
             expansionObbPath = null,
         )
 
         assertTrue(findings.any { it.pattern == "uses-sdk targetSdkVersion" && it.detected })
         assertTrue(findings.any { it.pattern == "filtered components missing android:exported" && it.detected })
-        assertTrue(findings.any { it.pattern == "Google Play package visibility" && !it.detected })
+        assertTrue(findings.any { it.pattern == "package visibility allowlist" && !it.detected })
         assertFalse(service.hasAndroidAttribute("exported"))
         assertEquals(0, manifest.childElementsForTest("queries"))
     }
@@ -231,7 +225,6 @@ class LegacyAppCompatibilityPreflightTest {
             repairExportFlags = true,
             exportAllActivityComponents = false,
             playStorePackageVisibility = false,
-            bypassPackageVisibility = false,
             embedExpansionObb = false,
             expansionObbPath = null,
         ).single { it.pattern == "filtered components missing android:exported" }

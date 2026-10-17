@@ -39,6 +39,7 @@ internal object LegacyCompatibilityPresets {
             "legacyReviver", "receiverFixAppWide", "repairExportFlags" -> true
             "apacheLegacy", "foregroundService" -> era <= 28
             "bluetooth" -> era < 31
+            "playStorePackageVisibility" -> era >= 30
             // All other settings, including explicit opt-ins, remain user-controlled.
             else -> false
         }

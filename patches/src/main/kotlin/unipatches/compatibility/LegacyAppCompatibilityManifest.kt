@@ -5,6 +5,7 @@ import app.morphe.patcher.patch.filePathOption
 import app.morphe.patcher.patch.intOption
 import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.patch.stringOption
+import app.morphe.patcher.patch.stringsOption
 import helpers.manifest.NS_ANDROID
 import helpers.manifest.applicationOrNull
 import java.util.logging.Logger
@@ -19,7 +20,6 @@ internal const val SCHEDULE_EXACT_ALARM = "android.permission.SCHEDULE_EXACT_ALA
 internal const val BLUETOOTH_CONNECT = "android.permission.BLUETOOTH_CONNECT"
 internal const val BLUETOOTH_SCAN = "android.permission.BLUETOOTH_SCAN"
 internal const val READ_PHONE_STATE = "android.permission.READ_PHONE_STATE"
-internal const val QUERY_ALL_PACKAGES = "android.permission.QUERY_ALL_PACKAGES"
 internal fun hasPermission(document: Document, name: String): Boolean =
     listOf("uses-permission", "uses-permission-sdk-23").any { tag ->
         val permissions = document.getElementsByTagName(tag)
@@ -57,15 +57,45 @@ private fun createManifestChild(document: Document, parent: Element, name: Strin
     return if (namespace.isNullOrEmpty()) document.createElement(name) else document.createElementNS(namespace, qualifiedName)
 }
 
-internal fun addPackageVisibilityQuery(document: Document, packageName: String): Boolean {
-    if (packageName.isBlank() || packageName.any { it.isWhitespace() || Character.isISOControl(it) }) return false
+private val packageNamePattern = Regex("[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)+")
+
+internal fun normalizePackageVisibilityAllowlist(entries: List<String>): List<String> {
+    val packages = linkedSetOf<String>()
+    entries.forEach { entry ->
+        val packageName = entry.trim()
+        if (packageName.isEmpty()) return@forEach
+        require(packageName.length <= 255 && packageNamePattern.matches(packageName)) {
+            val safeName = packageName.filterNot { Character.isISOControl(it) }.take(100)
+            "Legacy compatibility: invalid package name '$safeName' in Package Visibility Allowlist; enter exact names such as com.android.vending."
+        }
+        packages += packageName
+    }
+    return packages.toList()
+}
+
+internal fun hasPackageVisibilityQuery(document: Document, packageName: String): Boolean {
     val root = document.documentElement ?: return false
-    val queriesElements = root.childElements().filter { it.manifestLocalName() == "queries" }
+    return root.childElements().filter { it.manifestLocalName() == "queries" }.any { queries ->
+        elementsNamed(queries, "package").any { it.androidAttribute("name") == packageName }
+    }
+}
+
+internal fun addPackageVisibilityQuery(document: Document, packageName: String): Boolean {
+    if (packageName.length > 255 || !packageNamePattern.matches(packageName)) return false
+    val root = document.documentElement ?: return false
+    val rootChildren = root.childElements()
+    val queriesElements = rootChildren.filter { it.manifestLocalName() == "queries" }
+    val application = rootChildren.firstOrNull { it.manifestLocalName() == "application" }
+    if (application != null) {
+        val applicationIndex = rootChildren.indexOf(application)
+        require(queriesElements.all { rootChildren.indexOf(it) < applicationIndex }) {
+            "Legacy compatibility: existing <queries> section follows <application>; fix manifest order before adding package visibility."
+        }
+    }
     if (queriesElements.any { queries -> elementsNamed(queries, "package").any { it.androidAttribute("name") == packageName } }) {
         return false
     }
     val queries = queriesElements.firstOrNull() ?: createManifestChild(document, root, "queries").also { element ->
-        val application = root.childElements().firstOrNull { it.manifestLocalName() == "application" }
         if (application == null) root.appendChild(element) else root.insertBefore(element, application)
     }
     createManifestChild(document, queries, "package").also {
@@ -335,9 +365,10 @@ internal fun legacyManifestPreflightFindings(
     repairExportFlags: Boolean,
     exportAllActivityComponents: Boolean,
     playStorePackageVisibility: Boolean,
-    bypassPackageVisibility: Boolean,
     embedExpansionObb: Boolean,
     expansionObbPath: String?,
+    deviceApi: Int? = currentAndroidApiLevel(),
+    packageVisibilityAllowlist: List<String> = listOf("com.android.vending"),
 ): List<LegacyCompatibilityPreflightFinding> {
     val root = document.documentElement ?: return listOf(
         LegacyCompatibilityPreflightFinding("AndroidManifest.xml", false, "leave unchanged", "all", "unknown", "manifest root is missing"),
@@ -391,29 +422,33 @@ internal fun legacyManifestPreflightFindings(
             uncertainty = launcherCount.toString() + " launcher components among " + missingExported.size + " missing flags; external caller needs are not inferred",
         )
     }
-    val existingPlayQuery = root.childElements().filter { it.manifestLocalName() == "queries" }.any { queries ->
-        elementsNamed(queries, "package").any { it.androidAttribute("name") == "com.android.vending" }
+    val existingQueries = root.childElements().filter { it.manifestLocalName() == "queries" }.flatMap { queries ->
+        elementsNamed(queries, "package").mapNotNull { it.androidAttribute("name").takeIf(String::isNotBlank) }
+    }.distinct()
+    val selectedPackagesResult = if (playStorePackageVisibility) {
+        runCatching { normalizePackageVisibilityAllowlist(packageVisibilityAllowlist) }
+    } else {
+        Result.success(emptyList())
     }
-    if (playStorePackageVisibility || existingPlayQuery) {
+    val selectedPackages = selectedPackagesResult.getOrDefault(emptyList())
+    if (playStorePackageVisibility || existingQueries.isNotEmpty()) {
+        val invalidList = selectedPackagesResult.exceptionOrNull()?.message
         findings += LegacyCompatibilityPreflightFinding(
-            pattern = "Google Play package visibility",
-            detected = existingPlayQuery,
-            proposal = if (playStorePackageVisibility && !existingPlayQuery) "add a scoped queries/package entry for com.android.vending" else "preserve the existing scoped query",
-            apiRange = "Android 11/API 30+",
-            confidence = "exact manifest query scan",
-            uncertainty = "only Google Play visibility is covered; other installed packages remain hidden",
+            pattern = "package visibility allowlist",
+            detected = existingQueries.isNotEmpty(),
+            proposal = when {
+                invalidList != null -> "fix invalid Package Visibility Allowlist entries before applying package queries"
+                !playStorePackageVisibility -> "preserve existing scoped queries; disabled allowlist option adds none"
+                proposedTarget == null || proposedTarget < 30 -> "raise effective targetSdk to 30+ before adding scoped queries"
+                selectedPackages.isEmpty() -> "add at least one exact package name to Package Visibility Allowlist"
+                else -> "add scoped queries for ${selectedPackages.joinToString()}"
+            },
+            apiRange = "Android 11/API 30+ and effective targetSdk 30+",
+            confidence = "exact manifest query scan and selected allowlist",
+            uncertainty = invalidList ?: "queries reveal package visibility only; they do not make implicit service intents explicit",
         )
     }
-    if (bypassPackageVisibility) {
-        findings += LegacyCompatibilityPreflightFinding(
-            pattern = "broad package visibility",
-            detected = hasPermission(document, QUERY_ALL_PACKAGES),
-            proposal = "add QUERY_ALL_PACKAGES (broad visibility explicitly requested)",
-            apiRange = "Android 11/API 30+",
-            confidence = "explicit high-impact option",
-            uncertainty = "exposes installed-app visibility and may violate store policy",
-        )
-    }
+    findings += legacyApiCompatibilityFindings(document, deviceApi, originalTarget, proposedTarget)
     val obbPath = expansionObbPath.orEmpty().trim()
     if (embedExpansionObb || obbPath.isNotEmpty()) {
         val manifestVersionCode = root.androidAttribute("versionCode")
@@ -562,6 +597,12 @@ val legacyAppCompatibilityPatch = resourcePatch(
         key = "legacyCompatibilityRedirectLegacyStorage",
         description = "Try this if the app crashes or loses saves because it writes directly to the shared-storage root. Those API calls are redirected to app-specific storage, which can break shared-file access and OBB paths. Leave off if the app relies on files visible to other apps or uses conventional OBB directories.",
     )
+    val repairFileUriSharingRaw by booleanOption(
+        title = "Legacy App Compatibility > File sharing > Repair file:// shares for modern Android",
+        default = false,
+        key = "legacyCompatibilityRepairFileUriSharing",
+        description = "Opt in only when Android blocks an app's file:// Intent share. Rewrites only verified Uri.fromFile calls passed to Intent.setData, setDataAndType, or EXTRA_STREAM; unrecognized call sites are skipped. Shares only files from app-private storage through a non-exported provider. Provider setup or unsafe paths fail closed.",
+    )
     val receiverFixAppWideRaw by booleanOption(
         title = "Legacy App Compatibility > Runtime compatibility > Fix Dynamic Receiver Registrations (App Wide)",
         default = false,
@@ -581,10 +622,34 @@ val legacyAppCompatibilityPatch = resourcePatch(
         description = "Use only if a launcher activity is not visible or Android rejects the APK because an activity or alias with an intent filter lacks an exported setting. It exposes those matching components to other apps; existing explicit values are preserved. Do not combine with Repair Missing Component Export Flags.",
     )
     val allowCleartextRaw by booleanOption(
-        title = "Legacy App Compatibility > Installation and manifest > Allow Cleartext Traffic",
+        title = "Legacy App Compatibility > Installation and manifest > Allow Cleartext Traffic Everywhere",
         default = false,
         key = "legacyCompatibilityAllowCleartext",
-        description = "Try this if the app cannot connect to a server that supports only plain HTTP. Unencrypted traffic can be read or changed on the network, so do not enable for logins, payments, or other sensitive data. An existing network security configuration may still block HTTP.",
+        description = "Global fallback: allow unencrypted HTTP to every host. Traffic can be read or changed on the network. Never use for logins, payments, or other sensitive data. Mutually exclusive with selected-domain cleartext.",
+    )
+    val allowSelectedCleartextDomainsRaw by booleanOption(
+        title = "Legacy App Compatibility > Installation and manifest > Allow Cleartext for Selected Domains",
+        default = false,
+        key = "legacyCompatibilityAllowSelectedCleartextDomains",
+        description = "Allow unencrypted HTTP only for listed hostnames using Android network security config (API 24+). No presets enable this. Mutually exclusive with the global fallback.",
+    )
+    val cleartextDomainsRaw by stringsOption(
+        title = "Legacy App Compatibility > Installation and manifest > Cleartext Domains",
+        default = emptyList(),
+        key = "legacyCompatibilityCleartextDomains",
+        description = "Exact hostnames allowed to use unencrypted HTTP, one per entry. No URLs, paths, ports, or wildcards. Example: api.example.com.",
+    )
+    val applyForegroundServiceTypesRaw by booleanOption(
+        title = "Legacy App Compatibility > Installation and manifest > Apply Foreground Service Types",
+        default = false,
+        key = "legacyCompatibilityApplyForegroundServiceTypes",
+        description = "Opt in only when logs show Android rejects an existing foreground service because its type is missing. Add explicit Service=Type mappings; the patch adds only matching FGS permissions, never guesses a type or adds runtime permissions. Confirm runtime/user-consent prerequisites (camera, location, microphone, media projection) separately. specialUse and systemExempted are rejected because app-specific eligibility cannot be verified.",
+    )
+    val foregroundServiceTypeMappingsRaw by stringsOption(
+        title = "Legacy App Compatibility > Installation and manifest > Foreground Service Type Mappings",
+        default = emptyList(),
+        key = "legacyCompatibilityForegroundServiceTypeMappings",
+        description = "One mapping per service: com.example.SyncService=dataSync. Use | to combine types for one service. Relative names are resolved against the app package. phoneCall requires a predeclared MANAGE_OWN_CALLS permission; mappings are never preset-generated.",
     )
     val relaxLibrariesRaw by booleanOption(
         title = "Legacy App Compatibility > Installation and manifest > Relax Shared Libraries",
@@ -593,16 +658,16 @@ val legacyAppCompatibilityPatch = resourcePatch(
         description = "Use if Android will not install the app because an optional device library is missing. This lets installation continue, but the app may crash or lose features if it truly needs that library.",
     )
     val playStorePackageVisibilityRaw by booleanOption(
-        title = "Legacy App Compatibility > Installation and manifest > Play Store Package Visibility",
+        title = "Legacy App Compatibility > Installation and manifest > Enable Package Visibility Allowlist",
         default = false,
         key = "legacyCompatibilityPlayStoreVisibility",
-        description = "Use if the app incorrectly reports that Google Play is not installed on Android 11+. It allows checks for Google Play only, not other apps, and is preferable to broad package visibility when Play is the only check needed.",
+        description = "Request visibility only for packages in Package Visibility Allowlist. Android 11/API 30+ presets enable this toggle; effective targetSdk must also be 30+. No broad QUERY_ALL_PACKAGES permission is added.",
     )
-    val bypassPackageVisibilityRaw by booleanOption(
-        title = "Legacy App Compatibility > Installation and manifest > Bypass Package Visibility (Broad)",
-        default = false,
-        key = "legacyCompatibilityPackageVisibility",
-        description = "Use only if the app must check for many different installed apps and those checks fail on Android 11+. This requests visibility into all installed packages, which exposes more information and may be restricted by app-store policy. Prefer Play Store Package Visibility if only Google Play is needed.",
+    val packageVisibilityAllowlistRaw by stringsOption(
+        title = "Legacy App Compatibility > Installation and manifest > Package Visibility Allowlist",
+        default = listOf("com.android.vending"),
+        key = "legacyCompatibilityPackageVisibilityAllowlist",
+        description = "Exact package names this app must query, one per entry. Add only packages the app genuinely checks, such as com.google.android.gms. Presets never change this list.",
     )
     val manifestCompatAttributesRaw by booleanOption(
         title = "Legacy App Compatibility > Installation and manifest > Extra Manifest Compatibility Attributes",
@@ -703,12 +768,17 @@ val legacyAppCompatibilityPatch = resourcePatch(
     val trustCertificates by option { trustCertificatesRaw == true }
     val acknowledgeTrustCertificates by option { acknowledgeTrustCertificatesRaw == true }
     val redirectLegacyStorage by option { redirectLegacyStorageRaw == true }
+    val repairFileUriSharing by option { repairFileUriSharingRaw == true }
     val receiverFixAppWide by option { LegacyCompatibilityPresets.boolean(presetId, "receiverFixAppWide", receiverFixAppWideRaw) }
     val repairExportFlags by option { LegacyCompatibilityPresets.boolean(presetId, "repairExportFlags", repairExportFlagsRaw) }
     val exportAllActivityComponents by option { exportAllActivityComponentsRaw == true }
     val allowCleartext by option { allowCleartextRaw == true }
+    val allowSelectedCleartextDomains by option { allowSelectedCleartextDomainsRaw == true }
+    val cleartextDomains by option { cleartextDomainsRaw.orEmpty() }
+    val applyForegroundServiceTypes by option { applyForegroundServiceTypesRaw == true }
+    val foregroundServiceTypeMappings by option { foregroundServiceTypeMappingsRaw.orEmpty() }
     val relaxLibraries by option { relaxLibrariesRaw == true }
-    val bypassPackageVisibility by option { bypassPackageVisibilityRaw == true }
+    val packageVisibilityAllowlist by option { packageVisibilityAllowlistRaw.orEmpty() }
     val manifestCompatAttributes by option { manifestCompatAttributesRaw == true }
     val legacyStorage by option { legacyStorageRaw == true }
     val expansionObbPath by option { expansionObbPathRaw }
@@ -733,6 +803,8 @@ val legacyAppCompatibilityPatch = resourcePatch(
             removeRelocatedNativeLibrariesFromObb = !diagnosticsOnly && removeRelocatedNativeLibrariesFromObb,
         )
     })
+    val fileUriSharingResult = LegacyFileUriSharingResult()
+    dependsOn(legacyFileUriSharingPatch(fileUriSharingResult) { !diagnosticsOnly && repairFileUriSharing })
     dependsOn(legacyRuntimeHooksPatch {
         LegacyRuntimeOptions(
             hiddenApiExemptions = !diagnosticsOnly && bypassHiddenApi,
@@ -740,16 +812,21 @@ val legacyAppCompatibilityPatch = resourcePatch(
             storageRedirect = !diagnosticsOnly && redirectLegacyStorage,
             embeddedExpansionObb = !diagnosticsOnly && embedExpansionObb && expansionObbPath.orEmpty().trim().isNotEmpty(),
             expansionDownloaderBypass = !diagnosticsOnly && bypassExpansionDownloader && embedExpansionObb && expansionObbPath.orEmpty().trim().isNotEmpty(),
+            fileUriSharing = !diagnosticsOnly && repairFileUriSharing,
         )
     })
     dependsOn(legacyReceiverFlagsPatch { !diagnosticsOnly && receiverFixAppWide })
     dependsOn(legacyDownloaderPendingIntentPatch { !diagnosticsOnly })
     dependsOn(legacyLicenseServiceIntentPatch { !diagnosticsOnly })
-    dependsOn(legacyCompatibilityBytecodePreflightPatch { diagnosticsOnly })
+    dependsOn(legacyCompatibilityBytecodePreflightPatch(enabledProvider = { diagnosticsOnly }))
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)
-        val playStorePackageVisibility = playStorePackageVisibilityRaw == true
+        val playStorePackageVisibility = LegacyCompatibilityPresets.boolean(
+            presetId,
+            "playStorePackageVisibility",
+            playStorePackageVisibilityRaw == true,
+        )
         val playStoreQueryReason = if (playStorePackageVisibility) "explicit user selection" else "not requested"
         if (preset in LegacyCompatibilityPresets.removedIds) {
             logger.warning("Legacy compatibility: removed preset $preset migrated to Custom; individual settings preserved.")
@@ -780,13 +857,15 @@ val legacyAppCompatibilityPatch = resourcePatch(
                 appendLine("  trustCertificates=${trustCertificates && acknowledgeTrustCertificates}")
                 appendLine("  acknowledgeTrustCertificates=${optionLogValue(acknowledgeTrustCertificates)}")
                 appendLine("  redirectLegacyStorage=${optionLogValue(redirectLegacyStorage)}")
+                appendLine("  repairFileUriSharing=${optionLogValue(repairFileUriSharing)}")
                 appendLine("  receiverFixAppWide=${optionLogValue(receiverFixAppWide)}")
                 appendLine("  repairExportFlags=${optionLogValue(repairExportFlags)}")
                 appendLine("  exportAllActivityComponents=${optionLogValue(exportAllActivityComponents)}")
                 appendLine("  allowCleartext=${optionLogValue(allowCleartext)}")
                 appendLine("  relaxLibraries=${optionLogValue(relaxLibraries)}")
                 appendLine("  playStorePackageVisibility=${optionLogValue(playStorePackageVisibility)} reason=${optionLogValue(playStoreQueryReason)}")
-                appendLine("  bypassPackageVisibility=${optionLogValue(bypassPackageVisibility)}")
+                appendLine("  allowSelectedCleartextDomains=${optionLogValue(allowSelectedCleartextDomains)}")
+                appendLine("  applyForegroundServiceTypes=${optionLogValue(applyForegroundServiceTypes)} mappingCount=${foregroundServiceTypeMappings.size}")
                 appendLine("  manifestCompatAttributes=${optionLogValue(manifestCompatAttributes)}")
                 appendLine("  legacyStorage=${optionLogValue(legacyStorage)}")
                 appendLine("  expansionObbPath=${optionLogValue(obbPathLogValue(obbPathForLog))} (directory redacted)")
@@ -814,12 +893,43 @@ val legacyAppCompatibilityPatch = resourcePatch(
                 repairExportFlags = repairExportFlags == true,
                 exportAllActivityComponents = exportAllActivityComponents == true,
                 playStorePackageVisibility = playStorePackageVisibility == true,
-                bypassPackageVisibility = bypassPackageVisibility == true,
                 embedExpansionObb = embedExpansionObb == true,
                 expansionObbPath = obbPathForLog,
+                deviceApi = currentAndroidApiLevel(),
+                packageVisibilityAllowlist = packageVisibilityAllowlist,
             ).forEach { logger.info(formatLegacyCompatibilityPreflightFinding(it)) }
         }
 
+        validateCleartextModes(
+            globalEnabled = allowCleartext == true,
+            domainScopedEnabled = allowSelectedCleartextDomains == true,
+        )
+        val selectedCleartextDomains = if (allowSelectedCleartextDomains == true) {
+            normalizeCleartextDomains(cleartextDomains)
+        } else {
+            emptyList()
+        }
+        validateExpansionDownloaderBypass(
+            selected = bypassExpansionDownloader == true,
+            unityDetected = detectedEngines.unity,
+            obbEmbeddingSelected = embedExpansionObb == true,
+            obbPath = obbPathForLog,
+        )
+        val selectedForegroundMappings = if (applyForegroundServiceTypes == true) {
+            get("AndroidManifest.xml", false).inputStream().use { input ->
+                document(input).use { manifest ->
+                    val mappings = normalizeForegroundServiceTypeMappings(
+                        foregroundServiceTypeMappings,
+                        manifest.documentElement.getAttribute("package"),
+                        declaredManifestPermissionNames(manifest),
+                    )
+                    if (mappings.isNotEmpty()) {
+                        applyForegroundServiceTypeMappings(manifest.cloneNode(true) as Document, mappings)
+                    }
+                    mappings
+                }
+            }
+        } else emptyList()
         if (diagnosticsOnly == true) {
             get("AndroidManifest.xml", false).inputStream().use { input ->
                 document(input).use { manifest -> reportManifestPreflight(manifest) }
@@ -831,6 +941,9 @@ val legacyAppCompatibilityPatch = resourcePatch(
         var changed = 0
         var noApplication = false
         var targetSdkUpdate: LegacyTargetSdkUpdateResult? = null
+        var packageVisibilityApplied: List<String> = emptyList()
+        var packageVisibilityTarget: Int? = null
+        var foregroundServiceMappingsApplied: List<ForegroundServiceTypeMapping> = emptyList()
         document("AndroidManifest.xml").use { manifest ->
             reportManifestPreflight(manifest)
             noApplication = manifest.documentElement.applicationOrNull() == null
@@ -844,6 +957,11 @@ val legacyAppCompatibilityPatch = resourcePatch(
             if (update.outcome == LegacyTargetSdkOutcome.UPDATED) changed++
             if (update.outcome == LegacyTargetSdkOutcome.UPDATED && update.originalTarget != null && update.selectedTarget != null && update.originalTarget > update.selectedTarget) {
                 logger.warning("Legacy compatibility: original target SDK ${update.originalTarget} was higher than ${update.selectedTarget}; platform behavior was downgraded.")
+            }
+            if (selectedForegroundMappings.isNotEmpty()) {
+                foregroundServiceMappingsApplied = selectedForegroundMappings
+            } else if (applyForegroundServiceTypes == true) {
+                logger.warning("Legacy compatibility: foreground-service type mapping is enabled but no mappings were supplied; no service declarations changed.")
             }
             if (legacyReviver == true) {
                 changed += addLegacyReviver(
@@ -892,6 +1010,49 @@ val legacyAppCompatibilityPatch = resourcePatch(
                     logger.warning("Legacy compatibility: preserved networkSecurityConfig; it may still restrict cleartext traffic.")
                 }
             }
+            if (allowSelectedCleartextDomains == true) {
+                val domains = selectedCleartextDomains
+                if (domains.isEmpty()) {
+                    logger.warning("Legacy compatibility: selected-domain cleartext is enabled but Cleartext Domains is empty; no network security config changes made.")
+                } else {
+                    val application = manifest.documentElement.applicationOrNull()
+                        ?: error("Legacy compatibility: cannot configure selected-domain cleartext; manifest application is missing.")
+                    val reference = application.androidAttribute("networkSecurityConfig").trim()
+                    if (reference.isEmpty()) {
+                        val path = "res/xml/$CLEAR_TEXT_NETWORK_SECURITY_RESOURCE.xml"
+                        val existingVariants = networkSecurityConfigPathsForResource(
+                            CLEAR_TEXT_NETWORK_SECURITY_RESOURCE,
+                            listApkEntries("res/xml"),
+                        )
+                        require(existingVariants.isEmpty()) {
+                            "Legacy compatibility: generated network security resource already exists without a manifest reference; refusing to overwrite it."
+                        }
+                        val configFile = get(path, false)
+                        require(!configFile.exists()) {
+                            "Legacy compatibility: a staged network security resource exists outside the input APK; refusing to overwrite another patch's output."
+                        }
+                        ensurePublicXmlResourceId(get("res/values/public.xml", false), "xml", CLEAR_TEXT_NETWORK_SECURITY_RESOURCE)
+                        val config = newCleartextNetworkSecurityConfig(domains)
+                        writeSecureXml(config, configFile)
+                        application.setAttributeNS(NS_ANDROID, "android:networkSecurityConfig", "@xml/$CLEAR_TEXT_NETWORK_SECURITY_RESOURCE")
+                        changed += 2
+                    } else {
+                        val paths = resolveNetworkSecurityConfigPaths(reference, listApkEntries("res/xml"))
+                        val configs = paths.map { path -> path to readSecureXml(get(path, false)) }
+                        configs.forEach { (path, config) ->
+                            val hadCleartextDomainRule = hasExistingCleartextDomainRule(config)
+                            val configChanges = mergeCleartextDomains(config, domains)
+                            if (configChanges > 0) writeSecureXml(config, get(path, false))
+                            changed += configChanges
+                            if (hadCleartextDomainRule) {
+                                logger.warning("Legacy compatibility: existing cleartext domain rules in $path are preserved; selected-domain entries are additive.")
+                            }
+                        }
+                    }
+                    if (setApplicationAttribute(manifest, "usesCleartextTraffic", "false")) changed++
+                    logger.info("Legacy compatibility: selected cleartext domains configured: ${domains.joinToString()}; global cleartext remains disabled.")
+                }
+            }
             if (legacyStorage == true) {
                 if (setApplicationAttribute(manifest, "requestLegacyExternalStorage", "true")) changed++
                 if (addPermission(manifest, WRITE_EXTERNAL_STORAGE, maxSdkVersion = 32)) changed++
@@ -904,10 +1065,7 @@ val legacyAppCompatibilityPatch = resourcePatch(
                     logger.warning("Legacy compatibility: target SDK $effectiveTarget is 30 or higher; requestLegacyExternalStorage is ignored on Android 11 and newer.")
                 }
             }
-            if (bypassExpansionDownloader == true && detectedEngines.unity) {
-                require(embedExpansionObb == true && expansionObbPath.orEmpty().trim().isNotEmpty()) {
-                    "Legacy compatibility: expansion downloader bypass requires OBB embedding and a valid selected OBB file."
-                }
+            if (bypassExpansionDownloader == true) {
                 changed += moveExpansionDownloaderLauncher(manifest, logger)
             }
             if (allScreens == true) {
@@ -916,14 +1074,22 @@ val legacyAppCompatibilityPatch = resourcePatch(
                 if (updated) changed++
             }
             if (relaxLibraries == true) changed += relaxSharedLibraries(manifest)
-            if (playStorePackageVisibility == true && addPackageVisibilityQuery(manifest, "com.android.vending")) {
-                changed++
-                logger.info("Legacy compatibility: added Google Play package visibility query; reason=$playStoreQueryReason.")
+            if (foregroundServiceMappingsApplied.isNotEmpty()) {
+                changed += applyForegroundServiceTypeMappings(manifest, foregroundServiceMappingsApplied)
             }
-            if (bypassPackageVisibility == true) {
-                if (addPermission(manifest, QUERY_ALL_PACKAGES)) {
-                    changed++
-                    logger.info("Legacy compatibility: added QUERY_ALL_PACKAGES for full package visibility.")
+            packageVisibilityTarget = update.finalTarget
+            if (playStorePackageVisibility == true) {
+                if (update.finalTarget == null || update.finalTarget < 30) {
+                    logger.warning("Legacy compatibility: package visibility queries require effective targetSdk 30+; no queries added (target=${update.finalTarget ?: "unknown"}).")
+                } else {
+                    packageVisibilityApplied = normalizePackageVisibilityAllowlist(packageVisibilityAllowlist)
+                    if (packageVisibilityApplied.isEmpty()) {
+                        logger.warning("Legacy compatibility: Package Visibility Allowlist is empty; no package queries added.")
+                    } else {
+                        packageVisibilityApplied.forEach { packageName ->
+                            if (addPackageVisibilityQuery(manifest, packageName)) changed++
+                        }
+                    }
                 }
             }
             if (manifestCompatAttributes == true) {
@@ -933,6 +1099,55 @@ val legacyAppCompatibilityPatch = resourcePatch(
             if (extractNativeLibs == true && setApplicationAttribute(manifest, "extractNativeLibs", "true")) changed++
             if (disableHeapTagging == true && setApplicationAttribute(manifest, "allowNativeHeapPointerTagging", "false")) changed++
             if (vmSafeMode == true && setApplicationAttribute(manifest, "vmSafeMode", "true")) changed++
+        }
+        if (foregroundServiceMappingsApplied.isNotEmpty()) {
+            get("AndroidManifest.xml", false).inputStream().use { input ->
+                document(input).use { parsed -> verifyForegroundServiceTypeMappings(parsed, foregroundServiceMappingsApplied) }
+            }
+            logger.info("Legacy compatibility: foreground-service types and required permissions verified in manifest readback: ${foregroundServiceMappingsApplied.joinToString { "${it.component}=${it.types.joinToString("|")}" }}.")
+        }
+        if (packageVisibilityApplied.isNotEmpty()) {
+            get("AndroidManifest.xml", false).inputStream().use { input ->
+                document(input).use { parsed ->
+                    val missing = packageVisibilityApplied.filterNot { hasPackageVisibilityQuery(parsed, it) }
+                    check(missing.isEmpty()) {
+                        "Legacy compatibility: package visibility query readback failed for: ${missing.joinToString()}"
+                    }
+                }
+            }
+            logger.info("Legacy compatibility: package visibility queries verified for targetSdk ${packageVisibilityTarget}: ${packageVisibilityApplied.joinToString()}.")
+        }
+        if (bypassExpansionDownloader == true && detectedEngines.unity) {
+            get("AndroidManifest.xml", false).inputStream().use { input ->
+                document(input).use(::verifyExpansionDownloaderLauncher)
+            }
+            logger.info("Legacy compatibility: downloader bypass manifest verified after transformation; DownloaderActivity is not launcher and UnityLauncherActivity is launcher.")
+        }
+        if (repairFileUriSharing == true) {
+            if (fileUriSharingResult.patchedCallSites == 0 && fileUriSharingResult.alreadyPatchedCallSites == 0) {
+                logger.warning("Legacy compatibility: no supported file URI share call sites were found; provider manifest changes skipped.")
+            } else {
+                val paths = get("res/xml/$LEGACY_FILE_PROVIDER_PATHS_RESOURCE.xml", false)
+                val publicXml = get("res/values/public.xml", false)
+                val pathEntryNames = legacyFileProviderPathsEntries(listApkEntries("res/xml"))
+                val basePathEntry = "res/xml/$LEGACY_FILE_PROVIDER_PATHS_RESOURCE.xml"
+                val alreadyExists = basePathEntry in pathEntryNames
+                val additionalPaths = pathEntryNames.filterNot { it == basePathEntry }.map { get(it, false) }
+                document("AndroidManifest.xml").use { manifest ->
+                    changed += ensureLegacyFileProvider(
+                        manifest,
+                        paths,
+                        publicXml,
+                        pathsResourceExists = alreadyExists,
+                        additionalExistingPathsFiles = additionalPaths,
+                    )
+                }
+                if (paths.exists()) paths.inputStream().use { input -> verifyLegacyFileProviderPaths(document(input)) }
+                get("AndroidManifest.xml", false).inputStream().use { input ->
+                    document(input).use { parsed -> verifyLegacyFileProvider(parsed, paths, additionalPaths) }
+                }
+                logger.info("Legacy compatibility: private file-sharing provider verified; rewritten=${fileUriSharingResult.patchedCallSites}, alreadyPatched=${fileUriSharingResult.alreadyPatchedCallSites}, skipped=${fileUriSharingResult.skippedCallSites}.")
+            }
         }
         targetSdkUpdate?.let { update ->
             val readback = get("AndroidManifest.xml", false).inputStream().use { input ->

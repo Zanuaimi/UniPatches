@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "1.32.0",
+  "version": "1.33.0-dev.1",
   "patches": [
     {
       "name": "Ads Block Patch ( Experimental, Enhanced, Overlay Support, UniManager Support )",
@@ -1232,6 +1232,15 @@
           "values": null
         },
         {
+          "key": "legacyCompatibilityRepairFileUriSharing",
+          "title": "Legacy App Compatibility > File sharing > Repair file:// shares for modern Android",
+          "description": "Opt in only when Android blocks an app's file:// Intent share. Rewrites only verified Uri.fromFile calls passed to Intent.setData, setDataAndType, or EXTRA_STREAM; unrecognized call sites are skipped. Shares only files from app-private storage through a non-exported provider. Provider setup or unsafe paths fail closed.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
           "key": "legacyCompatibilityReceiverFixAppWide",
           "title": "Legacy App Compatibility > Runtime compatibility > Fix Dynamic Receiver Registrations (App Wide)",
           "description": "Try this if receiver registration crashes on Android 13+. Each call is classified from its statically resolved IntentFilter actions: app-only calls are private, known system/store actions stay exported, and ambiguous calls are skipped with a warning. The fix can miss dynamic filters or expose exported receivers to other apps; OpenIAB is handled separately.",
@@ -1260,11 +1269,47 @@
         },
         {
           "key": "legacyCompatibilityAllowCleartext",
-          "title": "Legacy App Compatibility > Installation and manifest > Allow Cleartext Traffic",
-          "description": "Try this if the app cannot connect to a server that supports only plain HTTP. Unencrypted traffic can be read or changed on the network, so do not enable for logins, payments, or other sensitive data. An existing network security configuration may still block HTTP.",
+          "title": "Legacy App Compatibility > Installation and manifest > Allow Cleartext Traffic Everywhere",
+          "description": "Global fallback: allow unencrypted HTTP to every host. Traffic can be read or changed on the network. Never use for logins, payments, or other sensitive data. Mutually exclusive with selected-domain cleartext.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,
+          "values": null
+        },
+        {
+          "key": "legacyCompatibilityAllowSelectedCleartextDomains",
+          "title": "Legacy App Compatibility > Installation and manifest > Allow Cleartext for Selected Domains",
+          "description": "Allow unencrypted HTTP only for listed hostnames using Android network security config (API 24+). No presets enable this. Mutually exclusive with the global fallback.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "legacyCompatibilityCleartextDomains",
+          "title": "Legacy App Compatibility > Installation and manifest > Cleartext Domains",
+          "description": "Exact hostnames allowed to use unencrypted HTTP, one per entry. No URLs, paths, ports, or wildcards. Example: api.example.com.",
+          "required": false,
+          "type": "kotlin.collections.List<kotlin.String>",
+          "default": [],
+          "values": null
+        },
+        {
+          "key": "legacyCompatibilityApplyForegroundServiceTypes",
+          "title": "Legacy App Compatibility > Installation and manifest > Apply Foreground Service Types",
+          "description": "Opt in only when logs show Android rejects an existing foreground service because its type is missing. Add explicit Service=Type mappings; the patch adds only matching FGS permissions, never guesses a type or adds runtime permissions. Confirm runtime/user-consent prerequisites (camera, location, microphone, media projection) separately. specialUse and systemExempted are rejected because app-specific eligibility cannot be verified.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "legacyCompatibilityForegroundServiceTypeMappings",
+          "title": "Legacy App Compatibility > Installation and manifest > Foreground Service Type Mappings",
+          "description": "One mapping per service: com.example.SyncService=dataSync. Use | to combine types for one service. Relative names are resolved against the app package. phoneCall requires a predeclared MANAGE_OWN_CALLS permission; mappings are never preset-generated.",
+          "required": false,
+          "type": "kotlin.collections.List<kotlin.String>",
+          "default": [],
           "values": null
         },
         {
@@ -1278,20 +1323,22 @@
         },
         {
           "key": "legacyCompatibilityPlayStoreVisibility",
-          "title": "Legacy App Compatibility > Installation and manifest > Play Store Package Visibility",
-          "description": "Use if the app incorrectly reports that Google Play is not installed on Android 11+. It allows checks for Google Play only, not other apps, and is preferable to broad package visibility when Play is the only check needed.",
+          "title": "Legacy App Compatibility > Installation and manifest > Enable Package Visibility Allowlist",
+          "description": "Request visibility only for packages in Package Visibility Allowlist. Android 11/API 30+ presets enable this toggle; effective targetSdk must also be 30+. No broad QUERY_ALL_PACKAGES permission is added.",
           "required": false,
           "type": "kotlin.Boolean",
           "default": false,
           "values": null
         },
         {
-          "key": "legacyCompatibilityPackageVisibility",
-          "title": "Legacy App Compatibility > Installation and manifest > Bypass Package Visibility (Broad)",
-          "description": "Use only if the app must check for many different installed apps and those checks fail on Android 11+. This requests visibility into all installed packages, which exposes more information and may be restricted by app-store policy. Prefer Play Store Package Visibility if only Google Play is needed.",
+          "key": "legacyCompatibilityPackageVisibilityAllowlist",
+          "title": "Legacy App Compatibility > Installation and manifest > Package Visibility Allowlist",
+          "description": "Exact package names this app must query, one per entry. Add only packages the app genuinely checks, such as com.google.android.gms. Presets never change this list.",
           "required": false,
-          "type": "kotlin.Boolean",
-          "default": false,
+          "type": "kotlin.collections.List<kotlin.String>",
+          "default": [
+            "com.android.vending"
+          ],
           "values": null
         },
         {

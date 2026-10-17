@@ -30,6 +30,24 @@ public class LegacyCompatRuntimeTest {
     }
 
     @Test
+    public void fileUriSharingEntryPointsAreAvailable() throws Exception {
+        assertNotNull(LegacyCompatRuntime.class.getMethod("fileUriForShare", File.class));
+        assertNotNull(LegacyCompatRuntime.class.getMethod("grantFileUriReadPermission", android.content.Intent.class));
+    }
+
+    @Test
+    public void fileProviderReturnsNullForUnsupportedMetadataColumns() throws Exception {
+        File file = File.createTempFile("legacy-provider", ".bin");
+        try {
+            assertEquals(file.getName(), LegacyCompatFileProvider.queryValue(file, android.provider.OpenableColumns.DISPLAY_NAME));
+            assertEquals(file.length(), LegacyCompatFileProvider.queryValue(file, android.provider.OpenableColumns.SIZE));
+            assertNull(LegacyCompatFileProvider.queryValue(file, "date_modified"));
+        } finally {
+            assertTrue(file.delete());
+        }
+    }
+
+    @Test
     public void receiverCompatibilityEntryPointIsAvailable() throws Exception {
         Method entryPoint = LegacyCompatRuntime.class.getMethod(
                 "registerReceiverCompat",

@@ -11,6 +11,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.net.Uri;
 import android.content.res.AssetManager;
 import android.os.Environment;
 import android.util.Log;
@@ -101,6 +102,18 @@ public final class LegacyCompatRuntime {
     /** Stores the application context for later path redirects. */
     public static void init(Context context) {
         appContext = context != null ? context.getApplicationContext() : null;
+    }
+
+    /** Converts a verified file-share path into a private content URI. */
+    public static Uri fileUriForShare(File file) {
+        Context context = appContext;
+        if (context == null) throw new IllegalStateException("Legacy compatibility startup context is unavailable for file sharing");
+        return LegacyCompatFileProvider.getUriForFile(context, file);
+    }
+
+    /** Adds only the temporary read grant required by a content-URI share. */
+    public static void grantFileUriReadPermission(Intent intent) {
+        LegacyCompatFileProvider.grantReadPermission(intent);
     }
 
     static final class ExpansionMetadata {
@@ -258,18 +271,40 @@ public final class LegacyCompatRuntime {
         }
     }
 
+    private static IllegalStateException expansionStagingFailure(String reason, File target, Throwable cause) {
+        String path = target == null ? "<unavailable>" : target.getAbsolutePath();
+        String message = "Legacy compatibility: embedded OBB staging failed: " + reason + "; expected path=" + path + ". Verify the selected OBB is embedded and app storage is writable; rebuild the patch if the OBB is stale or mismatched.";
+        Log.e(TAG, message, cause);
+        return new IllegalStateException(message, cause);
+    }
+
+    private static void logVerifiedExpansion(File target, ExpansionMetadata metadata) {
+        Log.i(TAG, "Verified embedded expansion path=" + target.getAbsolutePath() + " bytes=" + metadata.length + " sha256=" + metadata.sha256);
+    }
+
+    private static void verifyAndLogExpansion(File target, ExpansionMetadata metadata) throws IOException {
+        if (target == null || !target.isFile()) {
+            throw expansionStagingFailure("expected OBB file is missing", target, null);
+        }
+        long length = target.length();
+        String checksum = sha256(target);
+        if (length != metadata.length || !metadata.sha256.equals(checksum)) {
+            throw expansionStagingFailure("verification mismatch; found bytes=" + length + " sha256=" + checksum + " expected bytes=" + metadata.length + " sha256=" + metadata.sha256, target, null);
+        }
+        logVerifiedExpansion(target, metadata);
+    }
+
     /**
-     * Copies one embedded expansion OBB into the conventional Android OBB directory.
-     * The asset is copied through a temporary file so Unity never sees a partial archive.
-     * Failure is logged and leaves the original app behavior intact.
+     * Stages and verifies one embedded expansion OBB before startup continues.
+     * Failure aborts app startup rather than falling through to the old downloader flow.
      */
     public static void prepareEmbeddedExpansion(Context context) {
-        if (context == null) {
-            Log.w(TAG, "Embedded expansion skipped: no application context");
-            return;
-        }
         File temporary = null;
+        File target = null;
         try {
+            if (context == null) {
+                throw expansionStagingFailure("no application context", null, null);
+            }
             AssetManager assets = context.getAssets();
             String[] names = assets.list("unipatch-legacy-expansion");
             String name = null;
@@ -289,86 +324,79 @@ public final class LegacyCompatRuntime {
                 }
             }
             if (names == null || names.length != 2 || obbCount != 1 || !hasChecksum) {
-                Log.w(TAG, "Embedded expansion skipped: expected one .obb and its .sha256 metadata asset");
-                return;
+                throw expansionStagingFailure("expected exactly one .obb and its .sha256 metadata asset", null, null);
             }
             ExpansionMetadata metadata = readExpansionMetadata(assets, name);
             if (metadata == null) {
-                Log.w(TAG, "Embedded expansion skipped: checksum metadata is invalid");
-                return;
+                throw expansionStagingFailure("checksum metadata is invalid", null, null);
             }
             File obbDir = context.getObbDir();
             if (obbDir == null) {
-                Log.w(TAG, "Embedded expansion skipped: getObbDir returned null");
-                return;
+                throw expansionStagingFailure("Context.getObbDir returned null", null, null);
             }
             if (!obbDir.exists() && !obbDir.mkdirs()) {
-                Log.w(TAG, "Embedded expansion skipped: cannot create " + obbDir);
-                return;
+                throw expansionStagingFailure("cannot create OBB directory " + obbDir, new File(obbDir, name), null);
             }
-            File target = new File(obbDir, name);
+            target = new File(obbDir, name);
             String versionKey = ".unipatch." + metadata.sha256;
             File marker = new File(obbDir, "." + name + versionKey + ".verified");
             File backup = new File(obbDir, "." + name + versionKey + ".bak");
             temporary = new File(obbDir, "." + name + ".unipatch.tmp");
 
             if (!target.exists() && backup.isFile() && !backup.renameTo(target)) {
-                Log.w(TAG, "Embedded expansion skipped: cannot restore interrupted OBB replacement " + backup);
-                return;
+                throw expansionStagingFailure("cannot restore interrupted OBB replacement " + backup, target, null);
             }
             if (target.exists() && !target.isFile()) {
-                Log.w(TAG, "Embedded expansion skipped: target is not a file " + target);
-                return;
+                throw expansionStagingFailure("target is not a regular file", target, null);
             }
             if (markerMatches(marker, target, metadata)) {
+                logVerifiedExpansion(target, metadata);
                 if (backup.exists()) backup.delete();
-                Log.i(TAG, "Embedded expansion already verified at " + target);
                 return;
             }
             if (fileMatchesExpected(target, metadata)) {
-                writeMarker(marker, metadata);
+                logVerifiedExpansion(target, metadata);
+                if (!writeMarker(marker, metadata)) Log.w(TAG, "Verified embedded OBB, but could not write freshness marker at " + marker);
                 if (backup.exists()) backup.delete();
-                Log.i(TAG, "Existing expansion OBB matches embedded checksum at " + target);
                 return;
             }
             if (backup.exists()) {
                 if (fileMatchesExpected(backup, metadata)) {
                     if (target.exists() && !target.delete()) {
-                        Log.w(TAG, "Embedded expansion skipped: cannot replace stale target with verified backup " + target);
-                        return;
+                        throw expansionStagingFailure("cannot replace stale target with verified backup", target, null);
                     }
                     if (!backup.renameTo(target)) {
-                        Log.w(TAG, "Embedded expansion skipped: cannot restore verified OBB backup " + backup);
-                        return;
+                        throw expansionStagingFailure("cannot restore verified OBB backup " + backup, target, null);
                     }
-                    writeMarker(marker, metadata);
+                    verifyAndLogExpansion(target, metadata);
+                    if (!writeMarker(marker, metadata)) Log.w(TAG, "Verified restored OBB, but could not write freshness marker at " + marker);
                     return;
                 }
-                Log.w(TAG, "Embedded expansion skipped: an unverified recovery file already exists " + backup);
-                return;
+                throw expansionStagingFailure("unverified recovery file already exists " + backup, target, null);
             }
             if (temporary.exists() && !temporary.delete()) {
-                Log.w(TAG, "Embedded expansion skipped: cannot clear temporary file " + temporary);
-                return;
+                throw expansionStagingFailure("cannot clear temporary file " + temporary, target, null);
             }
             boolean staged;
             try (InputStream input = assets.open("unipatch-legacy-expansion/" + name)) {
                 staged = stageVerifiedFile(input, temporary, target, backup, metadata);
             }
             if (!staged) {
-                Log.w(TAG, "Embedded expansion skipped: staged OBB length or SHA-256 did not match metadata");
-                return;
+                throw expansionStagingFailure("staged OBB length or SHA-256 did not match metadata", target, null);
             }
+            verifyAndLogExpansion(target, metadata);
             if (!writeMarker(marker, metadata)) {
-                Log.w(TAG, "Embedded expansion staged and verified, but freshness marker could not be written");
+                Log.w(TAG, "Verified embedded OBB, but could not write freshness marker at " + marker);
             }
             if (backup.exists() && !backup.delete()) {
                 Log.w(TAG, "Embedded expansion staged; old OBB backup remains at " + backup);
             }
-            Log.i(TAG, "Embedded expansion staged and verified at " + target);
-        } catch (Throwable t) {
+        } catch (IllegalStateException e) {
             if (temporary != null) temporary.delete();
-            Log.w(TAG, "Embedded expansion staging failed", t);
+            throw e;
+        } catch (Exception e) {
+            if (temporary != null) temporary.delete();
+            throw expansionStagingFailure("unexpected staging error: " + e.getMessage(), target, e);
         }
     }
     /**

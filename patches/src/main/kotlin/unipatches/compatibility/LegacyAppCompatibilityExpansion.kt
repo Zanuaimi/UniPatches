@@ -310,52 +310,77 @@ internal fun legacyExpansionFilesPatch(optionsProvider: () -> LegacyExpansionOpt
  * Moves the standard Google expansion-downloader launcher to the GLU AUnityInstaller SDK activity.
  * This exact component fingerprint is shared by APKs using that library and is not package-gated.
  */
-internal fun moveExpansionDownloaderLauncher(document: Document, logger: Logger): Int {
-    val application = document.documentElement?.let { root ->
-        val nodes = root.getElementsByTagName("application")
-        nodes.item(0) as? Element
-    } ?: return 0
-    val downloader = (0 until application.childNodes.length)
-        .mapNotNull { application.childNodes.item(it) as? Element }
-        .firstOrNull { it.tagName == "activity" && it.getAttributeNS(NS_ANDROID, "name") == "com.google.android.vending.expansion.downloader_impl.DownloaderActivity" }
-        ?: return 0
-    val unity = (0 until application.childNodes.length)
-        .mapNotNull { application.childNodes.item(it) as? Element }
-        .firstOrNull { it.tagName == "activity" && it.getAttributeNS(NS_ANDROID, "name") == "com.glu.plugins.AUnityInstaller.UnityLauncherActivity" }
-        ?: return 0
-    fun isLauncherFilter(filter: Element): Boolean {
-        if (filter.tagName != "intent-filter") return false
-        val actions = filter.getElementsByTagName("action")
-        val categories = filter.getElementsByTagName("category")
-        val main = (0 until actions.length).any { (actions.item(it) as? Element)?.getAttributeNS(NS_ANDROID, "name") == "android.intent.action.MAIN" }
-        val launcher = (0 until categories.length).any { (categories.item(it) as? Element)?.getAttributeNS(NS_ANDROID, "name") == "android.intent.category.LAUNCHER" }
-        return main && launcher
-    }
+private fun Element.isExpansionLauncherFilter(): Boolean {
+    if ((localName ?: tagName.substringAfter(':')) != "intent-filter") return false
+    val actions = getElementsByTagName("action")
+    val categories = getElementsByTagName("category")
+    val main = (0 until actions.length).any { (actions.item(it) as? Element)?.androidAttribute("name") == "android.intent.action.MAIN" }
+    val launcher = (0 until categories.length).any { (categories.item(it) as? Element)?.androidAttribute("name") == "android.intent.category.LAUNCHER" }
+    return main && launcher
+}
 
+internal fun validateExpansionDownloaderBypass(
+    selected: Boolean,
+    unityDetected: Boolean,
+    obbEmbeddingSelected: Boolean,
+    obbPath: String,
+) {
+    if (!selected) return
+    require(unityDetected) {
+        "Legacy compatibility: expansion downloader bypass was selected, but no supported Unity engine was detected."
+    }
+    require(obbEmbeddingSelected && obbPath.isNotBlank()) {
+        "Legacy compatibility: expansion downloader bypass requires OBB embedding and a valid selected OBB file."
+    }
+}
+
+internal fun verifyExpansionDownloaderLauncher(document: Document) {
+    val application = document.documentElement?.getElementsByTagName("application")?.item(0) as? Element
+        ?: error("Legacy compatibility: downloader bypass readback failed; manifest application is missing.")
+    fun activity(name: String) = (0 until application.childNodes.length)
+        .mapNotNull { application.childNodes.item(it) as? Element }
+        .firstOrNull { it.tagName == "activity" && it.androidAttribute("name") == name }
+    val downloader = activity("com.google.android.vending.expansion.downloader_impl.DownloaderActivity")
+        ?: error("Legacy compatibility: downloader bypass readback failed; DownloaderActivity is missing.")
+    val unity = activity("com.glu.plugins.AUnityInstaller.UnityLauncherActivity")
+        ?: error("Legacy compatibility: downloader bypass readback failed; UnityLauncherActivity is missing.")
+    check(!downloader.isLauncherComponent() && unity.isLauncherComponent()) {
+        "Legacy compatibility: downloader bypass readback failed; expected DownloaderActivity without MAIN/LAUNCHER and UnityLauncherActivity with MAIN/LAUNCHER."
+    }
+}
+
+internal fun moveExpansionDownloaderLauncher(document: Document, logger: Logger): Int {
+    val application = document.documentElement?.getElementsByTagName("application")?.item(0) as? Element
+        ?: error("Legacy compatibility: cannot bypass downloader; manifest application is missing.")
+    fun activity(name: String) = (0 until application.childNodes.length)
+        .mapNotNull { application.childNodes.item(it) as? Element }
+        .firstOrNull { it.tagName == "activity" && it.androidAttribute("name") == name }
+    val activityNames = (0 until application.childNodes.length)
+        .mapNotNull { application.childNodes.item(it) as? Element }
+        .filter { it.tagName == "activity" }
+        .map { it.androidAttribute("name") }
+    val downloader = activity("com.google.android.vending.expansion.downloader_impl.DownloaderActivity")
+        ?: error("Legacy compatibility: cannot bypass downloader; DownloaderActivity is missing. Activities=$activityNames")
+    val unity = activity("com.glu.plugins.AUnityInstaller.UnityLauncherActivity")
+        ?: error("Legacy compatibility: cannot bypass downloader; UnityLauncherActivity is missing.")
     val launcherFilters = (0 until downloader.childNodes.length)
         .mapNotNull { downloader.childNodes.item(it) as? Element }
-        .filter(::isLauncherFilter)
-    if (launcherFilters.isEmpty()) return 0
-    launcherFilters.forEach(downloader::removeChild)
-
-    val unityHasLauncher = (0 until unity.childNodes.length)
-        .mapNotNull { unity.childNodes.item(it) as? Element }
-        .any(::isLauncherFilter)
-    if (!unityHasLauncher) {
-        val replacement = document.createElement("intent-filter")
-        document.createElement("action").also {
-            it.setAttributeNS(NS_ANDROID, "android:name", "android.intent.action.MAIN")
-            replacement.appendChild(it)
+        .filter(Element::isExpansionLauncherFilter)
+    check(launcherFilters.isNotEmpty() || unity.isLauncherComponent()) {
+        "Legacy compatibility: cannot bypass downloader; DownloaderActivity has no MAIN/LAUNCHER filter to transfer and UnityLauncherActivity is not already the launcher."
+    }
+    if (!unity.isLauncherComponent()) {
+        launcherFilters.forEach { filter ->
+            downloader.removeChild(filter)
+            unity.appendChild(filter)
         }
-        document.createElement("category").also {
-            it.setAttributeNS(NS_ANDROID, "android:name", "android.intent.category.LAUNCHER")
-            replacement.appendChild(it)
-        }
-        unity.appendChild(replacement)
+    } else {
+        launcherFilters.forEach(downloader::removeChild)
     }
     unity.setAttributeNS(NS_ANDROID, "android:exported", "true")
-    logger.info("Legacy compatibility: moved launcher from expansion downloader to Unity launcher.")
-    return 1
+    verifyExpansionDownloaderLauncher(document)
+    logger.info("Legacy compatibility: transferred downloader launcher filter and verified manifest readback; UnityLauncherActivity is launcher.")
+    return launcherFilters.size
 }
 
 private const val DEFAULT_COPY_BUFFER = 64 * 1024

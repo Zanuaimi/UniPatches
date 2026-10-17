@@ -398,6 +398,27 @@ class LegacyAppCompatibilityManifestTest {
     }
 
     @Test
+    fun packageVisibilityAllowlistTrimsAndDeduplicatesExactPackages() {
+        assertEquals(
+            listOf("com.android.vending", "com.google.android.gms"),
+            normalizePackageVisibilityAllowlist(listOf(" com.android.vending ", "", "com.android.vending", "com.google.android.gms")),
+        )
+    }
+
+    @Test
+    fun packageVisibilityAllowlistRejectsUrlsWildcardsAndMalformedNames() {
+        for (value in listOf("https://example.com", "com.example.*", "com..example", "single", "com.example/path", "com.example:service", "a".repeat(256))) {
+            try {
+                normalizePackageVisibilityAllowlist(listOf(value))
+                throw AssertionError("Expected invalid package name rejection: $value")
+            } catch (expected: IllegalArgumentException) {
+                assertTrue(expected.message!!.contains("invalid package name"))
+            }
+        }
+        assertFalse(addPackageVisibilityQuery(newDocument().apply { appendChild(createElement("manifest")) }, "com.example.*"))
+    }
+
+    @Test
     fun packageVisibilityQueryIsScopedAndIdempotent() {
         val document = newDocument()
         document.appendChild(document.createElement("manifest"))
@@ -407,6 +428,8 @@ class LegacyAppCompatibilityManifestTest {
         val packages = document.getElementsByTagName("package")
         assertEquals(1, packages.length)
         assertEquals("com.android.vending", (packages.item(0) as Element).getAttributeNS(NS_ANDROID, "name"))
+        assertTrue(hasPackageVisibilityQuery(document, "com.android.vending"))
+        assertFalse(hasPackageVisibilityQuery(document, "com.google.android.gms"))
         assertEquals(0, document.getElementsByTagName("uses-permission").length)
     }
 
@@ -430,6 +453,25 @@ class LegacyAppCompatibilityManifestTest {
     }
 
     @Test
+    fun rejectsMisorderedExistingQueriesEvenWhenRequestedPackageAlreadyExists() {
+        val document = newDocument()
+        val manifest = document.createElement("manifest")
+        document.appendChild(manifest)
+        manifest.appendChild(document.createElement("application"))
+        val queries = document.createElement("queries")
+        queries.appendChild(document.createElement("package").apply {
+            setAttributeNS(NS_ANDROID, "android:name", "com.android.vending")
+        })
+        manifest.appendChild(queries)
+        try {
+            addPackageVisibilityQuery(document, "com.android.vending")
+            throw AssertionError("Expected misordered queries to fail")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("follows <application>"))
+        }
+    }
+
+    @Test
     fun newScopedQueryIsInsertedBeforeApplicationWithoutBroadPermission() {
         val document = newDocument()
         val manifest = document.createElement("manifest")
@@ -441,6 +483,6 @@ class LegacyAppCompatibilityManifestTest {
         assertTrue(addPackageVisibilityQuery(document, "com.android.vending"))
         assertEquals("queries", (manifest.childNodes.item(1) as Element).tagName)
         assertEquals("application", (manifest.childNodes.item(2) as Element).tagName)
-        assertFalse(hasPermission(document, QUERY_ALL_PACKAGES))
+        assertFalse(hasPermission(document, "android.permission.QUERY_ALL_PACKAGES"))
     }
 }

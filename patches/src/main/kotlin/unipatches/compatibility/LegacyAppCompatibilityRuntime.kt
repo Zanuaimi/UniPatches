@@ -25,9 +25,10 @@ internal data class LegacyRuntimeOptions(
     val storageRedirect: Boolean,
     val embeddedExpansionObb: Boolean,
     val expansionDownloaderBypass: Boolean,
+    val fileUriSharing: Boolean,
 ) {
     val anyEnabled: Boolean
-        get() = hiddenApiExemptions || trustCertificates || storageRedirect || embeddedExpansionObb || expansionDownloaderBypass
+        get() = hiddenApiExemptions || trustCertificates || storageRedirect || embeddedExpansionObb || expansionDownloaderBypass || fileUriSharing
 }
 
 internal fun legacyStorageReplacement(
@@ -163,6 +164,12 @@ internal fun legacyRuntimeHooksPatch(optionsProvider: () -> LegacyRuntimeOptions
             logger.info("Legacy compatibility: no runtime hooks selected; startup injection skipped.")
             return@execute
         }
+        val applicationStartupNeeded = options.hiddenApiExemptions || options.trustCertificates || options.storageRedirect ||
+            options.embeddedExpansionObb || options.expansionDownloaderBypass
+        if (!applicationStartupNeeded) {
+            logger.info("Legacy compatibility: no Application startup hook required; FileProvider initializes sharing context.")
+            return@execute
+        }
 
         val entry = resolveStartupEntryPoint(logger)
         var startupReady = false
@@ -175,7 +182,8 @@ internal fun legacyRuntimeHooksPatch(optionsProvider: () -> LegacyRuntimeOptions
             val hasInit = entry.onCreate.implementation?.instructions.orEmpty().any {
                 it.toString().contains("$COMPAT_RUNTIME->init(")
             }
-            startupReady = !options.storageRedirect && !options.embeddedExpansionObb || injected || hasInit
+            val startupNeedsInit = options.storageRedirect || options.embeddedExpansionObb
+            startupReady = !startupNeedsInit || injected || hasInit
             if (injected) {
                 logger.info("Legacy compatibility: injected LegacyCompatRuntime startup hooks ($options) into ${entry.owner.type}->onCreate.")
             } else {

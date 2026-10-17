@@ -24,7 +24,10 @@ internal fun formatLegacyCompatibilityPreflightFinding(finding: LegacyCompatibil
         "api=${preflightValue(finding.apiRange)}; confidence=${preflightValue(finding.confidence)}; " +
         "uncertainty=${preflightValue(finding.uncertainty)}"
 
-internal fun legacyCompatibilityBytecodePreflightPatch(enabledProvider: () -> Boolean) = bytecodePatch(
+internal fun legacyCompatibilityBytecodePreflightPatch(
+    enabledProvider: () -> Boolean,
+    deviceApiProvider: () -> Int? = ::currentAndroidApiLevel,
+) = bytecodePatch(
     name = null,
     description = "Internal diagnostics-only scan for Legacy App Compatibility fingerprints.",
     default = false,
@@ -32,6 +35,7 @@ internal fun legacyCompatibilityBytecodePreflightPatch(enabledProvider: () -> Bo
     execute {
         if (!enabledProvider()) return@execute
         val logger = Logger.getLogger(this::class.java.name)
+        val deviceApi = deviceApiProvider()?.toString() ?: "unknown"
         val classes = mutableListOf<ClassDef>()
         classDefForEach { classes += it }
 
@@ -58,7 +62,7 @@ internal fun legacyCompatibilityBytecodePreflightPatch(enabledProvider: () -> Bo
                     pattern = "Google Play LVL LicenseChecker.checkAccess implicit-service intent",
                     detected = licenseClass != null,
                     proposal = "set the known LVL Intent package to com.android.vending; retain license verification",
-                    apiRange = "Android API 21+",
+                    apiRange = "device API $deviceApi; Android API 21+",
                     confidence = if (licenseExact) "exact APKPure action, method, constructor, and register fingerprint" else "uncertain",
                     uncertainty = if (licenseExact) "Play Store service availability and license result remain runtime-dependent" else "class, action, constructor count, or register encoding does not match; no auto-fix",
                 ),
@@ -81,7 +85,7 @@ internal fun legacyCompatibilityBytecodePreflightPatch(enabledProvider: () -> Bo
                         pattern = "fixed downloader PendingIntent ${target.classType}->${target.methodName}",
                         detected = method != null,
                         proposal = "add FLAG_IMMUTABLE only to a recognized FLAG_UPDATE_CURRENT call with supported registers",
-                        apiRange = "Android API 31+",
+                        apiRange = "device API $deviceApi; Android API 31+",
                         confidence = if (exact) "exact method and call-shape fingerprint" else "uncertain",
                         uncertainty = if (exact) "flag value is checked again by the mutating patch" else "target method or call register shape is absent or changed; no auto-fix",
                     ),
@@ -96,7 +100,7 @@ internal fun legacyCompatibilityBytecodePreflightPatch(enabledProvider: () -> Bo
                     pattern = "OpenIAB UnityPlugin.createBroadcasts receiver setup",
                     detected = openIabMethod != null,
                     proposal = "use OpenIAB Automatic mode for recognized internal/external-store actions; ambiguous filters stay unchanged",
-                    apiRange = "Android API 33+",
+                    apiRange = "device API $deviceApi; Android API 33+",
                     confidence = if (openIabMethod != null) "exact class and method fingerprint" else "not found",
                     uncertainty = "automatic mode checks receiver ownership and action allowlists; Force mode can change broadcast delivery",
                 ),
@@ -131,7 +135,7 @@ internal fun legacyCompatibilityBytecodePreflightPatch(enabledProvider: () -> Bo
                     pattern = "legacy dynamic registerReceiver calls",
                     detected = receiverCalls > 0,
                     proposal = "on API 33+, keep app-only filters private, export known system/store filters, and skip ambiguous filters",
-                    apiRange = "Android API 33+",
+                    apiRange = "device API $deviceApi; Android API 33+ and targetSdk 33+",
                     confidence = if (receiverCalls > 0 && resolvedFilters == receiverCalls) "all filter action sets statically resolved" else "partial",
                     uncertainty = "${resolvedFilters} of ${receiverCalls} filters have static actions; app ID/sender identity and runtime-built filters may remain unknown",
                 ),

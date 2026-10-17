@@ -256,12 +256,39 @@ class LegacyAppCompatibilityExpansionTest {
     }
 
     @Test
+    fun downloaderBypassRequiresDetectedUnityAndEmbeddedObb() {
+        validateExpansionDownloaderBypass(false, false, false, "")
+        validateExpansionDownloaderBypass(true, true, true, "/tmp/main.1.example.obb")
+        assertTrue(assertThrows(IllegalArgumentException::class.java) {
+            validateExpansionDownloaderBypass(true, false, true, "/tmp/main.1.example.obb")
+        }.message!!.contains("no supported Unity engine was detected"))
+        assertTrue(assertThrows(IllegalArgumentException::class.java) {
+            validateExpansionDownloaderBypass(true, true, false, "/tmp/main.1.example.obb")
+        }.message!!.contains("requires OBB embedding"))
+        assertTrue(assertThrows(IllegalArgumentException::class.java) {
+            validateExpansionDownloaderBypass(true, true, true, "  ")
+        }.message!!.contains("requires OBB embedding"))
+    }
+
+    @Test
     fun movesAllDownloaderLaunchersWithoutDuplicatingUnityLauncher() {
         val document = launcherDocument(unityHasLauncher = false, downloaderFilters = 2)
 
-        assertEquals(1, moveExpansionDownloaderLauncher(document, Logger.getLogger("test")))
+        assertEquals(2, moveExpansionDownloaderLauncher(document, Logger.getLogger("test")))
         assertEquals(0, launcherFilterCount(activity(document, "com.google.android.vending.expansion.downloader_impl.DownloaderActivity")))
-        assertEquals(1, launcherFilterCount(activity(document, "com.glu.plugins.AUnityInstaller.UnityLauncherActivity")))
+        assertEquals(2, launcherFilterCount(activity(document, "com.glu.plugins.AUnityInstaller.UnityLauncherActivity")))
+        verifyExpansionDownloaderLauncher(document)
+    }
+
+    @Test
+    fun failsClosedWhenDownloaderLauncherCannotBeTransferred() {
+        val document = launcherDocument(unityHasLauncher = false, downloaderFilters = 0)
+
+        val failure = assertThrows(IllegalStateException::class.java) {
+            moveExpansionDownloaderLauncher(document, Logger.getLogger("test"))
+        }
+
+        assertTrue(failure.message!!.contains("no MAIN/LAUNCHER filter to transfer"))
     }
 
     @Test
@@ -270,6 +297,7 @@ class LegacyAppCompatibilityExpansionTest {
 
         assertEquals(1, moveExpansionDownloaderLauncher(document, Logger.getLogger("test")))
         assertEquals(1, launcherFilterCount(activity(document, "com.glu.plugins.AUnityInstaller.UnityLauncherActivity")))
+        verifyExpansionDownloaderLauncher(document)
     }
 
     private fun launcherDocument(unityHasLauncher: Boolean, downloaderFilters: Int): Document {

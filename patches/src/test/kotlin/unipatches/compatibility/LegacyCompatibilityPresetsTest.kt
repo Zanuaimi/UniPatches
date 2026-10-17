@@ -6,17 +6,17 @@ import org.junit.Test
 class LegacyCompatibilityPresetsTest {
     private val explicitOptions = listOf(
         "diagnosticsOnly", "spoofTargetSdk", "exactAlarms", "trustCertificates",
-        "acknowledgeTrustCertificates", "spoofImei", "bypassPackageVisibility",
+        "acknowledgeTrustCertificates", "spoofImei",
         "exportAllActivityComponents", "allowCleartext", "bypassHiddenApi",
         "relocateExpansionNativeLibraries", "removeRelocatedNativeLibrariesFromObb",
         "embedExpansionObb", "bypassExpansionDownloader", "extractNativeLibs",
-        "playStorePackageVisibility", "redirectLegacyStorage", "allScreens",
+        "redirectLegacyStorage", "allScreens",
         "relaxLibraries", "manifestCompatAttributes", "legacyStorage",
         "disableHeapTagging", "vmSafeMode",
     )
 
     @Test fun customPreservesManualChoices() {
-        for (key in explicitOptions + listOf("legacyReviver", "apacheLegacy", "foregroundService", "bluetooth", "receiverFixAppWide", "repairExportFlags")) {
+        for (key in explicitOptions + listOf("legacyReviver", "apacheLegacy", "foregroundService", "bluetooth", "receiverFixAppWide", "repairExportFlags", "playStorePackageVisibility")) {
             assertTrue(key, LegacyCompatibilityPresets.boolean("custom", key, true))
             assertFalse(key, LegacyCompatibilityPresets.boolean("custom", key, false))
             assertFalse(key, LegacyCompatibilityPresets.boolean("custom", key, null))
@@ -37,6 +37,8 @@ class LegacyCompatibilityPresetsTest {
         for ((id, era) in LegacyCompatibilityPresets.eras) {
             for (key in listOf("legacyReviver", "receiverFixAppWide", "repairExportFlags"))
                 assertTrue("$id/$key", LegacyCompatibilityPresets.boolean(id, key, false))
+            assertEquals("$id/playStorePackageVisibility", era >= 30,
+                LegacyCompatibilityPresets.boolean(id, "playStorePackageVisibility", false))
             for (key in listOf("apacheLegacy", "foregroundService", "bluetooth")) {
                 assertTrue("$id/$key", LegacyCompatibilityPresets.boolean(id, key, true))
                 assertEquals("$id/$key", if (key == "bluetooth") era < 31 else era <= 28,
