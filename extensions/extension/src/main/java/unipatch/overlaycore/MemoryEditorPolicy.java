@@ -15,7 +15,7 @@ public final class MemoryEditorPolicy {
     });
     private static volatile boolean enabled;
     private static volatile boolean seeded;
-    private static volatile String status = "Enter exact 123 to start";
+    private static volatile String status = "Enter: exact <int32> to start";
 
     private MemoryEditorPolicy() { }
 
@@ -41,7 +41,7 @@ public final class MemoryEditorPolicy {
                     if (parts.length != 3) return false;
                     index = Integer.parseInt(parts[1]);
                     value = Integer.parseInt(parts[2]);
-                    if (index < 0 || index >= 20_000) return false;
+                    if (index < 0 || index >= MemoryScanner.MAX_RESULTS) return false;
                     break;
                 case "filter":
                     if (parts.length != 2 || parts[1].length() > 96) return false;
@@ -80,7 +80,8 @@ public final class MemoryEditorPolicy {
                             seeded = false;
                             status = "Memory unavailable: /proc/self/mem could not be read";
                         } else {
-                            status = "Found " + found + " int32 candidates; run show";
+                            status = "Found " + found + " int32 candidates" +
+                                    partialSuffix() + "; run show";
                         }
                         return;
                     case "write":
@@ -93,7 +94,8 @@ public final class MemoryEditorPolicy {
                     case "show":
                         if (!seeded) { status = "Run exact VALUE first"; return; }
                         List<Long> results = SCANNER.resultAddresses(8);
-                        StringBuilder summary = new StringBuilder("Candidates: ").append(SCANNER.resultCount());
+                        StringBuilder summary = new StringBuilder("Candidates: ")
+                                .append(SCANNER.resultCount()).append(partialSuffix());
                         for (int i = 0; i < results.size(); i++) {
                             long address = results.get(i);
                             summary.append("\n").append(i).append(": ")
@@ -104,12 +106,17 @@ public final class MemoryEditorPolicy {
                     default:
                         if (!seeded) { status = "Run exact VALUE first"; return; }
                         MemoryScanner.Mode mode = MemoryScanner.Mode.valueOf(action.toUpperCase(Locale.ROOT));
-                        status = "Remaining " + SCANNER.scan(mode, 0) + " int32 candidates; run show";
+                        status = "Remaining " + SCANNER.scan(mode, 0) + " int32 candidates" +
+                                partialSuffix() + "; run show";
                 }
             } catch (RuntimeException error) {
                 status = "Memory command failed: " + error.getClass().getSimpleName();
             }
         });
         return true;
+    }
+
+    private static String partialSuffix() {
+        return SCANNER.wasLastScanTruncated() ? " (partial scan)" : "";
     }
 }

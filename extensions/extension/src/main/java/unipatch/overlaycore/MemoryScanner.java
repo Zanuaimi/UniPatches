@@ -3,7 +3,6 @@ package unipatch.overlaycore;
 import java.io.File;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,29 +49,29 @@ public final class MemoryScanner {
     }
 
     /**
-     * Region size cap. The Java heap on a large app runs to hundreds of MB and
-     * scanning it as 4-byte words takes seconds. Most entitlement flags sit in
-     * small allocations, so callers narrow with {@link #setRegionFilter} before
-     * committing to a full sweep.
+     * Per-region read cap. The Java heap on a large app runs to hundreds of MB
+     * and scanning it as 4-byte words takes seconds. A mapping larger than the
+     * cap is still scanned up to the cap instead of being skipped, so a value
+     * in the first part of a large heap mapping remains reachable. Callers can
+     * narrow with {@link #setRegionFilter} before committing to a full sweep.
      */
     private static final long DEFAULT_MAX_REGION_BYTES = 64L * 1024 * 1024;
     private static final long MAX_SCAN_BYTES = 128L * 1024 * 1024;
 
-    private static final int MAX_RESULTS = 20_000;
+    static final int MAX_RESULTS = 20_000;
 
     private long maxRegionBytes = DEFAULT_MAX_REGION_BYTES;
     private String regionFilter = null;
-    private long regionFilterBase = 0L;
 
     private final Map<Long, Integer> previous = new LinkedHashMap<>();
     private final Map<Long, Integer> current = new LinkedHashMap<>();
     private boolean hasPrevious = false;
     private boolean lastScanReadable = false;
+    private boolean lastScanTruncated = false;
 
     /** Restricts scanning to mappings whose path contains {@code needle}. */
     public void setRegionFilter(String needle) {
         this.regionFilter = (needle == null || needle.isEmpty()) ? null : needle;
-        this.regionFilterBase = 0L;
     }
 
     public void setMaxRegionBytes(long bytes) { this.maxRegionBytes = bytes; }
@@ -83,10 +82,13 @@ public final class MemoryScanner {
         current.clear();
         hasPrevious = false;
         lastScanReadable = false;
+        lastScanTruncated = false;
     }
 
     public int resultCount() { return current.size(); }
     public boolean wasLastScanReadable() { return lastScanReadable; }
+    /** True when the result set hit the byte budget or the result cap. */
+    public boolean wasLastScanTruncated() { return lastScanTruncated; }
 
     public List<Long> resultAddresses(int limit) {
         List<Long> out = new ArrayList<>();
@@ -119,6 +121,7 @@ public final class MemoryScanner {
         }
 
         Map<Long, Integer> next = new LinkedHashMap<>();
+        lastScanReadable = false;
         try (RandomAccessFile mem = new RandomAccessFile(new File("/proc/self/mem"), "r")) {
             byte[] buf = new byte[4];
             for (Map.Entry<Long, Integer> entry : previous.entrySet()) {
@@ -130,6 +133,7 @@ public final class MemoryScanner {
                 } catch (Exception staleMapping) {
                     continue;
                 }
+                lastScanReadable = true;
                 int newValue = littleEndianInt(buf);
                 boolean keep;
                 switch (mode) {
@@ -156,12 +160,21 @@ public final class MemoryScanner {
         previous.clear();
         current.clear();
         lastScanReadable = false;
+        lastScanTruncated = false;
         long scanned = 0;
         for (Region region : parseMaps()) {
-            if (region.size() > maxRegionBytes) continue;
-            if (scanned >= MAX_SCAN_BYTES || current.size() >= MAX_RESULTS) break;
+            if (scanned >= MAX_SCAN_BYTES || current.size() >= MAX_RESULTS) {
+                lastScanTruncated = true;
+                break;
+            }
             long start = (region.start + 3L) & ~3L;
-            long end = Math.min(region.end & ~3L, start + MAX_SCAN_BYTES - scanned);
+            long regionLimit = Math.min(region.end, region.start + Math.max(4L, maxRegionBytes));
+            long end = Math.min(regionLimit & ~3L, start + (MAX_SCAN_BYTES - scanned));
+            if (end <= start) {
+                if (regionLimit < region.end) lastScanTruncated = true;
+                continue;
+            }
+            if (end < region.end) lastScanTruncated = true;
             // Keep one descriptor open per mapping rather than opening /proc/self/mem
             // for every 4-byte value.
             try (RandomAccessFile mem = new RandomAccessFile(new File("/proc/self/mem"), "r")) {
@@ -178,7 +191,10 @@ public final class MemoryScanner {
                                 long hit = address + offset;
                                 current.put(hit, value);
                                 previous.put(hit, value);
-                                if (current.size() >= MAX_RESULTS) break;
+                                if (current.size() >= MAX_RESULTS) {
+                                    lastScanTruncated = true;
+                                    break;
+                                }
                             }
                         }
                         address += bytes;
@@ -219,12 +235,12 @@ public final class MemoryScanner {
                      new java.io.BufferedReader(new java.io.FileReader("/proc/self/maps"))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] parts = line.trim().split("\\s+");
+                String[] parts = line.trim().split("\\s+", 6);
                 if (parts.length < 6) continue;
                 String[] range = parts[0].split("-");
                 if (range.length != 2) continue;
-                long start = Long.parseUnsignedLong(range[0], 16);
-                long end = Long.parseUnsignedLong(range[1], 16);
+                long start = parseAddress(range[0]);
+                long end = parseAddress(range[1]);
                 if (address < start || address >= end) continue;
                 String path = parts[5];
                 int slash = path.lastIndexOf('/');
@@ -242,18 +258,17 @@ public final class MemoryScanner {
         try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader("/proc/self/maps"))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] parts = line.trim().split("\\s+");
+                String[] parts = line.trim().split("\\s+", 6);
                 if (parts.length < 5) continue;
                 String perms = parts[1];
                 if (!isReadableWritablePrivate(perms)) continue;
                 String[] range = parts[0].split("-");
                 if (range.length != 2) continue;
-                long start = Long.parseUnsignedLong(range[0], 16);
-                long end = Long.parseUnsignedLong(range[1], 16);
+                long start = parseAddress(range[0]);
+                long end = parseAddress(range[1]);
                 if (end <= start) continue;
                 String name = parts.length > 5 ? parts[5] : "";
                 if (regionFilter != null && !name.contains(regionFilter)) continue;
-                if (regionFilter != null && !regionFilterBaseIn(start, end)) continue;
                 out.add(new Region(start, end));
             }
         } catch (Exception error) {
@@ -262,16 +277,30 @@ public final class MemoryScanner {
         return out;
     }
 
-    private boolean regionFilterBaseIn(long start, long end) {
-        // Filter by name only; a numeric base filter is applied by callers through
-        // setRegionFilter with a name substring, so this is a no-op placeholder kept
-        // for the case where a caller supplies both.
-        return regionFilterBase == 0L || (start <= regionFilterBase && regionFilterBase < end);
-    }
-
     static boolean isReadableWritablePrivate(String perms) {
         return perms != null && perms.length() >= 4 && perms.charAt(0) == 'r'
                 && perms.charAt(1) == 'w' && perms.charAt(3) == 'p';
+    }
+
+    /**
+     * Parses a hexadecimal /proc/self/maps address.
+     *
+     * Long.parseUnsignedLong is API 26 and the extension supports API 23, so
+     * this loop handles both 32-bit and 64-bit user-space addresses without a
+     * newer platform API. User-space addresses are below 2^63, so a signed long
+     * holds them exactly.
+     */
+    static long parseAddress(String hex) {
+        if (hex == null || hex.isEmpty() || hex.length() > 16) {
+            throw new NumberFormatException("invalid address: " + hex);
+        }
+        long value = 0L;
+        for (int i = 0; i < hex.length(); i++) {
+            int digit = Character.digit(hex.charAt(i), 16);
+            if (digit < 0) throw new NumberFormatException("invalid address: " + hex);
+            value = (value << 4) | digit;
+        }
+        return value;
     }
 
     private int read(long address, byte[] buf) {
