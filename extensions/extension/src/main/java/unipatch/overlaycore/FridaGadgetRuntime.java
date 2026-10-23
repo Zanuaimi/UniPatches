@@ -16,6 +16,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Array;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 
 /** Runtime loader for the patch-time embedded Frida Gadget and JavaScript bundle. */
@@ -155,9 +157,39 @@ public final class FridaGadgetRuntime {
                 }
                 output.getFD().sync();
             }
-            if (!temporary.renameTo(destination)) throw new IOException("Could not replace " + destination);
+            if (!replace(temporary, destination)) throw new IOException("Could not replace " + destination);
         } finally {
             temporary.delete();
+        }
+    }
+
+    /**
+     * Replaces {@code destination} with {@code source}. Android 26+ and desktop
+     * JVMs expose NIO, whose move can replace an existing target; Windows
+     * renameTo cannot. Older Android runtimes lack java.nio.file and fall back
+     * to renameTo, which is atomic on Linux.
+     */
+    private static boolean replace(File source, File destination) {
+        if (moveWithNio(source, destination)) return true;
+        return source.renameTo(destination);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static boolean moveWithNio(File source, File destination) {
+        try {
+            Class<?> filesClass = Class.forName("java.nio.file.Files");
+            Class<?> pathClass = Class.forName("java.nio.file.Path");
+            Class<?> copyOptionClass = Class.forName("java.nio.file.CopyOption");
+            Class<?> standardCopyOptionClass = Class.forName("java.nio.file.StandardCopyOption");
+            Method toPath = File.class.getMethod("toPath");
+            Method move = filesClass.getMethod("move", pathClass, pathClass, copyOptionClass.arrayType());
+            Object options = Array.newInstance(copyOptionClass, 2);
+            Array.set(options, 0, Enum.valueOf((Class) standardCopyOptionClass, "REPLACE_EXISTING"));
+            Array.set(options, 1, Enum.valueOf((Class) standardCopyOptionClass, "ATOMIC_MOVE"));
+            move.invoke(null, toPath.invoke(source), toPath.invoke(destination), options);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 

@@ -7,6 +7,7 @@ import helpers.ads.*
 internal class RuntimeNoAdsCoordinator(
     private val sdkCoverage: AdsSdkCoverage,
     private val blockAdsRuntime: Boolean,
+    private val rewardsRuntime: Boolean,
 ) {
     fun fingerprintCategories(): Map<Fingerprint, String> = buildMap {
         // MAX readiness and wrapper methods are frequently called while mediation is
@@ -14,6 +15,7 @@ internal class RuntimeNoAdsCoordinator(
         // request-scoped, parameter-preserving adapters.
         val maxRuntimeCoverage = sdkCoverage.max && !shouldSkipMaxRuntimeCoverage(
             runtimeBlockAds = blockAdsRuntime,
+            runtimeRewards = rewardsRuntime,
             maxCoverageEnabled = sdkCoverage.max,
         )
 
@@ -105,7 +107,8 @@ internal class RuntimeNoAdsCoordinator(
         add(sdkCoverage.huawei, "native", HuaweiNativeAdLoadFingerprint)
     }.filter { (_, _) ->
         // This coordinator owns only No Ads instrumentation. Rewards runtime coverage is
-        // Runtime fingerprints are queued only when the Block Ads module is selected.
+        // dispatched by RuntimeRewardsCoordinator and must never cause No Ads fingerprints
+        // to be queued or statically flushed when the Block Ads module is not selected.
         blockAdsRuntime
     }
 }

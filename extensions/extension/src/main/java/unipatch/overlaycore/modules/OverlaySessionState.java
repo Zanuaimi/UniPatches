@@ -35,6 +35,8 @@ public final class OverlaySessionState {
 
     /** Clears one module's values when a fresh runtime policy starts a new app session. */
     public static synchronized void clearModule(String module) {
+        // minSdk 23 has no Collection#removeIf (API 24); an iterator stays portable
+        // and the synchronized block already serializes the removal.
         String prefix = module + "\u0000";
         Iterator<String> keys = VALUES.keySet().iterator();
         while (keys.hasNext()) {

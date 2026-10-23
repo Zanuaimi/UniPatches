@@ -25,15 +25,17 @@ internal data class PathPlan(
 
 internal data class AdsPatchPlan(
     val noAds: PathPlan,
+    val rewards: PathPlan,
     val hosts: PathPlan,
     val sdkCoverage: AdsSdkCoverage,
     val runtimePolicyEnabled: Boolean,
     val overlayNoAdsModuleSelected: Boolean,
+    val overlayRewardsModuleSelected: Boolean = rewards.runtimeModuleSelected,
     val overlayHostsModuleSelected: Boolean,
 ) {
     val executionMode: AdsPatchExecutionMode
         get() {
-            val modes = listOf(noAds.mode, hosts.mode).toSet()
+            val modes = listOf(noAds.mode, rewards.mode, hosts.mode).toSet()
             return when {
                 modes == setOf(AdsPatchMode.DISABLED) -> AdsPatchExecutionMode.DISABLED
                 modes == setOf(AdsPatchMode.STATIC) || modes == setOf(AdsPatchMode.DISABLED, AdsPatchMode.STATIC) -> AdsPatchExecutionMode.STATIC
@@ -47,6 +49,7 @@ internal data class AdsPatchPlan(
             if (!runtimePolicyEnabled) return 0
             var mask = 0
             if (noAds.runtimeEligible) mask = mask or AdsRuntimeModule.BLOCK_ADS
+            if (rewards.runtimeEligible) mask = mask or AdsRuntimeModule.REWARDS
             // Hosts visibility is selected by policy and module selection; its master controls
             // the initial switch and whether host instrumentation exists.
             if (hosts.runtimeModuleSelected) mask = mask or AdsRuntimeModule.HOSTS
@@ -58,6 +61,7 @@ internal data class AdsPatchPlan(
             if (!runtimePolicyEnabled) return 0
             var mask = 0
             if (noAds.runtimeEligible && overlayNoAdsModuleSelected) mask = mask or AdsRuntimeModule.BLOCK_ADS
+            if (rewards.runtimeEligible && overlayRewardsModuleSelected) mask = mask or AdsRuntimeModule.REWARDS
             if (hosts.runtimeModuleSelected && overlayHostsModuleSelected) mask = mask or AdsRuntimeModule.HOSTS
             return mask
         }
@@ -65,5 +69,6 @@ internal data class AdsPatchPlan(
 
 internal object AdsRuntimeModule {
     const val BLOCK_ADS = 1
-    const val HOSTS = 2
+    const val REWARDS = 2
+    const val HOSTS = 4
 }

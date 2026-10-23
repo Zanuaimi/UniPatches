@@ -146,46 +146,60 @@ internal fun addLegacyReviver(document: Document, apache: Boolean, foreground: B
     return changed
 }
 
-/** Returns the explicitly declared targetSdkVersion text, or null when absent. */
-private fun originalTargetSdkValue(document: Document): String? {
+/** Returns the explicitly declared SDK attribute text, or null when absent. */
+private fun originalSdkValue(document: Document, attribute: String): String? {
     val usesSdk = document.documentElement
         ?.childElements()
         ?.firstOrNull { it.manifestLocalName() == "uses-sdk" }
         ?: return null
     return when {
-        usesSdk.hasAttributeNS(NS_ANDROID, "targetSdkVersion") ->
-            usesSdk.getAttributeNS(NS_ANDROID, "targetSdkVersion")
-        usesSdk.hasAttribute("android:targetSdkVersion") ->
-            usesSdk.getAttribute("android:targetSdkVersion")
-        usesSdk.hasAttribute("targetSdkVersion") ->
-            usesSdk.getAttribute("targetSdkVersion")
+        usesSdk.hasAttributeNS(NS_ANDROID, attribute) ->
+            usesSdk.getAttributeNS(NS_ANDROID, attribute)
+        usesSdk.hasAttribute("android:$attribute") ->
+            usesSdk.getAttribute("android:$attribute")
+        usesSdk.hasAttribute(attribute) ->
+            usesSdk.getAttribute(attribute)
         else -> null
     }
 }
 
+/** Returns the explicitly declared targetSdkVersion text, or null when absent. */
+private fun originalTargetSdkValue(document: Document): String? =
+    originalSdkValue(document, "targetSdkVersion")
+
 /** Returns the original targetSdkVersion from the manifest, or null when absent or invalid. */
 internal fun originalTargetSdk(document: Document): Int? = originalTargetSdkValue(document)?.toIntOrNull()
 
-internal fun updateTargetSdk(document: Document, target: Int): Boolean {
+internal fun updateTargetSdk(document: Document, target: Int): Boolean =
+    updateSdkVersion(document, "targetSdkVersion", target)
+
+/**
+ * Writes android:minSdkVersion. This is the attribute the package installer
+ * gates on: PackageManager rejects the APK with INSTALL_FAILED_OLDER_SDK when
+ * minSdkVersion is above the device's API level, regardless of targetSdkVersion.
+ */
+internal fun updateMinSdk(document: Document, min: Int): Boolean =
+    updateSdkVersion(document, "minSdkVersion", min)
+
+private fun updateSdkVersion(document: Document, attribute: String, value: Int): Boolean {
     val root = document.documentElement ?: return false
     if (root.manifestLocalName() != "manifest") return false
     val usesSdk = root.childElements().firstOrNull { it.manifestLocalName() == "uses-sdk" }
     if (usesSdk != null) {
-        val current = originalTargetSdkValue(document)
-        if (current == target.toString()) return false
-        if (usesSdk.hasAttributeNS(NS_ANDROID, "targetSdkVersion")) {
-            usesSdk.setAttributeNS(NS_ANDROID, "android:targetSdkVersion", target.toString())
-        } else if (usesSdk.hasAttribute("android:targetSdkVersion")) {
-            usesSdk.setAttribute("android:targetSdkVersion", target.toString())
-        } else if (usesSdk.hasAttribute("targetSdkVersion")) {
-            usesSdk.setAttribute("targetSdkVersion", target.toString())
+        if (originalSdkValue(document, attribute) == value.toString()) return false
+        if (usesSdk.hasAttributeNS(NS_ANDROID, attribute)) {
+            usesSdk.setAttributeNS(NS_ANDROID, "android:$attribute", value.toString())
+        } else if (usesSdk.hasAttribute("android:$attribute")) {
+            usesSdk.setAttribute("android:$attribute", value.toString())
+        } else if (usesSdk.hasAttribute(attribute)) {
+            usesSdk.setAttribute(attribute, value.toString())
         } else {
-            usesSdk.setAttributeNS(NS_ANDROID, "android:targetSdkVersion", target.toString())
+            usesSdk.setAttributeNS(NS_ANDROID, "android:$attribute", value.toString())
         }
         return true
     }
     val created = createManifestChild(document, root, "uses-sdk")
-    created.setAttributeNS(NS_ANDROID, "android:targetSdkVersion", target.toString())
+    created.setAttributeNS(NS_ANDROID, "android:$attribute", value.toString())
     val application = root.childElements().firstOrNull { it.manifestLocalName() == "application" }
     root.insertBefore(created, application)
     return true
@@ -535,6 +549,18 @@ val legacyAppCompatibilityPatch = resourcePatch(
         default = 24,
         key = "legacyCompatibilityTargetSdk",
         description = "Changes which Android version this app declares it was designed for. This may help install older apps, but does not upgrade their code or guarantee compatibility. Higher values can activate newer Android restrictions. Examples: 24 = Android 7.0; 27 = Android 8.1; 29 = Android 10; 34 = Android 14. Use the lowest value required by your device’s installation error. Ignored when Spoof Target SDK is disabled. Accepted range: 23–40; default: 24.",
+    )
+    val spoofMinSdk by booleanOption(
+        title = "Legacy App Compatibility > Installation and manifest > Spoof Min SDK",
+        default = false,
+        key = "legacyCompatibilitySpoofMinSdk",
+        description = "Rewrite android:minSdkVersion. This is the attribute the package installer gates on, so it is what clears INSTALL_FAILED_OLDER_SDK on an older device. Lowering it does not repair code that calls newer platform APIs.",
+    )
+    val minSdk by intOption(
+        title = "Legacy App Compatibility > Installation and manifest > Min SDK version",
+        default = 28,
+        key = "legacyCompatibilityMinSdk",
+        description = "Min SDK to write when Spoof Min SDK is enabled. Set this to the API level of the device you are installing on (28 = Android 9). Default: 28.",
     )
     val legacyReviverRaw by booleanOption(
         title = "Legacy App Compatibility > Installation and manifest > Legacy App Reviver",
@@ -1151,6 +1177,15 @@ val legacyAppCompatibilityPatch = resourcePatch(
             if (update.outcome == LegacyTargetSdkOutcome.UPDATED) changed++
             if (update.outcome == LegacyTargetSdkOutcome.UPDATED && update.originalTarget != null && update.selectedTarget != null && update.originalTarget > update.selectedTarget) {
                 logger.warning("Legacy compatibility: original target SDK ${update.originalTarget} was higher than ${update.selectedTarget}; platform behavior was downgraded.")
+            }
+            if (spoofMinSdk == true) {
+                val min = minSdk ?: 28
+                if (min !in 1..40) {
+                    logger.warning("Legacy compatibility: min SDK $min is outside the supported range 1..40.")
+                } else if (updateMinSdk(manifest, min)) {
+                    changed++
+                    logger.info("Legacy compatibility: min SDK set to $min.")
+                }
             }
             if (selectedForegroundMappings.isNotEmpty()) {
                 foregroundServiceMappingsApplied = selectedForegroundMappings
