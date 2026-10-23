@@ -1,158 +1,255 @@
-## [1.33.0](https://github.com/newuser7171/UniPatches/compare/v1.32.0...v1.33.0) (2026-10-09)
+## [1.33.4](https://github.com/Zanuaimi/UniPatches/compare/v1.33.3...v1.33.4) (2026-10-19)
+
+### 🐛 Bug Fixes
+
+* **compatibility:** Fix native libraries ([7ce4854](https://github.com/Zanuaimi/UniPatches/commit/7ce4854f13c5d8015fd1ab53084c1adffb195f48))
+
+## [1.33.3](https://github.com/Zanuaimi/UniPatches/compare/v1.33.2...v1.33.3) (2026-10-19)
+
+### 🐛 Bug Fixes
+
+* **compatibility:** Fix XML patch error ([7be85e0](https://github.com/Zanuaimi/UniPatches/commit/7be85e03103bb249206a1d959c2bf2ea4b747ad9))
+
+## [1.33.2](https://github.com/Zanuaimi/UniPatches/compare/v1.33.1...v1.33.2) (2026-10-18)
+
+### 🐛 Bug Fixes
+
+* **compatibility:** Fix Embed Obb / Bypass Downloader patch error ([6fbcc5e](https://github.com/Zanuaimi/UniPatches/commit/6fbcc5e50d076fc3810e742d5ac0bc40a26dd228))
+
+## [1.33.1](https://github.com/Zanuaimi/UniPatches/compare/v1.33.0...v1.33.1) (2026-10-18)
+
+### 🐛 Bug Fixes
+
+* fix resourcePatch patch error in compatibility patch ([4e90567](https://github.com/Zanuaimi/UniPatches/commit/4e9056733d627ec0454a6dc5be1b8c07e4a282e8))
+
+## [1.33.0](https://github.com/Zanuaimi/UniPatches/compare/v1.32.0...v1.33.0) (2026-10-18)
 
 ### ✨ New Features
 
-* **frida:** add universal entitlement and memory companion ([a7e6faf](https://github.com/newuser7171/UniPatches/commit/a7e6fafa5d071d62d84ea213a306e7f692b03ca9))
-
-## [1.32.0](https://github.com/newuser7171/UniPatches/compare/v1.31.5...v1.32.0) (2026-10-09)
-
-### 🐛 Bug Fixes
-
-* **overlay:** implement Memory Editor module state methods ([fe98120](https://github.com/newuser7171/UniPatches/commit/fe98120b659ecf7de2d93f2fae16069a0e31a2dc))
-
-### ✨ New Features
-
-* **iap:** add universal purchase and memory editor patch ([46701f0](https://github.com/newuser7171/UniPatches/commit/46701f0ab56cc241fd0f738d9454a01a74dd2e4e))
-
-## [1.31.5](https://github.com/newuser7171/UniPatches/compare/v1.31.4...v1.31.5) (2026-10-09)
-
-### 🐛 Bug Fixes
-
-* **iap:** preserve real BillingClient setup in RevenueCat apps ([29b9e7a](https://github.com/newuser7171/UniPatches/commit/29b9e7a40a95f698dcb7f2523674d9826a3b9f58))
-
-## [1.31.4](https://github.com/newuser7171/UniPatches/compare/v1.31.3...v1.31.4) (2026-10-09)
-
-### 🐛 Bug Fixes
-
-* **iap:** guard Rizz paywall stop when lifecycle LiveData is absent ([b4f16b3](https://github.com/newuser7171/UniPatches/commit/b4f16b3bb8e404e55fa0e3c7df23c06e130b3eca))
-* **iap:** preserve RevenueCat error handling and isolate store hooks ([e94f06c](https://github.com/newuser7171/UniPatches/commit/e94f06c87f0e10529821524234b71376b0ebc214))
-
-## [1.31.3](https://github.com/newuser7171/UniPatches/compare/v1.31.2...v1.31.3) (2026-10-09)
-
-### 🐛 Bug Fixes
-
-* **iap:** isolate unavailable Amazon dependencies in RevenueCat factory ([6e556bd](https://github.com/newuser7171/UniPatches/commit/6e556bd19530d7861c8bd5a09f361d9f59321905))
-* **iap:** recognize branch mnemonics and bind fixture labels ([4b4eeee](https://github.com/newuser7171/UniPatches/commit/4b4eeee05c18d69a01ad6a022b55289cad7247fe))
-
-## [1.31.2](https://github.com/newuser7171/UniPatches/compare/v1.31.1...v1.31.2) (2026-10-09)
-
-### 🐛 Bug Fixes
-
-* **iap:** require explicit RevenueCat opt-in and test register emission ([f3e73b1](https://github.com/newuser7171/UniPatches/commit/f3e73b1b9587752d1621c55c44928e6817c13571))
-
-## [1.31.1](https://github.com/newuser7171/UniPatches/compare/v1.31.0...v1.31.1) (2026-10-01)
-
-### 🐛 Bug Fixes
-
-* **iap:** copy high registers through a low temp before 35c invokes ([036a566](https://github.com/newuser7171/UniPatches/commit/036a5667c12e6fb69653b11683c6659cb7188a37))
-
-## [1.31.0](https://github.com/newuser7171/UniPatches/compare/v1.30.1...v1.31.0) (2026-10-01)
-
-### 🐛 Bug Fixes
-
-* **unlock-premium:** stop sweeping payment SDK internals ([399e4a4](https://github.com/newuser7171/UniPatches/commit/399e4a434d2f16d44f2ecedaaf9ecd69bd3494ba))
-
-### ✨ New Features
-
-* **overlay:** add in-process memory scanner engine ([a8a3515](https://github.com/newuser7171/UniPatches/commit/a8a3515686ed878a06159825dcce41f6fa70faab))
-
-## [1.30.1](https://github.com/newuser7171/UniPatches/compare/v1.30.0...v1.30.1) (2026-10-01)
-
-### 🐛 Bug Fixes
-
-* **unlock-premium:** match premium tokens on word boundaries, skip frameworks ([b49d86c](https://github.com/newuser7171/UniPatches/commit/b49d86cbc335ff16d4fa5e1e08cf45d64be087b5))
-
-## [1.30.0](https://github.com/newuser7171/UniPatches/compare/v1.29.0...v1.30.0) (2026-10-01)
-
-### 🐛 Bug Fixes
-
-* **ads:** avoid legacy reward helper collisions ([300243b](https://github.com/newuser7171/UniPatches/commit/300243bf99e4d842240165caec3f30e180f431d0))
-* **ads:** avoid legacy reward helper collisions ([e58e018](https://github.com/newuser7171/UniPatches/commit/e58e0188b50067bce0041e5e93fd645fe85815a2))
-* **ads:** fix unimanager support ([06829f1](https://github.com/newuser7171/UniPatches/commit/06829f189b9d7d83567b7f00781c4c842241f09d))
-* **ads:** Fix unimanager support ([52f7a74](https://github.com/newuser7171/UniPatches/commit/52f7a74e3c877720a5de850dd56588a1e7095436))
-* **ads:** restore removed integrated rewards and overlay controls ([f8ebad1](https://github.com/newuser7171/UniPatches/commit/f8ebad1b7b4da5914e4e1493a253ea9c63964de6))
-* **extension:** support API 23 session cleanup ([71ee032](https://github.com/newuser7171/UniPatches/commit/71ee032974163249b14ffd100c05b35617c1a267))
-* Fix ads block patch not being registered to unimanager ([a03d494](https://github.com/newuser7171/UniPatches/commit/a03d494719ef85852a923cb129785b90f5f52233))
-* fix inconsistency between custom preset and unipatches preset ([6ffff85](https://github.com/newuser7171/UniPatches/commit/6ffff8528624b52b644c6ba429f625b18dcc6abe))
-* fix unimanager and bridge not being included in manifest ([22e5bca](https://github.com/newuser7171/UniPatches/commit/22e5bca36b547a32f691ede753ce30a255039c0f))
-* fix unimanager application happening after overlay was already created. ([29af4a5](https://github.com/newuser7171/UniPatches/commit/29af4a522a92631adb46ae3d79fb03496da79d31))
-* **iap:** avoid private BillingClient listener field access ([bac6a4d](https://github.com/newuser7171/UniPatches/commit/bac6a4dcde6b8c72b7e57aa3d84e133cc17635dd))
-* **iap:** bind confirmation and cancellation to their purchase request ([7989647](https://github.com/newuser7171/UniPatches/commit/7989647f9dbe11b47ae6c63f70e379d79425f7a8))
-* **iap:** let the IL2CPP purchase bridge actually match ([72f8051](https://github.com/newuser7171/UniPatches/commit/72f80515ad195c1e85a4a5609f29a737165c2907))
-* **iap:** pass Activity and BillingFlowParams to purchase validation ([0c37f2f](https://github.com/newuser7171/UniPatches/commit/0c37f2fa6ef479cf7d8b4b691c88b5564afd9625))
-* **iap:** stop emitting a stranded move-result-object in RC.onPurchasesUpdated ([87f7e26](https://github.com/newuser7171/UniPatches/commit/87f7e267593b867f10e887cfbd5ea744d114c6a2))
-* Improve ads block patch and universal overlay patch to support for unimanager ([2e24a7c](https://github.com/newuser7171/UniPatches/commit/2e24a7cebd79dab6535c450e6b4c822763acd28d))
-* make managed IAP emulation survive a cold run ([c346135](https://github.com/newuser7171/UniPatches/commit/c346135472f13fc577b3c72589f8f6241e20278e))
-* remove preset catalog from universal overlay unimanager metadata ([6bbf574](https://github.com/newuser7171/UniPatches/commit/6bbf5743817c05074114068115be1b264361683f))
-* restore historical in-app emulation patch ([60031b2](https://github.com/newuser7171/UniPatches/commit/60031b257142f9d2d2a21eb83f9eab91cd08f343))
-
-### ✨ New Features
-
-* add UniManager bridge integration ([33cf8a9](https://github.com/newuser7171/UniPatches/commit/33cf8a9e20ea022f65ff877ea1633f50b8279039))
-* **ads:** rename from Control App Ads Patch to Ads Block Patch ([53140d7](https://github.com/newuser7171/UniPatches/commit/53140d7921c59dd6e9d3d71fb72fc7f265e3bafd))
-* **ads:** restore standalone No Ads patch ([f4cb29c](https://github.com/newuser7171/UniPatches/commit/f4cb29c3b2a6eb45d030a7dbc0703a442827889c))
-* **compatibility:** add few options like hiddenapibypass from lsposed ([c957542](https://github.com/newuser7171/UniPatches/commit/c95754246904b5faecca7f76777b8addf8d73664))
-* **integration:** add UniManager patch bridge ([d0c711f](https://github.com/newuser7171/UniPatches/commit/d0c711f8d690fd39d38f71d6a295696e26d566e7))
-* new patch called Permission Guard ([36c02a2](https://github.com/newuser7171/UniPatches/commit/36c02a284ca88422f4dc5cdab75739ee17af05c3))
-* **overlay:** expand multi-part icon editing ([f723211](https://github.com/newuser7171/UniPatches/commit/f723211b8acff070cd7f19c34f39874ad7d9a631))
-* **patches:** add Unlock Premium as an independent patch ([e48de85](https://github.com/newuser7171/UniPatches/commit/e48de857cea6b382bd89b29f57027b782646a474))
-* remove ads free rewards ([458783b](https://github.com/newuser7171/UniPatches/commit/458783bd886f6108f8316027e747a331e388b1c1))
-* rewrite unipatches-unimanager bridge ([da2edb9](https://github.com/newuser7171/UniPatches/commit/da2edb9685c399153cf900faba7f5aa99225cd73))
+* **compatibility:** Add new patch options ([7c5a45d](https://github.com/Zanuaimi/UniPatches/commit/7c5a45ddb70fa7bc7bdccb19543a6b819a6195d4))
 
 ### 🔧 Improvements
 
-* All patches has been optimized to do use immutable class for uncertain mods, and use mutable for certain mods, as it was suggested by LisoUseInAIKyrios. This change improves memory usage. ([39f2e22](https://github.com/newuser7171/UniPatches/commit/39f2e227de693a41cae41711b3a0b98c5e267559))
-* improve legacy app compatibility patch ([0194fb3](https://github.com/newuser7171/UniPatches/commit/0194fb30b7f2d6bb1733310a0be76f32f6bbd312))
-* improve metadta configuration sending ([8da4dc5](https://github.com/newuser7171/UniPatches/commit/8da4dc562dfae27117044b7a78e6516b40a5cd0e))
-* Improve reliability of unimanager metadata reading by delaying app start and add retry logic ([c167d3d](https://github.com/newuser7171/UniPatches/commit/c167d3d3c9066f40f1dafefaaaa08990be5f0ba3))
-* Improve support for UniManager and fix problem of DND module being a dependency. ([199b678](https://github.com/newuser7171/UniPatches/commit/199b678a8c30be120273ac62bd24a32b257f4e0a))
-* improve unimanager support ([a9e9900](https://github.com/newuser7171/UniPatches/commit/a9e99007c8fbef9142c5f507d291d3c1bf57667b))
-* **overlay:** Include built-in presets in unimanager metadata ([f2b1beb](https://github.com/newuser7171/UniPatches/commit/f2b1beb8ab87c2c281fbf7cc9022eb0617eed4e2))
-* update protocol ([70d93cc](https://github.com/newuser7171/UniPatches/commit/70d93ccdf0404d97cc416ec2f10c573fff9ed1b5))
+* **compatibility:** Improve download manager bypass, and fix licensing intent ([249bd17](https://github.com/Zanuaimi/UniPatches/commit/249bd17c553785669c43fdb04171f9928938f029))
+* **compatibility:** Replace hardocded solutions ( was for gun bros 2 ) with generic solutions, and fix licensing crash, and update README ([f6afe01](https://github.com/Zanuaimi/UniPatches/commit/f6afe0118088d2558a65f8ed065f62e3ce8355fc))
 
-## [1.2.0](https://github.com/newuser7171/UniPatches/compare/v1.1.0...v1.2.0) (2026-09-30)
-
-### 🐛 Bug Fixes
-
-* **ads:** avoid legacy reward helper collisions ([300243b](https://github.com/newuser7171/UniPatches/commit/300243bf99e4d842240165caec3f30e180f431d0))
-* **ads:** fix unimanager support ([06829f1](https://github.com/newuser7171/UniPatches/commit/06829f189b9d7d83567b7f00781c4c842241f09d))
-* **ads:** Fix unimanager support ([52f7a74](https://github.com/newuser7171/UniPatches/commit/52f7a74e3c877720a5de850dd56588a1e7095436))
-* **ads:** restore removed integrated rewards and overlay controls ([f8ebad1](https://github.com/newuser7171/UniPatches/commit/f8ebad1b7b4da5914e4e1493a253ea9c63964de6))
-* **extension:** support API 23 session cleanup ([71ee032](https://github.com/newuser7171/UniPatches/commit/71ee032974163249b14ffd100c05b35617c1a267))
-* Fix ads block patch not being registered to unimanager ([a03d494](https://github.com/newuser7171/UniPatches/commit/a03d494719ef85852a923cb129785b90f5f52233))
-* fix inconsistency between custom preset and unipatches preset ([6ffff85](https://github.com/newuser7171/UniPatches/commit/6ffff8528624b52b644c6ba429f625b18dcc6abe))
-* fix unimanager and bridge not being included in manifest ([22e5bca](https://github.com/newuser7171/UniPatches/commit/22e5bca36b547a32f691ede753ce30a255039c0f))
-* fix unimanager application happening after overlay was already created. ([29af4a5](https://github.com/newuser7171/UniPatches/commit/29af4a522a92631adb46ae3d79fb03496da79d31))
-* **iap:** avoid private BillingClient listener field access ([bac6a4d](https://github.com/newuser7171/UniPatches/commit/bac6a4dcde6b8c72b7e57aa3d84e133cc17635dd))
-* **iap:** bind confirmation and cancellation to their purchase request ([7989647](https://github.com/newuser7171/UniPatches/commit/7989647f9dbe11b47ae6c63f70e379d79425f7a8))
-* **iap:** let the IL2CPP purchase bridge actually match ([72f8051](https://github.com/newuser7171/UniPatches/commit/72f80515ad195c1e85a4a5609f29a737165c2907))
-* **iap:** pass Activity and BillingFlowParams to purchase validation ([0c37f2f](https://github.com/newuser7171/UniPatches/commit/0c37f2fa6ef479cf7d8b4b691c88b5564afd9625))
-* Improve ads block patch and universal overlay patch to support for unimanager ([2e24a7c](https://github.com/newuser7171/UniPatches/commit/2e24a7cebd79dab6535c450e6b4c822763acd28d))
-* make managed IAP emulation survive a cold run ([c346135](https://github.com/newuser7171/UniPatches/commit/c346135472f13fc577b3c72589f8f6241e20278e))
-* remove preset catalog from universal overlay unimanager metadata ([6bbf574](https://github.com/newuser7171/UniPatches/commit/6bbf5743817c05074114068115be1b264361683f))
-* restore historical in-app emulation patch ([60031b2](https://github.com/newuser7171/UniPatches/commit/60031b257142f9d2d2a21eb83f9eab91cd08f343))
-
-### ✨ New Features
-
-* add UniManager bridge integration ([33cf8a9](https://github.com/newuser7171/UniPatches/commit/33cf8a9e20ea022f65ff877ea1633f50b8279039))
-* **ads:** rename from Control App Ads Patch to Ads Block Patch ([53140d7](https://github.com/newuser7171/UniPatches/commit/53140d7921c59dd6e9d3d71fb72fc7f265e3bafd))
-* **compatibility:** add few options like hiddenapibypass from lsposed ([c957542](https://github.com/newuser7171/UniPatches/commit/c95754246904b5faecca7f76777b8addf8d73664))
-* **integration:** add UniManager patch bridge ([d0c711f](https://github.com/newuser7171/UniPatches/commit/d0c711f8d690fd39d38f71d6a295696e26d566e7))
-* new patch called Permission Guard ([36c02a2](https://github.com/newuser7171/UniPatches/commit/36c02a284ca88422f4dc5cdab75739ee17af05c3))
-* **overlay:** expand multi-part icon editing ([f723211](https://github.com/newuser7171/UniPatches/commit/f723211b8acff070cd7f19c34f39874ad7d9a631))
-* remove ads free rewards ([458783b](https://github.com/newuser7171/UniPatches/commit/458783bd886f6108f8316027e747a331e388b1c1))
-* rewrite unipatches-unimanager bridge ([da2edb9](https://github.com/newuser7171/UniPatches/commit/da2edb9685c399153cf900faba7f5aa99225cd73))
+## [1.33.0-dev.2](https://github.com/Zanuaimi/UniPatches/compare/v1.33.0-dev.1...v1.33.0-dev.2) (2026-10-18)
 
 ### 🔧 Improvements
 
-* All patches has been optimized to do use immutable class for uncertain mods, and use mutable for certain mods, as it was suggested by LisoUseInAIKyrios. This change improves memory usage. ([39f2e22](https://github.com/newuser7171/UniPatches/commit/39f2e227de693a41cae41711b3a0b98c5e267559))
-* improve legacy app compatibility patch ([0194fb3](https://github.com/newuser7171/UniPatches/commit/0194fb30b7f2d6bb1733310a0be76f32f6bbd312))
-* improve metadta configuration sending ([8da4dc5](https://github.com/newuser7171/UniPatches/commit/8da4dc562dfae27117044b7a78e6516b40a5cd0e))
-* Improve reliability of unimanager metadata reading by delaying app start and add retry logic ([c167d3d](https://github.com/newuser7171/UniPatches/commit/c167d3d3c9066f40f1dafefaaaa08990be5f0ba3))
-* Improve support for UniManager and fix problem of DND module being a dependency. ([199b678](https://github.com/newuser7171/UniPatches/commit/199b678a8c30be120273ac62bd24a32b257f4e0a))
-* improve unimanager support ([a9e9900](https://github.com/newuser7171/UniPatches/commit/a9e99007c8fbef9142c5f507d291d3c1bf57667b))
-* **overlay:** Include built-in presets in unimanager metadata ([f2b1beb](https://github.com/newuser7171/UniPatches/commit/f2b1beb8ab87c2c281fbf7cc9022eb0617eed4e2))
-* update protocol ([70d93cc](https://github.com/newuser7171/UniPatches/commit/70d93ccdf0404d97cc416ec2f10c573fff9ed1b5))
+* **compatibility:** Replace hardocded solutions ( was for gun bros 2 ) with generic solutions, and fix licensing crash, and update README ([f6afe01](https://github.com/Zanuaimi/UniPatches/commit/f6afe0118088d2558a65f8ed065f62e3ce8355fc))
+
+## [1.33.0-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.32.0...v1.33.0-dev.1) (2026-10-17)
+
+### ✨ New Features
+
+* **compatibility:** Add new patch options ([7c5a45d](https://github.com/Zanuaimi/UniPatches/commit/7c5a45ddb70fa7bc7bdccb19543a6b819a6195d4))
+
+### 🔧 Improvements
+
+* **compatibility:** Improve download manager bypass, and fix licensing intent ([249bd17](https://github.com/Zanuaimi/UniPatches/commit/249bd17c553785669c43fdb04171f9928938f029))
+
+## [1.32.1-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.32.0...v1.32.1-dev.1) (2026-10-16)
+
+### 🔧 Improvements
+
+* **compatibility:** Improve download manager bypass, and fix licensing intent ([249bd17](https://github.com/Zanuaimi/UniPatches/commit/249bd17c553785669c43fdb04171f9928938f029))
+
+## [1.32.0](https://github.com/Zanuaimi/UniPatches/compare/v1.31.2...v1.32.0) (2026-10-15)
+
+### 🐛 Bug Fixes
+
+* **compatibility:** Fix SDK edit and obb detection ([03b01ad](https://github.com/Zanuaimi/UniPatches/commit/03b01ad10c52602061429e7b19fe5e847343e9fd))
+
+### ✨ New Features
+
+* **compatibility:** Reworked presets to be only additive on top of custom preset, and target SDK profile dropdown has been removed, and duplicate flags have been removed ([f19412a](https://github.com/Zanuaimi/UniPatches/commit/f19412a14fe3acbf7e962cdd88973843e1bfbbda))
+
+## [1.32.0-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.31.3-dev.1...v1.32.0-dev.1) (2026-10-15)
+
+### ✨ New Features
+
+* **compatibility:** Reworked presets to be only additive on top of custom preset, and target SDK profile dropdown has been removed, and duplicate flags have been removed ([f19412a](https://github.com/Zanuaimi/UniPatches/commit/f19412a14fe3acbf7e962cdd88973843e1bfbbda))
+
+## [1.31.3-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.31.2...v1.31.3-dev.1) (2026-10-13)
+
+### 🐛 Bug Fixes
+
+* **compatibility:** Fix SDK edit and obb detection ([03b01ad](https://github.com/Zanuaimi/UniPatches/commit/03b01ad10c52602061429e7b19fe5e847343e9fd))
+
+## [1.31.2](https://github.com/Zanuaimi/UniPatches/compare/v1.31.1...v1.31.2) (2026-10-12)
+
+### 🔧 Improvements
+
+* remove duplicate target SDK spoof flag ([9602682](https://github.com/Zanuaimi/UniPatches/commit/960268259a5f2690a4d4ca903ade9263b6951e5f))
+
+## [1.31.2-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.31.1...v1.31.2-dev.1) (2026-10-12)
+
+### 🔧 Improvements
+
+* remove duplicate target SDK spoof flag ([9602682](https://github.com/Zanuaimi/UniPatches/commit/960268259a5f2690a4d4ca903ade9263b6951e5f))
+
+## [1.31.1](https://github.com/Zanuaimi/UniPatches/compare/v1.31.0...v1.31.1) (2026-10-11)
+
+### 🔧 Improvements
+
+* **compatibility:** Improve legacy app compatibility patch by replacing hardcoded solutions with generic, and adding more presets like android 4 and 5 ([21e5e44](https://github.com/Zanuaimi/UniPatches/commit/21e5e44f3608bc033b3612fe797a345b3c7548bb))
+
+## [1.31.1-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.31.0...v1.31.1-dev.1) (2026-10-11)
+
+### 🔧 Improvements
+
+* **compatibility:** Improve legacy app compatibility patch by replacing hardcoded solutions with generic, and adding more presets like android 4 and 5 ([21e5e44](https://github.com/Zanuaimi/UniPatches/commit/21e5e44f3608bc033b3612fe797a345b3c7548bb))
+
+## [1.31.0](https://github.com/Zanuaimi/UniPatches/compare/v1.30.2...v1.31.0) (2026-10-10)
+
+### ✨ New Features
+
+* **legacy:** add preset selection to legacy compatibility patch ([4176afb](https://github.com/Zanuaimi/UniPatches/commit/4176afb0ba5251aed1960960459be86f2a0cbfb8))
+
+## [1.31.0-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.30.2...v1.31.0-dev.1) (2026-10-10)
+
+### ✨ New Features
+
+* **legacy:** add preset selection to legacy compatibility patch ([4176afb](https://github.com/Zanuaimi/UniPatches/commit/4176afb0ba5251aed1960960459be86f2a0cbfb8))
+
+## [1.30.2](https://github.com/Zanuaimi/UniPatches/compare/v1.30.1...v1.30.2) (2026-10-10)
+
+### 🔧 Improvements
+
+* improve legacy compatibility patch ([d518dbc](https://github.com/Zanuaimi/UniPatches/commit/d518dbc41bc1f76321050310713085aebd465cef))
+
+## [1.30.2-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.30.1...v1.30.2-dev.1) (2026-10-10)
+
+### 🔧 Improvements
+
+* improve legacy compatibility patch ([d518dbc](https://github.com/Zanuaimi/UniPatches/commit/d518dbc41bc1f76321050310713085aebd465cef))
+
+## [1.30.1](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0...v1.30.1) (2026-10-08)
+
+### 🐛 Bug Fixes
+
+* update tests ([01a5f7b](https://github.com/Zanuaimi/UniPatches/commit/01a5f7b0858ab30f6982246664683d4ce17ee36b))
+
+### 🔧 Improvements
+
+* improve frida patch ([c2c27d8](https://github.com/Zanuaimi/UniPatches/commit/c2c27d8c56a52ee84002021c9023a79293055d48))
+* improve Hidden API Bypass by LSPosed in Legacy ([fffd0ae](https://github.com/Zanuaimi/UniPatches/commit/fffd0ae4a72ddb6c58758177927a38e1b9d35727))
+
+## [1.30.1-dev.2](https://github.com/Zanuaimi/UniPatches/compare/v1.30.1-dev.1...v1.30.1-dev.2) (2026-10-08)
+
+### 🐛 Bug Fixes
+
+* update tests ([01a5f7b](https://github.com/Zanuaimi/UniPatches/commit/01a5f7b0858ab30f6982246664683d4ce17ee36b))
+
+### 🔧 Improvements
+
+* improve frida patch ([c2c27d8](https://github.com/Zanuaimi/UniPatches/commit/c2c27d8c56a52ee84002021c9023a79293055d48))
+
+## [1.30.1-dev.1](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0...v1.30.1-dev.1) (2026-10-07)
+
+### 🔧 Improvements
+
+* improve Hidden API Bypass by LSPosed in Legacy ([fffd0ae](https://github.com/Zanuaimi/UniPatches/commit/fffd0ae4a72ddb6c58758177927a38e1b9d35727))
+
+## [1.30.0](https://github.com/Zanuaimi/UniPatches/compare/v1.29.0...v1.30.0) (2026-10-06)
+
+### 🐛 Bug Fixes
+
+* **ads:** fix unimanager support ([06829f1](https://github.com/Zanuaimi/UniPatches/commit/06829f189b9d7d83567b7f00781c4c842241f09d))
+* **ads:** Fix unimanager support ([52f7a74](https://github.com/Zanuaimi/UniPatches/commit/52f7a74e3c877720a5de850dd56588a1e7095436))
+* avoid misleading internet access ([310e496](https://github.com/Zanuaimi/UniPatches/commit/310e496902ee7d5d4d18467f0e33979842e2e64b))
+* **extension:** support API 23 session cleanup ([71ee032](https://github.com/Zanuaimi/UniPatches/commit/71ee032974163249b14ffd100c05b35617c1a267))
+* Fix ads block patch not being registered to unimanager ([a03d494](https://github.com/Zanuaimi/UniPatches/commit/a03d494719ef85852a923cb129785b90f5f52233))
+* fix inconsistency between custom preset and unipatches preset ([6ffff85](https://github.com/Zanuaimi/UniPatches/commit/6ffff8528624b52b644c6ba429f625b18dcc6abe))
+* fix permission guard not appearing in universal overlay ([fde9587](https://github.com/Zanuaimi/UniPatches/commit/fde9587de9b4c7dfea02e2e421bd934afa22911e))
+* fix unbounded popup for permission guard patch ([d5f3ea9](https://github.com/Zanuaimi/UniPatches/commit/d5f3ea92863ff2dbaee48ae033e856e04e88ca50))
+* fix unimanager and bridge not being included in manifest ([22e5bca](https://github.com/Zanuaimi/UniPatches/commit/22e5bca36b547a32f691ede753ce30a255039c0f))
+* fix unimanager application happening after overlay was already created. ([29af4a5](https://github.com/Zanuaimi/UniPatches/commit/29af4a522a92631adb46ae3d79fb03496da79d31))
+* Improve ads block patch and universal overlay patch to support for unimanager ([2e24a7c](https://github.com/Zanuaimi/UniPatches/commit/2e24a7cebd79dab6535c450e6b4c822763acd28d))
+* remove preset catalog from universal overlay unimanager metadata ([6bbf574](https://github.com/Zanuaimi/UniPatches/commit/6bbf5743817c05074114068115be1b264361683f))
+
+### ✨ New Features
+
+* Add a new patch called Frida Patch ([398cdf9](https://github.com/Zanuaimi/UniPatches/commit/398cdf980b446e1343a0efddd4ee6f538d030566))
+* add runtime support for permission guard ([7b77d70](https://github.com/Zanuaimi/UniPatches/commit/7b77d704c296bd3cb3599165fa769a669944c507))
+* add UniManager bridge integration ([33cf8a9](https://github.com/Zanuaimi/UniPatches/commit/33cf8a9e20ea022f65ff877ea1633f50b8279039))
+* **ads:** rename from Control App Ads Patch to Ads Block Patch ([53140d7](https://github.com/Zanuaimi/UniPatches/commit/53140d7921c59dd6e9d3d71fb72fc7f265e3bafd))
+* **compatibility:** add few options like hiddenapibypass from lsposed ([c957542](https://github.com/Zanuaimi/UniPatches/commit/c95754246904b5faecca7f76777b8addf8d73664))
+* **integration:** add UniManager patch bridge ([d0c711f](https://github.com/Zanuaimi/UniPatches/commit/d0c711f8d690fd39d38f71d6a295696e26d566e7))
+* new patch called Permission Guard ([36c02a2](https://github.com/Zanuaimi/UniPatches/commit/36c02a284ca88422f4dc5cdab75739ee17af05c3))
+* **overlay:** expand multi-part icon editing ([f723211](https://github.com/Zanuaimi/UniPatches/commit/f723211b8acff070cd7f19c34f39874ad7d9a631))
+* **permission:** Add internet access support ([c85cfc8](https://github.com/Zanuaimi/UniPatches/commit/c85cfc8fc863adfbc5e775aea4b0e6f22cd8830e))
+* remove ads free rewards ([458783b](https://github.com/Zanuaimi/UniPatches/commit/458783bd886f6108f8316027e747a331e388b1c1))
+* rewrite unipatches-unimanager bridge ([da2edb9](https://github.com/Zanuaimi/UniPatches/commit/da2edb9685c399153cf900faba7f5aa99225cd73))
+
+### 🔧 Improvements
+
+* All patches has been optimized to do use immutable class for uncertain mods, and use mutable for certain mods, as it was suggested by LisoUseInAIKyrios. This change improves memory usage. ([39f2e22](https://github.com/Zanuaimi/UniPatches/commit/39f2e227de693a41cae41711b3a0b98c5e267559))
+* improve existing options ([b73ac56](https://github.com/Zanuaimi/UniPatches/commit/b73ac563d9fd13b0bdc913f47dfad2678a00893e))
+* improve legacy app compatibility patch ([0194fb3](https://github.com/Zanuaimi/UniPatches/commit/0194fb30b7f2d6bb1733310a0be76f32f6bbd312))
+* improve metadta configuration sending ([8da4dc5](https://github.com/Zanuaimi/UniPatches/commit/8da4dc562dfae27117044b7a78e6516b40a5cd0e))
+* Improve reliability of unimanager metadata reading by delaying app start and add retry logic ([c167d3d](https://github.com/Zanuaimi/UniPatches/commit/c167d3d3c9066f40f1dafefaaaa08990be5f0ba3))
+* Improve support for UniManager and fix problem of DND module being a dependency. ([199b678](https://github.com/Zanuaimi/UniPatches/commit/199b678a8c30be120273ac62bd24a32b257f4e0a))
+* improve unimanager support ([a9e9900](https://github.com/Zanuaimi/UniPatches/commit/a9e99007c8fbef9142c5f507d291d3c1bf57667b))
+* **overlay:** Include built-in presets in unimanager metadata ([f2b1beb](https://github.com/Zanuaimi/UniPatches/commit/f2b1beb8ab87c2c281fbf7cc9022eb0617eed4e2))
+* patches get concise descriptions and legacy app compatibility patch has been improved ([bbaf959](https://github.com/Zanuaimi/UniPatches/commit/bbaf959ce62df96f81d054de4edefe03725f376e))
+* unipatches wide improvement ([97b9383](https://github.com/Zanuaimi/UniPatches/commit/97b9383a0694145a865a1de16f5a2ce57e68ff13))
+* update protocol ([70d93cc](https://github.com/Zanuaimi/UniPatches/commit/70d93ccdf0404d97cc416ec2f10c573fff9ed1b5))
+
+## [1.30.0-dev.32](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.31...v1.30.0-dev.32) (2026-10-06)
+
+### 🔧 Improvements
+
+* improve existing options ([b73ac56](https://github.com/Zanuaimi/UniPatches/commit/b73ac563d9fd13b0bdc913f47dfad2678a00893e))
+
+## [1.30.0-dev.31](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.30...v1.30.0-dev.31) (2026-10-06)
+
+### 🔧 Improvements
+
+* patches get concise descriptions and legacy app compatibility patch has been improved ([bbaf959](https://github.com/Zanuaimi/UniPatches/commit/bbaf959ce62df96f81d054de4edefe03725f376e))
+
+## [1.30.0-dev.30](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.29...v1.30.0-dev.30) (2026-10-05)
+
+### ✨ New Features
+
+* Add a new patch called Frida Patch ([398cdf9](https://github.com/Zanuaimi/UniPatches/commit/398cdf980b446e1343a0efddd4ee6f538d030566))
+
+## [1.30.0-dev.29](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.28...v1.30.0-dev.29) (2026-10-04)
+
+### 🐛 Bug Fixes
+
+* avoid misleading internet access ([310e496](https://github.com/Zanuaimi/UniPatches/commit/310e496902ee7d5d4d18467f0e33979842e2e64b))
+
+## [1.30.0-dev.28](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.27...v1.30.0-dev.28) (2026-10-04)
+
+### 🐛 Bug Fixes
+
+* fix unbounded popup for permission guard patch ([d5f3ea9](https://github.com/Zanuaimi/UniPatches/commit/d5f3ea92863ff2dbaee48ae033e856e04e88ca50))
+
+## [1.30.0-dev.27](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.26...v1.30.0-dev.27) (2026-10-04)
+
+### ✨ New Features
+
+* **permission:** Add internet access support ([c85cfc8](https://github.com/Zanuaimi/UniPatches/commit/c85cfc8fc863adfbc5e775aea4b0e6f22cd8830e))
+
+## [1.30.0-dev.26](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.25...v1.30.0-dev.26) (2026-10-03)
+
+### 🐛 Bug Fixes
+
+* fix permission guard not appearing in universal overlay ([fde9587](https://github.com/Zanuaimi/UniPatches/commit/fde9587de9b4c7dfea02e2e421bd934afa22911e))
+
+## [1.30.0-dev.25](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.24...v1.30.0-dev.25) (2026-10-02)
+
+### ✨ New Features
+
+* add runtime support for permission guard ([7b77d70](https://github.com/Zanuaimi/UniPatches/commit/7b77d704c296bd3cb3599165fa769a669944c507))
+
+## [1.30.0-dev.24](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.23...v1.30.0-dev.24) (2026-10-01)
+
+### 🔧 Improvements
+
+* unipatches wide improvement ([97b9383](https://github.com/Zanuaimi/UniPatches/commit/97b9383a0694145a865a1de16f5a2ce57e68ff13))
 
 ## [1.30.0-dev.23](https://github.com/Zanuaimi/UniPatches/compare/v1.30.0-dev.22...v1.30.0-dev.23) (2026-09-25)
 

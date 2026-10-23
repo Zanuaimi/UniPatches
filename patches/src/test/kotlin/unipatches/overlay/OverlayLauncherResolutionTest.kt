@@ -1,5 +1,7 @@
 package unipatches.overlay
 
+import helpers.startup.acceptsLauncherOwnership
+import helpers.startup.hasRecognizedActivityAncestor
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

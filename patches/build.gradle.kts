@@ -19,11 +19,14 @@ val patchListGeneratorClasspath = configurations.create("patchListGeneratorClass
 
 dependencies {
     implementation(libs.gson)
+    implementation(libs.xz)
     testImplementation("junit:junit:4.13.2")
     // The patcher exposes its execution flow as a Flow, so the real-APK smoke
     // test needs coroutines on the *compile* classpath. The patcher only
     // publishes them as runtime scope.
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.2")
+    // Compile real-APK tests against the patcher's already-installed runtime APIs.
+    testCompileOnly(files(configurations.runtimeClasspath))
     patchListGeneratorClasspath(libs.gson)
 }
 

@@ -63,10 +63,8 @@ private fun enableAppDataPreservation(document: Document): Int? {
 val customAppOutputPatch = resourcePatch(
     name = "Custom App Output Patch (Experimental, Enhanced)",
     description = """
-        Customize an APK's install identity and launcher presentation in one patch. Start with the
-        launcher name or icon; enable Clone only when you need a side-by-side copy. Name, icon,
-        hide-icon, and clone options are
-        independent. This cannot preserve original-app data when a package or signing identity
+        Customizes APK install identity and launcher presentation. Name, icon, hide-icon, and Clone
+        are independent; Clone enables side-by-side install. This cannot preserve original-app data when a package or signing identity
         changes. Clone mode rewrites supported manifest identifiers only; it does not rewrite
         bytecode strings, explicit process names, task affinities, or arbitrary SDK configuration.
         A clone has a new Android package identity and normally a new signing identity: package- or
@@ -265,8 +263,8 @@ val customAppOutputPatch = resourcePatch(
                 val changes = enableAppDataPreservation(manifest)
                 when {
                     changes == null -> logger.warning("Custom App Output: no <application> element found; app-data preservation was skipped.")
-                    changes == 0 -> logger.info("Custom App Output: app-data preservation settings were already applied.")
-                    else -> logger.info("Custom App Output: enabled app-data preservation with $changes manifest change(s).")
+                    changes == 0 -> logger.warning("Custom App Output: app-data preservation settings were already applied; Android backup policy still controls whether data is retained.")
+                    else -> logger.warning("Custom App Output: enabled app-data preservation with $changes manifest change(s). This overrides backup/data-extraction policy and may retain sensitive app data after uninstall; Android backup policy still controls whether data is retained.")
                 }
                 if (changes != null && clonedPackage != null) {
                     logger.warning("Custom App Output: app-data preservation applies to the cloned package only; it cannot transfer data from the original package.")

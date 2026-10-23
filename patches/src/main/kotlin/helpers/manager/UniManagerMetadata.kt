@@ -11,6 +11,7 @@ import org.w3c.dom.Element
 
 internal const val UNI_MANAGER_METADATA_NAME = "com.zanuaimi.unimanager.REGISTRATION"
 internal const val UNI_MANAGER_ADS_METADATA_NAME = "com.zanuaimi.unimanager.REGISTRATION.ADS_BLOCK"
+internal const val UNI_MANAGER_PERMISSION_GUARD_METADATA_NAME = "com.zanuaimi.unimanager.REGISTRATION.PERMISSION_GUARD"
 internal const val UNI_MANAGER_PACKAGE = "com.zanuaimi.unimanager"
 internal const val UNI_MANAGER_BRIDGE_PERMISSION = "com.zanuaimi.unimanager.permission.BRIDGE"
 private const val NS_ANDROID = "http://schemas.android.com/apk/res/android"

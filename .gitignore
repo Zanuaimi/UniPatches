@@ -149,3 +149,15 @@ patches/bin/
 # Python bytecode from the release scripts and their tests
 __pycache__/
 *.py[cod]
+
+# Local doublecheck reports
+.doublecheck/
+
+# Eclipse IDE metadata
+.metadata/
+.project
+.classpath
+.settings/
+
+# Local-only tools
+/tools/

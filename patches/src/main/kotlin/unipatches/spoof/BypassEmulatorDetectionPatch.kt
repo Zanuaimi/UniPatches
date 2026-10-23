@@ -16,6 +16,9 @@ import helpers.spoof.*
 import helpers.startup.StartupHooks.escapeSmali
 import java.util.logging.Logger
 
+internal fun shouldReplaceResult(register: Int?, opcode: Opcode): Boolean =
+    register != null && (opcode == Opcode.MOVE_RESULT || opcode == Opcode.MOVE_RESULT_OBJECT)
+
 /**
  * Replaces every `sget-object vX, Landroid/os/Build;-><FIELD>:Ljava/lang/String;`
  * with `const-string vX, "<value>"`, so the app sees a real device's identity.
@@ -92,10 +95,7 @@ internal fun BytecodePatchContext.foldBuildGetSerial(value: String): Int {
 
                 val next = instructions.getOrNull(index + 1)
                 val register = (next as? OneRegisterInstruction)?.registerA
-                if (next != null &&
-                    (next.opcode == Opcode.MOVE_RESULT ||
-                        next.opcode == Opcode.MOVE_RESULT_OBJECT)
-                ) {
+                if (next != null && shouldReplaceResult(register, next.opcode)) {
                     method.replaceInstruction(index, "const-string v$register, \"${escapeSmali(value)}\"")
                     method.replaceInstruction(index + 1, "nop")
                 } else {
@@ -162,10 +162,7 @@ internal fun BytecodePatchContext.foldSystemPropertyMap(properties: Map<String, 
 
                 val next = instructions.getOrNull(index + 1)
                 val register = (next as? OneRegisterInstruction)?.registerA
-                if (next != null &&
-                    (next.opcode == Opcode.MOVE_RESULT ||
-                        next.opcode == Opcode.MOVE_RESULT_OBJECT)
-                ) {
+                if (next != null && shouldReplaceResult(register, next.opcode)) {
                     method.replaceInstruction(index, "const-string v$register, \"${escapeSmali(value)}\"")
                     method.replaceInstruction(index + 1, "nop")
                 } else {
@@ -213,10 +210,7 @@ internal fun BytecodePatchContext.foldBuildMethodResult(methodName: String, valu
 
                 val next = instructions.getOrNull(index + 1)
                 val register = (next as? OneRegisterInstruction)?.registerA
-                if (next != null &&
-                    (next.opcode == Opcode.MOVE_RESULT ||
-                        next.opcode == Opcode.MOVE_RESULT_OBJECT)
-                ) {
+                if (next != null && shouldReplaceResult(register, next.opcode)) {
                     method.replaceInstruction(index, "const-string v$register, \"${escapeSmali(value)}\"")
                     method.replaceInstruction(index + 1, "nop")
                 } else {
@@ -348,9 +342,8 @@ private val DEVICE_PRESETS = mapOf(
 val bypassEmulatorDetectionPatch = bytecodePatch(
     name = "Bypass Emulator Detection",
     description = """
-        Hides common emulator traces by spoofing Build info and related checks so apps are less likely
-        to identify an emulator. This patch is marked for enhancement in future updates; coverage is
-        currently limited to the checks it can safely recognize.
+        Spoofs common Build and device checks to reduce emulator detection. Coverage is limited to
+        checks this patch can safely recognize.
 
         Compatibility: PairIP Bypass and other server-side integrity systems can still reject a
         device when entitlement is bound to genuine device signals, package identity, or attestation.

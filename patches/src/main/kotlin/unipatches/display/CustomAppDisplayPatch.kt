@@ -45,9 +45,8 @@ private fun Element.removeAspectRestrictions(): Int {
 val customAppDisplayPatch = bytecodePatch(
     name = "Custom App Display Patch (Experimental, Enhanced)",
     description = """
-        Adjust an APK's display compatibility: screen shape, Unity window-size request, preferred
-        refresh rate, Unity renderer preference, ANGLE preference, and Android game-category hint.
-        Start with Display scaling. Android and the app can ignore any request.
+        Adjust APK display compatibility, including scaling, refresh rate, Unity renderer, ANGLE, and
+        game-category settings. Android and the app can ignore any request.
 
         Resolution and renderer overrides currently target Unity activities. Scaling removes Android
         aspect-ratio restrictions where present; it cannot universally rescale every game engine.

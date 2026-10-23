@@ -27,6 +27,24 @@ internal data class ControlEmbeddedOptions(
     val spoofVersion: Boolean,
 )
 
+internal fun validateControlEmbeddedOptions(options: ControlEmbeddedOptions): List<String> = buildList {
+    if (options.providerMode !in setOf("real", "gmscore", "zero")) {
+        add("providerMode must be real, gmscore, or zero")
+    }
+    if (options.storeAvailability !in setOf("real", "google", "amazon", "none")) {
+        add("storeAvailability must be real, google, amazon, or none")
+    }
+    if (options.mainActivity.isNotBlank() && options.providerMode != "gmscore") {
+        add("mainActivity is only valid when providerMode is gmscore")
+    }
+    if (options.suppressPlayGamesSignIn && options.suppressPlayGamesSignInUi) {
+        add("suppressPlayGamesSignIn and suppressPlayGamesSignInUi are mutually exclusive")
+    }
+    if (options.providerMode == "gmscore" && !Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$").matches(options.gmsCorePackage)) {
+        add("gmsCorePackage must be a valid Java package when providerMode is gmscore")
+    }
+}
+
 private fun BytecodePatchContext.matches(fp: Fingerprint) = try {
     with(this) { fp.matchAll() }.map { it.method }
 } catch (_: Exception) {
@@ -42,15 +60,30 @@ private fun BytecodePatchContext.inject(
     minRegisters: Int = 1,
 ): Int {
     var count = 0
+    var skipped = 0
+    var failed = 0
+    val firstInjectedInstruction = smali.lineSequence().firstOrNull { it.isNotBlank() && !it.trimStart().startsWith("#") }?.trim()
     for (method in matches(fp).distinctBy { "${it.definingClass}->${it.name}${it.parameterTypes}" }) {
         try {
-            if (method.implementation == null || method.returnType !in returnTypes) continue
-            if (method.implementation!!.registerCount < minRegisters) continue
-            method.addInstructions(0, smali)
-            count++
-        } catch (_: Exception) {}
+            val implementation = method.implementation
+            when {
+                implementation == null -> skipped++
+                method.returnType !in returnTypes -> skipped++
+                implementation.registerCount < minRegisters -> skipped++
+                firstInjectedInstruction != null && implementation.instructions.firstOrNull()?.toString()?.trim() == firstInjectedInstruction -> skipped++
+                else -> {
+                    method.addInstructions(0, smali)
+                    count++
+                }
+            }
+        } catch (error: Exception) {
+            failed++
+            logger.warning("Control Embedded Auth / Stores: skipped $label for ${method.definingClass}->${method.name}: ${error.message ?: error::class.java.simpleName}")
+        }
     }
-    if (count > 0) logger.info("Control Embedded Auth / Stores: $label patched $count method(s)")
+    if (count > 0 || skipped > 0 || failed > 0) {
+        logger.info("Control Embedded Auth / Stores: $label patched $count method(s), skipped $skipped, failed $failed")
+    }
     return count
 }
 
@@ -120,8 +153,32 @@ private fun BytecodePatchContext.store(logger: Logger, mode: String): Int {
     var count = 0
     val packages = listOf("com.android.vending", "com.amazon.venezia", "com.amazon.device.marketplace")
     for (packageName in packages) {
-        val boolFp = Fingerprint(returnType = "Z", parameters = emptyList(), strings = listOf(packageName))
-        val stringFp = Fingerprint(returnType = "Ljava/lang/String;", parameters = emptyList(), strings = listOf(packageName))
+        val boolFp = Fingerprint(
+            returnType = "Z",
+            parameters = emptyList(),
+            strings = listOf(packageName),
+            custom = { _, c ->
+                val owner = c.type.lowercase()
+                owner.startsWith("l") &&
+                    !owner.startsWith("landroid/") &&
+                    !owner.startsWith("lcom/google/") &&
+                    !owner.startsWith("lcom/amazon/") &&
+                    !owner.startsWith("lcom/android/")
+            },
+        )
+        val stringFp = Fingerprint(
+            returnType = "Ljava/lang/String;",
+            parameters = emptyList(),
+            strings = listOf(packageName),
+            custom = { _, c ->
+                val owner = c.type.lowercase()
+                owner.startsWith("l") &&
+                    !owner.startsWith("landroid/") &&
+                    !owner.startsWith("lcom/google/") &&
+                    !owner.startsWith("lcom/amazon/") &&
+                    !owner.startsWith("lcom/android/")
+            },
+        )
         val available = when {
             mode == "google" -> packageName == "com.android.vending"
             mode == "amazon" -> packageName != "com.android.vending"
@@ -143,6 +200,11 @@ internal fun controlEmbeddedAuthStoresManagedPatch(optionsProvider: () -> Contro
     execute {
         val o = optionsProvider()
         val logger = Logger.getLogger(this::class.java.name)
+        val optionErrors = validateControlEmbeddedOptions(o)
+        if (optionErrors.isNotEmpty()) {
+            logger.warning("Control Embedded Auth / Stores: refusing to apply invalid options: ${optionErrors.joinToString("; ")}")
+            return@execute
+        }
 
         val availability = listOf(
             Fingerprint(definingClass = "Lcom/google/android/gms/common/GoogleApiAvailability;", name = "isGooglePlayServicesAvailable", returnType = "I", parameters = listOf("Landroid/content/Context;")),

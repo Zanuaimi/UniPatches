@@ -10,14 +10,16 @@ import app.morphe.patcher.patch.stringOption
 import app.morphe.patcher.patch.stringsOption
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
-import com.android.tools.smali.dexlib2.iface.ClassDef
-import com.android.tools.smali.dexlib2.iface.Method
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import helpers.bytecode.*
 import helpers.startup.StartupHooks
+import helpers.startup.StartupEntryPoint
+import helpers.startup.findFallbackActivity
+import helpers.startup.resolveApplicationEntryPoint
+import helpers.startup.resolveLauncherEntryPoint
 import unipatches.overlay.presets.OverlayPresetCatalog
 import unipatches.overlay.presets.OverlayUiPreset
 import unipatches.overlay.presets.UNI_PATCHES_ICON_PARTS
@@ -600,18 +602,12 @@ private fun validate(
 val universalOverlayPatch = bytecodePatch(
     name = "Universal Overlay Patch v2.6.1 ( Experimental, UniManager Support )",
     description = """
-        A customizable in-app overlay for Android apps and games. For a quick first build: choose a visual
-        preset, select the overlay modules you want, optionally supply an icon image, then patch. Modules
-        are excluded and disabled by default. Monitor modules show information, Activity modules control
-        the current Activity, Hook modules make best-effort changes to app behavior, System modules
-        control Android capabilities, and Advanced modules provide opt-in diagnostics. Text is the
-        default legacy icon; an optional image replaces it completely, while the advanced Multi-parts editor
-        supports custom drawn icons, and can be conveniently made in Icon Builder local website in UniPatches repo.
+        Customizable in-app overlay for Android apps and games. Choose a visual preset, select modules,
+        optionally supply an icon, then patch. Modules are excluded and disabled by default; Monitor,
+        Activity, Hook, System, and Advanced modules provide runtime controls and diagnostics.
 
-        UI presets can save and reuse supported appearance and advanced icon
-        settings. The title, description, repository button text, and repository button URL remain
-        controlled by the visible Morphe settings. Module selections and module behavior are excluded
-        because hook and module combinations can be app-specific.
+        UI presets reuse supported appearance and icon settings; Morphe settings control the title,
+        description, repository button text, and repository URL. Module selections remain app-specific.
 
         Experimental : This patch may not work on all apps.
 
@@ -622,23 +618,17 @@ val universalOverlayPatch = bytecodePatch(
         Control App Ads, Ads Block Patch and InApp Emulation attach to this bridge when their
         runtime addons are enabled; they should not create a second overlay runtime.
 
-        InApp Emulation has an optional overlay addon that adds an InApp Emulation module to this menu.
-        The module can show a themed confirmation popup before emulated purchases, let you save product
-        identifiers to skip later popups during the current app session, and manage those saved products
-        from its Settings button. To enable it, select InApp Emulation Patch, enable its Enable Overlay
-        Module setting, enable Universal Overlay in the same patch operation, and keep Initially enable
-        popups before buying products enabled if popups should start enabled. The addon does not control
-        catalog discovery, receipt verification, legacy inventory behavior, or native IL2CPP patching.
+        InApp Emulation can add its purchase-confirmation module to this menu. Enable its overlay
+        module and Universal Overlay in the same patch run; popups can start enabled from its
+        settings. The addon does not control catalog discovery, receipt verification, legacy
+        inventory, or native IL2CPP patching.
 
-        Ads Block Patch can also add runtime ad-control modules here, but Universal Overlay does not
-        patch ad SDKs by itself. To use them, select Ads Block Patch and Universal Overlay,
-        enable the desired options under Ads Block Patch's Overlay integration > Runtime controls. The
-        Ads runtime policy is enabled automatically when at least one of those modules is selected.
-        The available modules are Block
-        Ads, Ads Free Rewards, and Block Ads / Tracking Hosts. Their initial runtime values come from
-        the Ads Block Patch settings, and later changes are session-only. When both patches are selected,
-        Ads Block Patch attaches its policy to this overlay's exact startup bridge, including an explicit
-        Activity override, instead of selecting a separate Activity.
+        Ads Block Patch can add runtime ad controls here but does not patch ad SDKs by itself.
+        Select Universal Overlay and enable Ads Block Patch's Overlay integration > Runtime controls.
+        The policy is enabled automatically when any module is selected. Modules are Block Ads,
+        Ads Free Rewards, and Block Ads / Tracking Hosts; initial values come from Ads Block Patch
+        and later changes are session-only. The policy attaches to this overlay's exact startup
+        bridge, including an explicit Activity override.
 
         Attribution: The idea and initial works of Universal Overlay Patch are from Zanuaimi / Noobite.
     """.trimIndent(),
@@ -1858,9 +1848,6 @@ val universalOverlayPatch = bytecodePatch(
 
         // Prefer the process Application entry point. The Activity path is a compatibility fallback
         // for APKs whose Application class or onCreate method cannot be resolved safely.
-        val appDescriptor = StartupHooks.resolvedApplicationDescriptor
-        val appClass = appDescriptor?.let { classDefByOrNull(it) }
-        val appMethod = appClass?.let { findInheritedApplicationOnCreate(it) }
         var bridgeInstalled = false
         var bridgeAttempted = false
         var adsPolicyAttached = false
@@ -1879,37 +1866,16 @@ val universalOverlayPatch = bytecodePatch(
             )
             null
         }
-        val resolvedLauncher = resolveOverlayLauncherActivity(
+        val resolvedLauncher = resolveLauncherEntryPoint(
             StartupHooks.resolvedLauncherActivityDescriptor,
             logger,
         )
         // Prefer the process Application entry point whenever it can be resolved. This installs
         // lifecycle callbacks before Unity's Activity and before BillingClient purchase calls.
-        val applicationTarget = if (appMethod != null) {
-            val targetClass = mutableClassDefByOrNull(appClass.type)
-            val (inheritedOwner, inheritedOnCreate) = appMethod
-            if (targetClass == null) null
-            else if (inheritedOwner.type == targetClass.type) {
-                val mutableOnCreate = targetClass.methods.firstOrNull {
-                    it.name == inheritedOnCreate.name &&
-                        it.returnType == inheritedOnCreate.returnType &&
-                        it.parameterTypes == inheritedOnCreate.parameterTypes
-                }
-                if (mutableOnCreate == null) {
-                    logger.warning("Could not resolve mutable Application.onCreate in ${targetClass.type}")
-                    null
-                } else targetClass to mutableOnCreate
-            } else try {
-                val direct = createApplicationOnCreateOverride(targetClass)
-                logger.info("Created direct Application.onCreate override in ${targetClass.type}; inherited implementation remains untouched in ${inheritedOwner.type}")
-                targetClass to direct
-            } catch (error: Exception) {
-                logger.warning("Could not create direct Application.onCreate override in ${targetClass.type}: ${error.message}")
-                null
-            }
-        } else null
+        val applicationTarget = resolveApplicationEntryPoint(logger)
         if (applicationTarget != null) {
-            val (appOwner, appOnCreate) = applicationTarget
+            val appOwner = applicationTarget.owner
+            val appOnCreate = applicationTarget.onCreate
             if (appOnCreate.hasOverlayBridge(application = true)) {
                 logger.info("Runtime overlay bridge already exists in ${appOwner.type}->onCreate")
                 val configured = attachExistingOverlayPolicies(appOwner, appOnCreate, adsRuntimePolicy, inAppRuntimePolicy)
@@ -1918,6 +1884,10 @@ val universalOverlayPatch = bytecodePatch(
                     (inAppRuntimePolicy == null || configured.hasRuntimePolicy("Lunipatch/overlaycore/InAppRuntimePolicy"))
                 if (bridgeInstalled && inAppRuntimePolicy != null) OverlayInAppRuntimeIntegration.markInjected()
                 adsPolicyAttached = bridgeInstalled && adsRuntimePolicy != null
+                if (bridgeInstalled) {
+                    OverlayPatchRunMarker.publish(this, appOwner, configured)
+                    PermissionGuardOverlayIntegration.attach(this)
+                }
             } else {
                 bridgeAttempted = true
                 val injected = tryInjectOverlayBridge(appOwner, appOnCreate, application = true)
@@ -1949,7 +1919,7 @@ val universalOverlayPatch = bytecodePatch(
                     }?.let { mutableClassDefByOrNull(it.type) }
                 }
                 ?: resolvedLauncher?.owner
-                ?: findOverlayFallbackActivity()
+                ?: findFallbackActivity()
         }
         val onCreate = resolvedLauncher
             ?.takeIf { it.owner.type == fallback?.type }
@@ -1967,6 +1937,10 @@ val universalOverlayPatch = bytecodePatch(
                     (inAppRuntimePolicy == null || configured.hasRuntimePolicy("Lunipatch/overlaycore/InAppRuntimePolicy"))
                 if (bridgeInstalled && inAppRuntimePolicy != null) OverlayInAppRuntimeIntegration.markInjected()
                 adsPolicyAttached = bridgeInstalled && adsRuntimePolicy != null
+                if (bridgeInstalled) {
+                    OverlayPatchRunMarker.publish(this, fallback, configured)
+                    PermissionGuardOverlayIntegration.attach(this)
+                }
             } else {
                 bridgeAttempted = true
                 val injected = tryInjectOverlayBridge(fallback, onCreate, application = false)
@@ -2000,28 +1974,4 @@ val universalOverlayPatch = bytecodePatch(
         }
         if (customMode) exportPreset(exportUiPreset.orEmpty().trim(), exportedUiPresetOutputName.orEmpty(), selectedUiPreset, logger)
     }
-}
-
-/**
- * Finds the implementation of Application.onCreate, including an implementation inherited by
- * the manifest-declared Application class. Mutating a bundled application superclass is safe here:
- * it is still the process Application entry point, whereas selecting an arbitrary Activity or SDK
- * class can leave the actual game screen without an overlay.
- */
-private fun app.morphe.patcher.patch.BytecodePatchContext.findInheritedApplicationOnCreate(
-    start: ClassDef,
-): Pair<ClassDef, Method>? {
-    val seen = mutableSetOf<String>()
-    var current: ClassDef? = start
-    while (current != null && seen.add(current.type)) {
-        val method = current.methods.firstOrNull {
-            it.name == "onCreate" && it.returnType == "V" && it.parameterTypes.isEmpty()
-        }
-        if (method != null) return current to method
-
-        val superclass = current.superclass ?: return null
-        if (superclass == "Landroid/app/Application;" || superclass == "Ljava/lang/Object;") return null
-        current = classDefByOrNull(superclass)
-    }
-    return null
 }

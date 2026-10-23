@@ -125,9 +125,8 @@ private fun isFalseConstant(instruction: Any?, register: Int): Boolean =
 val bypassForcedUpdatesPatch = bytecodePatch(
     name = "Bypass Forced Updates (Experimental)",
     description = """
-        Try to bypass high-confidence client-side forced-update screens. Start with the defaults;
-        each option handles a different part of an update flow. This cannot bypass a server that
-        refuses old app versions, and an unsupported app may still require an update.
+        Try to bypass high-confidence client-side forced-update screens. This cannot bypass a server
+        that refuses old app versions, and an unsupported app may still require an update.
     """.trimIndent(),
     default = false,
 ) {
@@ -163,6 +162,7 @@ val bypassForcedUpdatesPatch = bytecodePatch(
         var dialogs = 0
         var redirects = 0
         var exits = 0
+        var ambiguousCandidates = 0
 
         classDefForEach { classDef ->
             val hasCandidate = classDef.methods.any { method ->
@@ -174,7 +174,10 @@ val bypassForcedUpdatesPatch = bytecodePatch(
             for (method in mutableClass.methods) {
                 val implementation = method.implementation ?: continue
                 val evidence = methodEvidence(method)
-                if (evidence.score < 6 || (!evidence.hasUpdateString && !evidence.hasUpdateUrl)) continue
+                if (evidence.score < 6 || (!evidence.hasUpdateString && !evidence.hasUpdateUrl)) {
+                    if (method.returnType == "Z" && evidence.score > 0) ambiguousCandidates++
+                    continue
+                }
 
                 if (bypassUpdateGate == true && falseBooleanGate(method, evidence)) {
                     gates++
@@ -223,6 +226,9 @@ val bypassForcedUpdatesPatch = bytecodePatch(
         }
 
         val total = gates + dialogs + redirects + exits
+        if (ambiguousCandidates > 0) {
+            logger.warning("Bypass Forced Updates: skipped $ambiguousCandidates ambiguous boolean candidate(s); evidence threshold is score >= 6 with update text or URL evidence.")
+        }
         if (total == 0) {
             logger.warning(
                 "No high-confidence forced-update patterns found. This experimental patch " +
