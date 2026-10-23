@@ -126,6 +126,12 @@ val customAppOutputPatch = resourcePatch(
         key = "customAppOutputExpandRelativeComponents",
         description = "Expand relative Activity, Service, Receiver, Provider, and alias class names to the original package before cloning. This prevents Android from searching for classes in the new package.",
     )
+    val removeSharedUserId by booleanOption(
+        title = "Remove shared user ID",
+        default = true,
+        key = "customAppOutputRemoveSharedUserId",
+        description = "Removes any shared user id in the manifest. Fixes install errors from differing signing keys and isolates the clone.",
+    )
     val preserveAppData by booleanOption(
         title = "Advanced > App data compatibility > Preserve App Data After Uninstall",
         default = false,
@@ -215,6 +221,7 @@ val customAppOutputPatch = resourcePatch(
                     authorities = rewriteAuthorities == true,
                     permissions = rewritePermissions == true,
                     components = expandRelativeComponents == true,
+                    sharedUserId = removeSharedUserId == true,
                     logger = logger,
                 )
                 logger.info("Custom App Output: package renamed $originalPackage -> $clonedPackage")
@@ -313,6 +320,7 @@ private fun rewriteCloneReferences(
     authorities: Boolean,
     permissions: Boolean,
     components: Boolean,
+    sharedUserId: Boolean,
     logger: Logger,
 ) {
     fun androidAttribute(element: Element, name: String): String =
@@ -402,6 +410,10 @@ private fun rewriteCloneReferences(
                 componentChanges++
             }
         }
+    }
+
+    if (sharedUserId) {
+        manifest.documentElement.removeAttribute("android:sharedUserId")
     }
     logger.info("Custom App Output: clone compatibility updates: authorities=$authorityChanges permissions=$permissionChanges components=$componentChanges")
     logger.warning("Custom App Output: clone mode is manifest-only. Review explicit process, taskAffinity, deep-link, SDK, and bytecode package references if the cloned app does not start.")

@@ -822,6 +822,15 @@
           "values": null
         },
         {
+          "key": "customAppOutputRemoveSharedUserId",
+          "title": "Remove shared user ID",
+          "description": "Removes any shared user id in the manifest. Fixes install errors from differing signing keys and isolates the clone.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
+        },
+        {
           "key": "customAppOutputPreserveAppData",
           "title": "Advanced > App data compatibility > Preserve App Data After Uninstall",
           "description": "Ask Android to preserve app data when uninstalling and offer it for restoration on reinstall. This is best-effort, may be affected by Android version and backup policy, and cannot preserve data across a changed clone package identity.",
