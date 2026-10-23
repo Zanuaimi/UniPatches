@@ -165,6 +165,16 @@ and has its own detailed guide in [tools/icon-builder/README.md](tools/icon-buil
 
 ### 🛠️ Building locally
 
+The Morphe Gradle plugin is distributed through GitHub Packages. On a fresh
+checkout, export a GitHub username and a token with `read:packages` before the
+first build (the plugin reads `gpr.user`/`gpr.key` or these environment
+variables; without them Gradle fails while applying the plugin):
+
+```bash
+export GITHUB_ACTOR=<github-user>
+export GITHUB_TOKEN=<token-with-read:packages>
+```
+
 - Run `./gradlew buildAndroid`
 - The built patches .mpp file is found in `patches/build/libs/patches-*.mpp`
 - Patch the mpp file using [Morphe-Desktop](https://github.com/MorpheApp/morphe-desktop)
