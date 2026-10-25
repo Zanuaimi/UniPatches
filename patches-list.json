@@ -1203,7 +1203,7 @@
     {
       "name": "InApp Emulation Patch ( Experimental, Enhanced, Has Overlay Addon )",
       "category": "InApp Emulation",
-      "description": "InApp emulation Patch does a local modification of in-app buying behavior via DEX modification to make pressing buy grant items without charging! Best for offline and legacy apps and games.\n\nWarning : This DOES NOT solve server-side purchase verification, which is used by many modern apps and games!\n\nInApp Emulation Overlay Module : This patch as an overlay addon involves an InApp Emulation hook module being added to overlay menu, that has a settings button, which shows a popup showing a checkbox whether to enable InApp Emulation popup or not at buy time, and then if it's enabled, it list of saved purchases, that are saved at buy time if user chooses to save the purchase. Saved purchases are so popup windows don't appear again on buy time. The settings popup list of item of saved purchases also allows for management of them, by deleting saved purchases items.\n\nExperimental : This patch may not work on all apps, as it modifies internal app / game behavior. It's billing libraries support may extend with updates, and it's functionality is not guaranteed.\n\nCredits : Credits to Nai64Patches from Nai64 for original IAP patch core functionality, and credits to MiguelNinja19's billing patches, as it was used to enhance original IAP patch with Cocos2D and GameMaker and Native ILL2CPP Hex Patch.\n\nEnhancement : UniPatches enhances this patch by improving compatibility, stability, and adding Automatic Mode (enabled by default) with optional per-backend Patch Coverage controls. RevenueCat requires explicit opt-in even in Automatic Mode. UniPatches also adds an optional overlay addon for use with Universal Overlay Patch.\n\nCompatibility: the overlay addon requires Universal Overlay in the same patch operation. If using\nControl Embedded Auth / Stores, keep its licensing and Google Play Services controls separate\nfrom this patch's purchase emulation controls. If using Custom App Display, avoid applying broad\nActivity changes to third-party billing or sign-in screens unless required.",
+      "description": "InApp emulation Patch does a local modification of in-app buying behavior via DEX modification to make pressing buy grant items without charging! Best for offline and legacy apps and games.\n\nServer-side purchase verification: this patch fakes the purchase callback only. Modern apps then hand the receipt to their backend and act on the answer. Pair it with the Server Purchase Verification Bypass patch, which handles that client-side hop by rewriting verification responses, forcing receipt/signature verifiers, and forcing Remote Config paywall flags. Neither patch makes Google's servers validate a receipt, and neither forges an attestation: a backend that checks the receipt against Play, rejects unknown order IDs, or pins a certificate this patch does not touch stays closed.\n\nInApp Emulation Overlay Module : This patch as an overlay addon involves an InApp Emulation hook module being added to overlay menu, that has a settings button, which shows a popup showing a checkbox whether to enable InApp Emulation popup or not at buy time, and then if it's enabled, it list of saved purchases, that are saved at buy time if user chooses to save the purchase. Saved purchases are so popup windows don't appear again on buy time. The settings popup list of item of saved purchases also allows for management of them, by deleting saved purchases items.\n\nExperimental : This patch may not work on all apps, as it modifies internal app / game behavior. It's billing libraries support may extend with updates, and it's functionality is not guaranteed.\n\nCredits : Credits to Nai64Patches from Nai64 for original IAP patch core functionality, and credits to MiguelNinja19's billing patches, as it was used to enhance original IAP patch with Cocos2D and GameMaker and Native ILL2CPP Hex Patch.\n\nEnhancement : UniPatches enhances this patch by improving compatibility, stability, and adding Automatic Mode (enabled by default) with optional per-backend Patch Coverage controls. RevenueCat requires explicit opt-in even in Automatic Mode. UniPatches also adds an optional overlay addon for use with Universal Overlay Patch.\n\nCompatibility: the overlay addon requires Universal Overlay in the same patch operation. If using\nControl Embedded Auth / Stores, keep its licensing and Google Play Services controls separate\nfrom this patch's purchase emulation controls. If using Custom App Display, avoid applying broad\nActivity changes to third-party billing or sign-in screens unless required.",
       "default": false,
       "dependencies": [],
       "compatiblePackages": null,
@@ -2529,6 +2529,117 @@
           "required": false,
           "type": "kotlin.Boolean",
           "default": true,
+          "values": null
+        }
+      ]
+    },
+    {
+      "name": "Server Purchase Verification Bypass (Experimental)",
+      "category": "InApp Emulation",
+      "description": "Handles the client half of server-side purchase verification: the receipt/entitlement\nresponse the app receives after a purchase, and the local flags it reads from that response.\n\nStrategies (all switchable):\n- Force receipt/signature verifier methods that take a receipt, token or signature to\n  report success. Covers the Play sample `Security.verifyPurchase` shape and app-specific\n  equivalents by name plus parameter evidence.\n- Rewrite JSON verification payloads before the app parses them: booleans such as\n  verified/isPremium/subscribed become true, dead status strings become active, expiry\n  fields move forward. Applied at Gson and Moshi entry points and at every\n  `new JSONObject(String)` call site in app bytecode.\n- Observe okhttp request URLs so a real verification call confirms the rewrite path.\n- Force premium Firebase Remote Config flags used by server-driven paywalls.\n\nLimits: this changes client behaviour, not the server. A backend that compares a receipt\nagainst Google Play, rejects unknown order IDs, pins a certificate this patch does not\ntouch, or never returns an entitlement to the client stays closed. Pair it with\nInApp Emulation for the purchase callback itself.\n\nCompatibility: pair with InApp Emulation so a purchase exists before verification runs.\nDo not select this with a real store build where purchases must charge.",
+      "default": false,
+      "dependencies": [
+        "Resolve Real Application (internal)"
+      ],
+      "compatiblePackages": null,
+      "options": [
+        {
+          "key": "verifyForceReceiptVerifiers",
+          "title": "Verification > Force receipt and signature verifiers",
+          "description": "Make methods named like verifyPurchase/validateReceipt/checkSignature, which take a receipt, token or signature, report success.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
+        },
+        {
+          "key": "verifyForceCallSites",
+          "title": "Verification > Force verification call sites",
+          "description": "Force boolean methods that both look like a verification consumer and reference a verification endpoint or verifier call. Requires evidence inside the method body; name matching alone is not enough.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
+        },
+        {
+          "key": "verifyRewritePayloads",
+          "title": "Verification > Rewrite verification responses",
+          "description": "Rewrite JSON before the app parses it: Gson, Moshi and new JSONObject(String) call sites. Only verification-shaped payloads are changed; other responses pass through untouched.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
+        },
+        {
+          "key": "verifyObserveUrls",
+          "title": "Verification > Observe okhttp request URLs",
+          "description": "Report okhttp request URLs to the runtime so a real receipt/entitlement call marks the session as verifying. Also lets Rewrite verification responses require a recent verification request.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
+        },
+        {
+          "key": "verifyRemoteConfig",
+          "title": "Verification > Force Remote Config paywall flags",
+          "description": "Make Firebase Remote Config boolean flags named premium/pro/paywall/subscription report true, for server-driven paywalls that ship their gate through Remote Config.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
+        },
+        {
+          "key": "verifyRequireRequest",
+          "title": "Verification > Require an observed verification request",
+          "description": "Only rewrite payloads after a receipt/entitlement URL was actually requested in this session. Stricter, but misses apps that verify through a scheme this patch does not observe.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        },
+        {
+          "key": "verifyInjectPolicy",
+          "title": "Verification > Inject runtime policy",
+          "description": "Write the selected URL/flag/expiry policy into the app's startup entry point. Disable to keep the runtime defaults compiled into the extension.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": true,
+          "values": null
+        },
+        {
+          "key": "verifyExpiryDays",
+          "title": "Verification > Entitlement expiry (days)",
+          "description": "How far forward expiry/validUntil fields are moved. Values are clamped to 1-36500 days.",
+          "required": false,
+          "type": "kotlin.Int",
+          "default": 3650,
+          "values": null
+        },
+        {
+          "key": "verifyExtraFlagKeys",
+          "title": "Verification > Extra response flag keys",
+          "description": "Additional JSON keys to force true, one per row, for an app with its own receipt field name.",
+          "required": false,
+          "type": "kotlin.collections.List<kotlin.String>",
+          "default": [],
+          "values": null
+        },
+        {
+          "key": "verifyExtraUrlTokens",
+          "title": "Verification > Extra URL tokens",
+          "description": "Additional substrings that identify a verification endpoint, one per row, for a backend with custom routes.",
+          "required": false,
+          "type": "kotlin.collections.List<kotlin.String>",
+          "default": [],
+          "values": null
+        },
+        {
+          "key": "verifyExtraRemoteKeys",
+          "title": "Verification > Extra Remote Config keys",
+          "description": "Additional Remote Config boolean keys to force true, one per row, for a custom paywall flag.",
+          "required": false,
+          "type": "kotlin.collections.List<kotlin.String>",
+          "default": [],
           "values": null
         }
       ]

@@ -118,16 +118,12 @@ public final class InAppRuntimePolicy {
 
     public static String emulatedPurchaseJson(String productId) {
         String id = valid(productId) ? normalize(productId) : "";
-        String token = "unipatches-inventory-token-" + Integer.toHexString(id.hashCode());
-        return "{\"orderId\":\"unipatches-inventory-order-" + Integer.toHexString(id.hashCode()) +
-                "\",\"productId\":\"" + PurchaseJson.escape(id) +
-                "\",\"purchaseTime\":" + System.currentTimeMillis() +
-                ",\"purchaseState\":1,\"purchaseToken\":\"" + token + "\",\"quantity\":1}";
+        return BillingPurchaseFactory.inventoryJson(id);
     }
 
     public static String emulatedPurchaseToken(String productId) {
         String id = valid(productId) ? normalize(productId) : "";
-        return "unipatches-inventory-token-" + Integer.toHexString(id.hashCode());
+        return BillingPurchaseFactory.token(id);
     }
 
     /** Product of the last successful emulated delivery, or null. */

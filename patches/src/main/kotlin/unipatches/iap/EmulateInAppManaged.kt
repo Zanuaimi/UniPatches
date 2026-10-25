@@ -34,6 +34,8 @@ internal fun emulateInAppManagedPatch(optionsProvider: () -> InAppPatchOptions) 
         Credits to Nai64Patches from Nai64 for original IAP patch functionality, and enhancement process of this patch is inspired by MiguelNinja19's billing patches.
         UniPatches enhances this patch by improving compatibility, stability, and adding an optional overlay addon.
 
+        Server-side purchase verification: this patch only fakes the purchase callback. Pair it with the Server Purchase Verification Bypass patch for the client half of backend verification: verification response rewriting, receipt/signature verifier forcing, and Remote Config paywall flags. A backend that validates the receipt against Play stays closed.
+
 
     """.trimIndent(),
     default = false,

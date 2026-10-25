@@ -12,7 +12,7 @@ val emulateInAppPatch = rawResourcePatch(
     description = """
         InApp emulation Patch does a local modification of in-app buying behavior via DEX modification to make pressing buy grant items without charging! Best for offline and legacy apps and games.
 
-        Warning : This DOES NOT solve server-side purchase verification, which is used by many modern apps and games!
+        Server-side purchase verification: this patch fakes the purchase callback only. Modern apps then hand the receipt to their backend and act on the answer. Pair it with the Server Purchase Verification Bypass patch, which handles that client-side hop by rewriting verification responses, forcing receipt/signature verifiers, and forcing Remote Config paywall flags. Neither patch makes Google's servers validate a receipt, and neither forges an attestation: a backend that checks the receipt against Play, rejects unknown order IDs, or pins a certificate this patch does not touch stays closed.
 
         InApp Emulation Overlay Module : This patch as an overlay addon involves an InApp Emulation hook module being added to overlay menu, that has a settings button, which shows a popup showing a checkbox whether to enable InApp Emulation popup or not at buy time, and then if it's enabled, it list of saved purchases, that are saved at buy time if user chooses to save the purchase. Saved purchases are so popup windows don't appear again on buy time. The settings popup list of item of saved purchases also allows for management of them, by deleting saved purchases items.
 
