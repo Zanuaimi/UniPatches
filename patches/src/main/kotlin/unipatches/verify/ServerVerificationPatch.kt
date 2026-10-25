@@ -13,6 +13,7 @@ import com.android.tools.smali.dexlib2.iface.instruction.RegisterRangeInstructio
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import com.android.tools.smali.dexlib2.iface.reference.StringReference
 import helpers.bytecode.cloneMutable
+import helpers.bytecode.p0Register
 import helpers.startup.StartupHooks
 import helpers.startup.resolveStartupEntryPoint
 import java.util.logging.Logger
@@ -165,26 +166,21 @@ val serverVerificationBypassPatch = bytecodePatch(
                         hooked++
                     }
                     listOf("Lokhttp3/HttpUrl;") -> {
-                        // The clone reserves one register above the original frame: at index 0 the
-                        // parameter register still holds the caller's HttpUrl, so toString() is safe
-                        // and no live local is clobbered.
-                        val scratch = implementation.registerCount
-                        val cloned = try {
-                            target.cloneMutable(additionalRegisters = 1)
-                        } catch (error: Exception) {
-                            logger.warning("Server verification: URL clone failed for ${target.name}: ${error.message}")
+                        // The caller's HttpUrl is still in p1 at entry, so toString() is safe.
+                        // v0 is only dead on entry while it sits below the parameter block --
+                        // above p0Register it is the receiver or an argument.
+                        if (target.p0Register < 1) {
+                            logger.fine("Server verification: no local register for the URL hook in ${target.name}")
                             continue
                         }
-                        cloned.addInstructions(
+                        target.addInstructions(
                             0,
                             """
                             invoke-virtual/range {p1 .. p1}, Lokhttp3/HttpUrl;->toString()Ljava/lang/String;
-                            move-result-object v$scratch
-                            invoke-static/range {v$scratch .. v$scratch}, $VERIFY_RUNTIME->observeUrl(Ljava/lang/String;)V
+                            move-result-object v0
+                            invoke-static {v0}, $VERIFY_RUNTIME->observeUrl(Ljava/lang/String;)V
                             """.trimIndent(),
                         )
-                        builder.methods.remove(target)
-                        builder.methods.add(cloned)
                         hooked++
                     }
                 }
@@ -231,8 +227,17 @@ val serverVerificationBypassPatch = bytecodePatch(
                         if (reference.parameterTypes != listOf("Ljava/lang/String;")) continue
                         if (index > 0 && instructions[index - 1].toString().contains("VerificationRuntime;->rewritePayload")) continue
                         val register = when (instruction) {
-                            // 35c: registerC is the String argument of a 2-register instance <init>.
-                            is FiveRegisterInstruction -> instruction.registerC
+                            // 35c lists registers in argument order: the receiver first, then the
+                            // arguments. For `invoke-direct {vA, vB}, JSONObject-><init>(String)`
+                            // vA is the uninitialised object and vB is the payload, so the rewrite
+                            // has to target the LAST register, never registerC.
+                            is FiveRegisterInstruction -> when (instruction.registerCount) {
+                                2 -> instruction.registerD
+                                3 -> instruction.registerE
+                                4 -> instruction.registerF
+                                5 -> instruction.registerG
+                                else -> null
+                            }
                             // 3rc covers {this, arg}; the argument is the last register of the range.
                             // Using startRegister here would rewrite the JSONObject being built.
                             is RegisterRangeInstruction ->
@@ -295,7 +300,7 @@ val serverVerificationBypassPatch = bytecodePatch(
                         instructions[0].toString().trim() == "const/4 v0, 0x1" &&
                         instructions[1].toString().trim() == "return v0"
                     ) continue
-                    if (implementation.registerCount < 1) continue
+                    if (method.p0Register < 1) continue
                     try {
                         method.addInstructions(0, "const/4 v0, 0x1\nreturn v0")
                         patchedClasses += "${method.definingClass}->${method.name}"
@@ -337,7 +342,7 @@ val serverVerificationBypassPatch = bytecodePatch(
                         instructions[0].toString().trim() == "const/4 v0, 0x1" &&
                         instructions[1].toString().trim() == "return v0"
                     ) continue
-                    if (implementation.registerCount < 1) continue
+                    if (method.p0Register < 1) continue
                     try {
                         method.addInstructions(0, "const/4 v0, 0x1\nreturn v0")
                         patchedClasses += key
@@ -362,25 +367,25 @@ val serverVerificationBypassPatch = bytecodePatch(
             } ?: return false
             val implementation = method.implementation ?: return false
             if (implementation.instructions.any { it.toString().contains("isPremiumRemoteKey") }) return true
-            val keyRegister = implementation.registerCount
-            val resultRegister = keyRegister + 1
+            // Inserted at entry, so v0 has to be a real local: at or above p0Register it is
+            // the receiver (v0 for a static-free method is only safe below the parameter block).
+            if (method.p0Register < 1) {
+                logger.warning("Server verification: Remote Config hook skipped; no local register in getBoolean")
+                return false
+            }
             return try {
-                val cloned = method.cloneMutable(additionalRegisters = 2)
-                cloned.addInstructionsWithLabels(
+                method.addInstructionsWithLabels(
                     0,
                     """
-                    move-object/from16 v$keyRegister, p1
-                    invoke-static/range { v$keyRegister .. v$keyRegister }, $VERIFY_RUNTIME->isPremiumRemoteKey(Ljava/lang/String;)Z
-                    move-result v$resultRegister
-                    if-eqz v$resultRegister, :verifyRemoteContinue
-                    const/4 v$resultRegister, 0x1
-                    return v$resultRegister
+                    invoke-static/range { p1 .. p1 }, $VERIFY_RUNTIME->isPremiumRemoteKey(Ljava/lang/String;)Z
+                    move-result v0
+                    if-eqz v0, :verifyRemoteContinue
+                    const/4 v0, 0x1
+                    return v0
                     :verifyRemoteContinue
                     nop
                     """.trimIndent(),
                 )
-                owner.methods.remove(method)
-                owner.methods.add(cloned)
                 true
             } catch (error: Exception) {
                 logger.warning("Server verification: Remote Config hook failed: ${error.message}")
@@ -399,26 +404,24 @@ val serverVerificationBypassPatch = bytecodePatch(
             }
             val implementation = entry.onCreate.implementation ?: return false
             if (implementation.instructions.any { it.toString().contains("VerificationRuntime;->configure") }) return true
-            val scratch = implementation.registerCount
+            // The block is inserted at entry, where every local below p0Register is still
+            // undefined. Requesting extra registers instead would shift the parameter block up
+            // and write over `this`, which the verifier rejects as a type mismatch at the
+            // original invoke-super.
+            if (entry.onCreate.p0Register < 1) {
+                logger.warning(
+                    "Server verification: policy injection skipped; ${entry.owner.type}->onCreate has no local register",
+                )
+                return false
+            }
             return try {
-                val cloned = entry.onCreate.cloneMutable(additionalRegisters = 1)
-                val instructions = cloned.implementation?.instructions?.toList().orEmpty()
-                val superIndex = instructions.indexOfFirst { it.toString().contains("invoke-super") }
-                // After super.onCreate the process is initialised; before it the runtime is
-                // still safe, so a missing super call falls back to the method entry.
-                val index = if (superIndex >= 0) superIndex + 1 else 0
-                cloned.addInstructions(
-                    index,
+                entry.onCreate.addInstructions(
+                    0,
                     """
-                    const-string v$scratch, "${StartupHooks.escapeSmali(policy.toJson())}"
-                    invoke-static/range { v$scratch .. v$scratch }, $VERIFY_RUNTIME->configure(Ljava/lang/String;)V
+                    const-string v0, "${StartupHooks.escapeSmali(policy.toJson())}"
+                    invoke-static {v0}, $VERIFY_RUNTIME->configure(Ljava/lang/String;)V
                     """.trimIndent(),
                 )
-                entry.owner.methods.removeAll {
-                    it.name == cloned.name && it.parameterTypes == cloned.parameterTypes &&
-                        it.returnType == cloned.returnType
-                }
-                entry.owner.methods.add(cloned)
                 logger.info("Server verification: policy injected at ${entry.owner.type}->onCreate")
                 true
             } catch (error: Exception) {
