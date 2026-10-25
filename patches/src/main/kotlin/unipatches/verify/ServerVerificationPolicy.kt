@@ -14,6 +14,7 @@ internal data class ServerVerificationPolicy(
     val requireVerificationRequest: Boolean = false,
     val expiryDays: Int = 3650,
     val activeStatus: String = "active",
+    val verbose: Boolean = false,
     val urlTokens: List<String> = DEFAULT_URL_TOKENS,
     val flagKeys: List<String> = DEFAULT_FLAG_KEYS,
     val statusKeys: List<String> = DEFAULT_STATUS_KEYS,
@@ -28,6 +29,7 @@ internal data class ServerVerificationPolicy(
         append(",\"requireRequest\":").append(requireVerificationRequest)
         append(",\"expiryDays\":").append(expiryDays.coerceIn(1, 36500))
         append(",\"activeStatus\":\"").append(jsonEscape(activeStatus)).append('"')
+        append(",\"verbose\":").append(verbose)
         append(",\"urlTokens\":").append(stringArray(urlTokens))
         append(",\"flagKeys\":").append(stringArray(flagKeys))
         append(",\"statusKeys\":").append(stringArray(statusKeys))

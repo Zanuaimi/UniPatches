@@ -59,7 +59,7 @@ tasks {
     //   ./gradlew :patches:patchLocalApk -Papk=in.apk -Pout=out.apk -Ppatches=inapp,verify
     register<JavaExec>("patchLocalApk") {
         group = "unipatches"
-        description = "Patch a local APK: -Papk=<in.apk> -Pout=<out.apk> [-Ppatches=inapp,verify]"
+        description = "Patch a local APK: -Papk=<in.apk> -Pout=<out.apk> [-Ppatches=inapp,verify] [-Poptions=verifyVerbose=true]"
 
         classpath = sourceSets["test"].runtimeClasspath
         mainClass.set("tools.PatchApkToolKt")
@@ -76,8 +76,11 @@ tasks {
             val selected = System.getenv("UNIPATCH_PATCHES")?.takeIf { it.isNotBlank() }
                 ?: (project.findProperty("patches") as? String)?.takeIf { it.isNotBlank() }
                 ?: "inapp,verify"
-            logger.lifecycle("patchLocalApk: $apk -> $out [$selected]")
-            args(apk, out, selected)
+            val options = System.getenv("UNIPATCH_OPTIONS")?.takeIf { it.isNotBlank() }
+                ?: (project.findProperty("options") as? String)?.takeIf { it.isNotBlank() }
+                ?: ""
+            logger.lifecycle("patchLocalApk: $apk -> $out [$selected]${if (options.isEmpty()) "" else " options=$options"}")
+            args(apk, out, selected, options)
         }
     }
 

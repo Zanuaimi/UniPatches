@@ -77,6 +77,8 @@ public final class VerificationRuntime {
     private static volatile boolean enabled = true;
     private static volatile boolean rewritePayloads = true;
     private static volatile boolean requireRecentRequest = false;
+    /** Diagnostic: log the first payloads the rewrite hook sees, so a new shape can be recognised. */
+    private static volatile boolean verbose = false;
     private static volatile long expiryEpochMillis = now() + 3650L * DAY_MILLIS;
     private static volatile boolean expiryInSeconds = false;
     private static volatile String activeStatus = "active";
@@ -88,6 +90,16 @@ public final class VerificationRuntime {
     private static volatile Set<String> deadStatuses = normalizeAll(DEFAULT_DEAD_STATUSES);
 
     private static final AtomicLong lastVerificationRequestAt = new AtomicLong(0L);
+    private static final AtomicInteger loggedPayloads = new AtomicInteger();
+    private static final AtomicInteger payloadsSkipped = new AtomicInteger();
+    private static final int VERBOSE_LOG_LIMIT = 60;
+    private static final int VERBOSE_PREVIEW_CHARS = 400;
+
+    /** Roots that mark a payload as commerce-shaped, for the diagnostic log only. */
+    private static final String[] CANDIDATE_ROOTS = {
+            "purchase", "receipt", "premium", "entitle", "subscri", "reward", "sku",
+            "billing", "transaction", "orderid", "voucher", "inapp", "iap",
+    };
     private static final AtomicInteger observedRequests = new AtomicInteger();
     private static final AtomicInteger rewrittenPayloads = new AtomicInteger();
     private static final AtomicInteger remoteOverrides = new AtomicInteger();
@@ -104,6 +116,7 @@ public final class VerificationRuntime {
             }
             if (policy.containsKey("enabled")) enabled = bool(policy.get("enabled"), enabled);
             if (policy.containsKey("rewrite")) rewritePayloads = bool(policy.get("rewrite"), rewritePayloads);
+            if (policy.containsKey("verbose")) verbose = bool(policy.get("verbose"), verbose);
             if (policy.containsKey("requireRequest")) {
                 requireRecentRequest = bool(policy.get("requireRequest"), requireRecentRequest);
             }
@@ -132,7 +145,7 @@ public final class VerificationRuntime {
             if (!dead.isEmpty()) deadStatuses = dead;
             log("configure: enabled=" + enabled + " rewrite=" + rewritePayloads +
                     " urls=" + urlTokens.size() + " flags=" + flagKeys.size() +
-                    " remote=" + remoteKeys.size());
+                    " remote=" + remoteKeys.size() + " verbose=" + verbose);
         } catch (Throwable error) {
             log("configure failed: " + error);
         }
@@ -173,9 +186,19 @@ public final class VerificationRuntime {
             if (first != '{' && first != '[') return json;
             if (requireRecentRequest && !recentVerificationRequest()) return json;
             String lower = json.toLowerCase(Locale.ROOT);
-            if (!looksLikeVerificationPayload(lower)) return json;
+            if (!looksLikeVerificationPayload(lower)) {
+                // Startup builds hundreds of SDK payloads before the app is even usable, so
+                // an unfiltered log burns its budget on Firebase and Adjust noise and is
+                // silent by the time a purchase happens. Only near-miss shapes get logged.
+                if (mentionsEntitlementVocabulary(lower)) logPayload("ignored", json);
+                else payloadsSkipped.incrementAndGet();
+                return json;
+            }
             String rewritten = VerificationJson.rewrite(json, rules());
-            if (rewritten == null) return json;
+            if (rewritten == null) {
+                logPayload("unrewritten", json);
+                return json;
+            }
             int count = rewrittenPayloads.incrementAndGet();
             if (count <= 8) log("rewrote verification payload (" + count + ")");
             return rewritten;
@@ -237,6 +260,20 @@ public final class VerificationRuntime {
                 || lower.contains("\"subscribed\"") || lower.contains("\"ispurchased\"")
                 || lower.contains("\"license\"") || lower.contains("\"valid\"")
                 || recentVerificationRequest();
+    }
+
+    /**
+     * True when a payload uses commerce vocabulary even though it failed the strict test.
+     *
+     * The words here are deliberately roots, not keys: an app that builds its own receipt
+     * shape ("iapState", "storeProduct") still gets logged, which is the whole point of
+     * running the diagnostic before the key list can be extended.
+     */
+    private static boolean mentionsEntitlementVocabulary(String lower) {
+        for (String root : CANDIDATE_ROOTS) {
+            if (lower.contains(root)) return true;
+        }
+        return false;
     }
 
     private static boolean recentVerificationRequest() {
@@ -317,5 +354,24 @@ public final class VerificationRuntime {
         } catch (Throwable ignored) {
             // Unit tests and stripped builds have no Log implementation.
         }
+    }
+
+    /**
+     * Diagnostic tail for [rewritePayload] when verbose is on.
+     *
+     * Bounded on purpose: a busy app builds thousands of JSONObjects at startup, and the
+     * point is to see the shape of a handful, not to mirror traffic into logcat.
+     */
+    private static void logPayload(String verdict, String json) {
+        if (!verbose) return;
+        if (loggedPayloads.incrementAndGet() > VERBOSE_LOG_LIMIT) return;
+        int limit = Math.min(json.length(), VERBOSE_PREVIEW_CHARS);
+        StringBuilder preview = new StringBuilder(limit);
+        for (int i = 0; i < limit; i++) {
+            char c = json.charAt(i);
+            preview.append(c == '\n' || c == '\r' || c == '\t' ? ' ' : c);
+        }
+        log("payload " + verdict + " len=" + json.length() +
+                " (filtered " + payloadsSkipped.get() + ") " + preview);
     }
 }

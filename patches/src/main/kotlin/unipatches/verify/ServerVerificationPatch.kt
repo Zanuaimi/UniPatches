@@ -129,6 +129,12 @@ val serverVerificationBypassPatch = bytecodePatch(
         key = "verifyExtraRemoteKeys",
         description = "Additional Remote Config boolean keys to force true, one per row, for a custom paywall flag.",
     )
+    val verbosePayloads by booleanOption(
+        title = "Verification > Log parsed JSON payloads (diagnostics)",
+        default = false,
+        key = "verifyVerbose",
+        description = "Log the first 40 JSON payloads the rewrite hook sees, with the verdict, so a payload shape this patch does not recognise can be discovered and added as a flag/status/expiry key. Diagnostic only; leave off for normal builds.",
+    )
 
     execute {
         val logger = Logger.getLogger(this::class.java.name)
@@ -136,6 +142,7 @@ val serverVerificationBypassPatch = bytecodePatch(
             rewritePayloads = rewriteJsonPayloads == true,
             requireVerificationRequest = requireVerificationRequest == true,
             expiryDays = (expiryDays ?: 3650).coerceIn(1, 36500),
+            verbose = verbosePayloads == true,
             urlTokens = (DEFAULT_URL_TOKENS + (extraUrlTokens ?: emptyList())).distinct(),
             flagKeys = (DEFAULT_FLAG_KEYS + (extraFlagKeys ?: emptyList())).distinct(),
             remoteKeys = (DEFAULT_REMOTE_KEYS + (extraRemoteKeys ?: emptyList())).distinct(),
