@@ -1,3 +1,9 @@
+## [1.34.0](https://github.com/Zanuaimi/UniPatches/compare/v1.33.4...v1.34.0) (2026-10-28)
+
+### ✨ New Features
+
+* remove sharedUserId attribute when cloning ([02d09a4](https://github.com/Zanuaimi/UniPatches/commit/02d09a407a19f52e5c8f311230ae5d9c6d570165))
+
 ## [1.33.4](https://github.com/Zanuaimi/UniPatches/compare/v1.33.3...v1.33.4) (2026-10-19)
 
 ### 🐛 Bug Fixes
